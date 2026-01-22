@@ -1,0 +1,10 @@
+This is a placeholder resource.
+
+To use a custom Adhan sound on Android notifications:
+1) Replace this file with an audio file named exactly: adhan.mp3 (or adhan.wav / adhan.ogg)
+2) Keep it in this folder: android/app/src/main/res/raw/
+3) Restart the app (so notification channels are recreated) and use Settings -> Prayer Notifications -> Test now / Test in 10s.
+
+Notes:
+- Android notification channel sound is controlled by the system. If the user has disabled sound for this channel in system settings, the app cannot force-enable it.
+- For best results, keep the sound short (Android notification sound length is limited on some devices).
