@@ -80,7 +80,8 @@ class SettingsService {
   }
 
   bool getAdhanNotificationsEnabled() {
-    return _prefs.getBool(_keyAdhanNotificationsEnabled) ?? false;
+    // Default ON so reminders work automatically after first install.
+    return _prefs.getBool(_keyAdhanNotificationsEnabled) ?? true;
   }
 
   Future<bool> setAdhanIncludeFajr(bool include) async {

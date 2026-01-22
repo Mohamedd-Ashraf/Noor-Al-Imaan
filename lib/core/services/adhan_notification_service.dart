@@ -199,6 +199,11 @@ class AdhanNotificationService {
     final cached = _settings.getLastKnownCoordinates();
     if (cached != null) return cached;
 
+    final cachedFromTimes = _cache.getCachedLocation();
+    if (cachedFromTimes != null) {
+      return Coordinates(cachedFromTimes.latitude, cachedFromTimes.longitude);
+    }
+
     // Try getting a fresh location once.
     final permission = await _location.ensurePermission();
     if (permission != LocationPermissionState.granted) {
@@ -281,12 +286,15 @@ class AdhanNotificationService {
         playSound: true,
         enableVibration: true,
         sound: _adhanSound,
+        category: AndroidNotificationCategory.alarm,
+        visibility: NotificationVisibility.public,
       ),
       iOS: DarwinNotificationDetails(
         presentAlert: true,
         presentSound: true,
         presentBadge: true,
         sound: _iosAdhanSoundName,
+        interruptionLevel: InterruptionLevel.timeSensitive,
       ),
     );
   }

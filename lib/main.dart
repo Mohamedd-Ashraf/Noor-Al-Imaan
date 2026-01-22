@@ -19,10 +19,12 @@ void main() async {
   // Notifications are used for prayer reminders (adhan). Initialize early.
   final adhanService = di.sl<AdhanNotificationService>();
   await adhanService.init();
-  
-  // Force channel recreation to ensure adhan.mp3 sound is configured
-  await adhanService.recreateAndroidChannels();
-  
+
+  // Best-effort: ask for notification + exact alarm permission up-front.
+  // Scheduling will no-op if permissions are denied.
+  unawaited(adhanService.requestPermissions());
+
+  // Schedule upcoming prayer reminders (uses cached location/times when available).
   unawaited(adhanService.ensureScheduled());
 
   runApp(const MyApp());
