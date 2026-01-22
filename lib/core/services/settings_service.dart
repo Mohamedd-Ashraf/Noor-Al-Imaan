@@ -15,6 +15,7 @@ class SettingsService {
   static const String _keyLastAdhanScheduleDateIso = 'last_adhan_schedule_date_iso';
   static const String _keyAdhanUseCustomSound = 'adhan_use_custom_sound';
   static const String _keyCachedPrayerTimes = 'cached_prayer_times';
+  static const String _keyAdhanSchedulePreview = 'adhan_schedule_preview';
 
   final SharedPreferences _prefs;
 
@@ -127,5 +128,14 @@ class SettingsService {
 
   String? getCachedPrayerTimes() {
     return _prefs.getString(_keyCachedPrayerTimes);
+  }
+
+  // Adhan schedule preview (JSON string)
+  Future<bool> setAdhanSchedulePreview(String jsonData) async {
+    return await _prefs.setString(_keyAdhanSchedulePreview, jsonData);
+  }
+
+  String? getAdhanSchedulePreview() {
+    return _prefs.getString(_keyAdhanSchedulePreview);
   }
 }

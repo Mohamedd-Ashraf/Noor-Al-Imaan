@@ -76,6 +76,7 @@ class _QiblahScreenState extends State<QiblahScreen> {
         _bearing = bearing;
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         _loading = false;
         _error = e is TimeoutException

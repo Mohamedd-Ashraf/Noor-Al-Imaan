@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:adhan/adhan.dart';
 import 'package:flutter/foundation.dart';
@@ -164,11 +165,28 @@ class AdhanNotificationService {
     final today = DateTime(now.year, now.month, now.day);
 
     await cancelAll();
+    final preview = <Map<String, dynamic>>[];
     for (var i = 0; i < _daysToScheduleAhead; i++) {
-      await _scheduleForDate(coords, today.add(Duration(days: i)));
+      final items = await _scheduleForDate(coords, today.add(Duration(days: i)));
+      for (final it in items) {
+        preview.add(it);
+      }
     }
 
     await _settings.setLastAdhanScheduleDateIso(today.toIso8601String());
+
+    // Persist a snapshot of what we scheduled (for UI display).
+    // Note: this does not guarantee OS delivery, but reflects our intended schedule.
+    try {
+      preview.sort((a, b) {
+        final ta = DateTime.tryParse(a['time'] as String? ?? '') ?? DateTime.fromMillisecondsSinceEpoch(0);
+        final tb = DateTime.tryParse(b['time'] as String? ?? '') ?? DateTime.fromMillisecondsSinceEpoch(0);
+        return ta.compareTo(tb);
+      });
+      await _settings.setAdhanSchedulePreview(jsonEncode(preview));
+    } catch (_) {
+      // Ignore preview persistence failures.
+    }
   }
 
   Future<void> testNow() async {
@@ -219,7 +237,7 @@ class AdhanNotificationService {
     }
   }
 
-  Future<void> _scheduleForDate(Coordinates coordinates, DateTime date) async {
+  Future<List<Map<String, dynamic>>> _scheduleForDate(Coordinates coordinates, DateTime date) async {
     // Try to use cached prayer times first (offline support)
     final cachedTimes = _cache.getCachedTimesForDate(date);
     
@@ -256,6 +274,7 @@ class AdhanNotificationService {
       _PrayerNotifItem(Prayer.isha, 'Isha', prayerTimesMap['isha']!),
     ];
 
+    final scheduled = <Map<String, dynamic>>[];
     for (final item in items) {
       if (!item.enabled) continue;
 
@@ -272,7 +291,16 @@ class AdhanNotificationService {
         _notificationDetails(),
         androidScheduleMode: await _androidScheduleMode(),
       );
+
+      scheduled.add({
+        'id': id,
+        'prayer': item.prayer.name,
+        'label': item.label,
+        'time': item.time.toLocal().toIso8601String(),
+      });
     }
+
+    return scheduled;
   }
 
   NotificationDetails _notificationDetails() {

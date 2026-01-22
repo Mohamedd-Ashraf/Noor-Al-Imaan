@@ -84,6 +84,7 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen> {
         _prayerTimes = prayerTimes;
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         _loading = false;
         _error = e is TimeoutException
