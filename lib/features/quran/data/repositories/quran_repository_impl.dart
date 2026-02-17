@@ -23,7 +23,7 @@ class QuranRepositoryImpl implements QuranRepository {
     required this.networkInfo,
   });
 
-  bool _isCacheableEdition(String? edition) {
+  bool _isUthmaniEdition(String? edition) {
     final normalized = (edition == null || edition.isEmpty)
         ? ApiConstants.defaultEdition
         : edition;
@@ -69,9 +69,13 @@ class QuranRepositoryImpl implements QuranRepository {
   }
 
   @override
-  Future<Either<Failure, Surah>> getSurah(int surahNumber, {String? edition}) async {
-    // Prefer bundled Quran text for Arabic default edition.
-    if (_isCacheableEdition(edition)) {
+  Future<Either<Failure, Surah>> getSurah(
+    int surahNumber, {
+    String? edition,
+  }) async {
+    // Prefer bundled Quran text for Uthmani edition only
+    // Simple edition requires online fetch
+    if (_isUthmaniEdition(edition)) {
       try {
         final bundled = await bundledDataSource.getBundledSurah(surahNumber);
         return Right(bundled);
@@ -82,35 +86,45 @@ class QuranRepositoryImpl implements QuranRepository {
 
     if (await networkInfo.isConnected) {
       try {
-        final surah = await remoteDataSource.getSurah(surahNumber, edition: edition);
-        if (_isCacheableEdition(edition)) {
+        final surah = await remoteDataSource.getSurah(
+          surahNumber,
+          edition: edition,
+        );
+        // Only cache Uthmani edition
+        if (_isUthmaniEdition(edition)) {
           await localDataSource.cacheSurah(surah, edition: edition);
         }
         return Right(surah);
       } on ServerException {
-        // Fallback to cache for Arabic only
-        if (_isCacheableEdition(edition)) {
+        // Fallback to bundled/cached Uthmani for both editions when API fails
+        try {
+          final bundled = await bundledDataSource.getBundledSurah(surahNumber);
+          return Right(bundled);
+        } on CacheException {
+          // Try local cache
           try {
             final cached = await localDataSource.getCachedSurah(
               surahNumber,
-              edition: edition,
+              edition: ApiConstants.defaultEdition,
             );
             return Right(cached);
           } on CacheException {
             return const Left(ServerFailure('Failed to fetch surah'));
           }
         }
-
-        return const Left(ServerFailure('Failed to fetch surah'));
       }
     }
 
-    // Offline
-    if (_isCacheableEdition(edition)) {
+    // Offline - always fallback to bundled Uthmani edition
+    try {
+      final bundled = await bundledDataSource.getBundledSurah(surahNumber);
+      return Right(bundled);
+    } on CacheException {
+      // Try local cache
       try {
         final cached = await localDataSource.getCachedSurah(
           surahNumber,
-          edition: edition,
+          edition: ApiConstants.defaultEdition,
         );
         return Right(cached);
       } on CacheException {
@@ -121,16 +135,19 @@ class QuranRepositoryImpl implements QuranRepository {
         );
       }
     }
-
-    // Non-Arabic editions (like translation) are not cached.
-    return const Left(NetworkFailure('No internet connection'));
   }
 
   @override
-  Future<Either<Failure, Ayah>> getAyah(String reference, {String? edition}) async {
+  Future<Either<Failure, Ayah>> getAyah(
+    String reference, {
+    String? edition,
+  }) async {
     if (await networkInfo.isConnected) {
       try {
-        final ayah = await remoteDataSource.getAyah(reference, edition: edition);
+        final ayah = await remoteDataSource.getAyah(
+          reference,
+          edition: edition,
+        );
         return Right(ayah);
       } on ServerException {
         return const Left(ServerFailure('Failed to fetch ayah'));

@@ -9,6 +9,7 @@ import '../bloc/surah/surah_event.dart';
 import '../bloc/surah/surah_state.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/settings/app_settings_cubit.dart';
+import '../../../../core/audio/ayah_audio_cubit.dart';
 import '../../../islamic/presentation/screens/duaa_screen.dart';
 import '../../../islamic/presentation/screens/prayer_times_screen.dart';
 import '../../../islamic/presentation/screens/qiblah_screen.dart';
@@ -69,8 +70,9 @@ class HomeScreenState extends State<HomeScreen>
     _loadingJuzForSurah.add(surahNumber);
 
     try {
-      final jsonString =
-          await rootBundle.loadString('assets/offline/surah_$surahNumber.json');
+      final jsonString = await rootBundle.loadString(
+        'assets/offline/surah_$surahNumber.json',
+      );
       final decoded = jsonDecode(jsonString);
       final ayahs = (decoded is Map<String, dynamic>)
           ? (decoded['ayahs'] as List?)
@@ -135,150 +137,171 @@ class HomeScreenState extends State<HomeScreen>
                 SliverPadding(
                   padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
                   sliver: SliverList(
-                    delegate: SliverChildBuilderDelegate(
-                      (context, index) {
-                        final surah = state.surahs[index];
-                        _ensureJuzLabel(surah.number);
-                        final juzLabel = _juzLabelBySurahNumber[surah.number];
+                    delegate: SliverChildBuilderDelegate((context, index) {
+                      final surah = state.surahs[index];
+                      _ensureJuzLabel(surah.number);
+                      final juzLabel = _juzLabelBySurahNumber[surah.number];
 
-                        final revelation = _revelationLabel(
-                          surah.revelationType,
-                          isArabicUi: isArabicUi,
-                        );
-                        final ayahs = _ayahCountLabel(
-                          surah.numberOfAyahs,
-                          isArabicUi: isArabicUi,
-                        );
-                        final juz = juzLabel == null
-                            ? null
-                            : (isArabicUi
+                      final revelation = _revelationLabel(
+                        surah.revelationType,
+                        isArabicUi: isArabicUi,
+                      );
+                      final ayahs = _ayahCountLabel(
+                        surah.numberOfAyahs,
+                        isArabicUi: isArabicUi,
+                      );
+                      final juz = juzLabel == null
+                          ? null
+                          : (isArabicUi
                                 ? juzLabel.replaceFirst('Juz', 'الجزء')
                                 : juzLabel);
-                        final detailsParts = <String>[
-                          revelation,
-                          ayahs,
-                          if (juz != null) juz,
-                        ];
-                        final detailsLine = detailsParts.join(' • ');
+                      final detailsParts = <String>[
+                        revelation,
+                        ayahs,
+                        if (juz != null) juz,
+                      ];
+                      final detailsLine = detailsParts.join(' • ');
 
-                        return Card(
-                          margin: const EdgeInsets.only(bottom: 12),
-                          child: InkWell(
-                            onTap: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (context) => SurahDetailScreen(
-                                    surahNumber: surah.number,
-                                    surahName: isArabicUi
-                                        ? surah.name
-                                        : surah.englishName,
+                      final useUthmaniScript = context
+                          .watch<AppSettingsCubit>()
+                          .state
+                          .useUthmaniScript;
+
+                      return Card(
+                        margin: const EdgeInsets.only(bottom: 12),
+                        child: InkWell(
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => SurahDetailScreen(
+                                  surahNumber: surah.number,
+                                  surahName: isArabicUi
+                                      ? surah.name
+                                      : surah.englishName,
+                                ),
+                              ),
+                            );
+                          },
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 14,
+                            ),
+                            child: Row(
+                              textDirection: isArabicUi
+                                  ? TextDirection.rtl
+                                  : TextDirection.ltr,
+                              children: [
+                                Container(
+                                  width: 48,
+                                  height: 48,
+                                  decoration: BoxDecoration(
+                                    color: AppColors.primary.withValues(
+                                      alpha: 0.1,
+                                    ),
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: Center(
+                                    child: Text(
+                                      '${surah.number}',
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .titleMedium
+                                          ?.copyWith(
+                                            color: AppColors.primary,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                    ),
                                   ),
                                 ),
-                              );
-                            },
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 16,
-                                vertical: 14,
-                              ),
-                              child: Row(
-                                textDirection: isArabicUi
-                                    ? TextDirection.rtl
-                                    : TextDirection.ltr,
-                                children: [
-                                  Container(
-                                    width: 48,
-                                    height: 48,
-                                    decoration: BoxDecoration(
-                                      color: AppColors.primary
-                                          .withValues(alpha: 0.1),
-                                      shape: BoxShape.circle,
-                                    ),
-                                    child: Center(
-                                      child: Text(
-                                        '${surah.number}',
-                                        style: Theme.of(context)
-                                            .textTheme
-                                            .titleMedium
-                                            ?.copyWith(
-                                              color: AppColors.primary,
-                                              fontWeight: FontWeight.bold,
-                                            ),
+                                const SizedBox(width: 16),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: isArabicUi
+                                        ? CrossAxisAlignment.end
+                                        : CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        isArabicUi
+                                            ? surah.name
+                                            : surah.englishName,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        textAlign: isArabicUi
+                                            ? TextAlign.right
+                                            : TextAlign.left,
+                                        textDirection: isArabicUi
+                                            ? TextDirection.rtl
+                                            : TextDirection.ltr,
+                                        locale: isArabicUi
+                                            ? const Locale('ar')
+                                            : null,
+                                        strutStyle: isArabicUi
+                                            ? const StrutStyle(
+                                                height: 1.6,
+                                                forceStrutHeight: true,
+                                              )
+                                            : null,
+                                        style: isArabicUi
+                                            ? GoogleFonts.amiriQuran(
+                                                fontSize: 22,
+                                                fontWeight: FontWeight.w700,
+                                                height: 1.6,
+                                                color: Theme.of(
+                                                  context,
+                                                ).textTheme.titleMedium?.color,
+                                              )
+                                            : Theme.of(
+                                                context,
+                                              ).textTheme.titleMedium?.copyWith(
+                                                fontWeight: FontWeight.w700,
+                                              ),
                                       ),
-                                    ),
+                                      const SizedBox(height: 6),
+                                      Text(
+                                        detailsLine,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        textAlign: isArabicUi
+                                            ? TextAlign.right
+                                            : TextAlign.left,
+                                        textDirection: isArabicUi
+                                            ? TextDirection.rtl
+                                            : TextDirection.ltr,
+                                        style: Theme.of(
+                                          context,
+                                        ).textTheme.bodySmall,
+                                      ),
+                                    ],
                                   ),
-                                  const SizedBox(width: 16),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment: isArabicUi
-                                          ? CrossAxisAlignment.end
-                                          : CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          isArabicUi
-                                              ? surah.name
-                                              : surah.englishName,
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                          textAlign: isArabicUi
-                                              ? TextAlign.right
-                                              : TextAlign.left,
-                                          textDirection: isArabicUi
-                                              ? TextDirection.rtl
-                                              : TextDirection.ltr,
-                                          locale: isArabicUi
-                                              ? const Locale('ar')
-                                              : null,
-                                          strutStyle: isArabicUi
-                                              ? const StrutStyle(
-                                                  height: 1.6,
-                                                  forceStrutHeight: true,
-                                                )
-                                              : null,
-                                          style: isArabicUi
-                                              ? GoogleFonts.amiriQuran(
-                                                  fontSize: 22,
-                                                  fontWeight: FontWeight.w700,
-                                                  height: 1.6,
-                                                  color: Theme.of(context)
-                                                      .textTheme
-                                                      .titleMedium
-                                                      ?.color,
-                                                )
-                                              : Theme.of(context)
-                                                  .textTheme
-                                                  .titleMedium
-                                                  ?.copyWith(
-                                                    fontWeight: FontWeight.w700,
-                                                  ),
-                                        ),
-                                        const SizedBox(height: 6),
-                                        Text(
-                                          detailsLine,
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                          textAlign: isArabicUi
-                                              ? TextAlign.right
-                                              : TextAlign.left,
-                                          textDirection: isArabicUi
-                                              ? TextDirection.rtl
-                                              : TextDirection.ltr,
-                                          style: Theme.of(context)
-                                              .textTheme
-                                              .bodySmall,
-                                        ),
-                                      ],
+                                ),
+                                if (useUthmaniScript) ...[
+                                  const SizedBox(width: 8),
+                                  IconButton(
+                                    icon: Icon(
+                                      Icons.play_circle_outline,
+                                      color: AppColors.primary,
                                     ),
+                                    tooltip: isArabicUi
+                                        ? 'تشغيل السورة كاملة'
+                                        : 'Play full surah',
+                                    onPressed: () {
+                                      context
+                                          .read<AyahAudioCubit>()
+                                          .togglePlaySurah(
+                                            surahNumber: surah.number,
+                                            numberOfAyahs: surah.numberOfAyahs,
+                                          );
+                                    },
                                   ),
                                 ],
-                              ),
+                              ],
                             ),
                           ),
-                        );
-                      },
-                      childCount: state.surahs.length,
-                    ),
+                        ),
+                      );
+                    }, childCount: state.surahs.length),
                   ),
                 ),
               ],
@@ -310,7 +333,177 @@ class HomeScreenState extends State<HomeScreen>
           return const SizedBox.shrink();
         },
       ),
+      bottomNavigationBar: BlocBuilder<SurahBloc, SurahState>(
+        builder: (context, surahState) {
+          return BlocBuilder<AyahAudioCubit, AyahAudioState>(
+            buildWhen: (prev, next) => prev != next,
+            builder: (context, audioState) {
+              final visible = audioState.status != AyahAudioStatus.idle;
+              if (!visible) return const SizedBox.shrink();
+
+              final isSurahMode = audioState.mode == AyahAudioMode.surah;
+              final surahName = _getSurahName(
+                surahState,
+                audioState.surahNumber,
+                isArabicUi: isArabicUi,
+              );
+              final title = isSurahMode
+                  ? '$surahName • ${isArabicUi ? 'الآية' : 'Ayah'} ${audioState.ayahNumber ?? '-'}'
+                  : '${isArabicUi ? 'الآية' : 'Ayah'} ${audioState.ayahNumber ?? '-'}';
+
+              final isPlaying = audioState.status == AyahAudioStatus.playing;
+              final isBuffering =
+                  audioState.status == AyahAudioStatus.buffering;
+
+              final cubit = context.read<AyahAudioCubit>();
+
+              return Material(
+                elevation: 10,
+                color: Theme.of(context).colorScheme.surface,
+                child: SafeArea(
+                  top: false,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                title,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: Theme.of(context).textTheme.bodyMedium
+                                    ?.copyWith(fontWeight: FontWeight.w600),
+                              ),
+                            ),
+                            if (isSurahMode)
+                              IconButton(
+                                tooltip: isArabicUi ? 'السابق' : 'Previous',
+                                onPressed: () => cubit.previous(),
+                                icon: const Icon(Icons.skip_previous),
+                              ),
+                            IconButton(
+                              tooltip: isPlaying
+                                  ? (isArabicUi ? 'إيقاف مؤقت' : 'Pause')
+                                  : (isBuffering
+                                        ? (isArabicUi
+                                              ? 'جاري التحميل…'
+                                              : 'Loading…')
+                                        : (isArabicUi ? 'تشغيل' : 'Play')),
+                              onPressed: () {
+                                if (isSurahMode) {
+                                  final surahNumber = audioState.surahNumber;
+                                  if (surahNumber != null) {
+                                    final numberOfAyahs = _getNumberOfAyahs(
+                                      surahState,
+                                      surahNumber,
+                                    );
+                                    if (numberOfAyahs != null) {
+                                      cubit.togglePlaySurah(
+                                        surahNumber: surahNumber,
+                                        numberOfAyahs: numberOfAyahs,
+                                      );
+                                    }
+                                  }
+                                } else {
+                                  if (audioState.surahNumber != null &&
+                                      audioState.ayahNumber != null) {
+                                    cubit.togglePlayAyah(
+                                      surahNumber: audioState.surahNumber!,
+                                      ayahNumber: audioState.ayahNumber!,
+                                    );
+                                  }
+                                }
+                              },
+                              icon: Icon(
+                                isBuffering
+                                    ? Icons.hourglass_top
+                                    : (isPlaying
+                                          ? Icons.pause
+                                          : Icons.play_arrow),
+                              ),
+                            ),
+                            if (isSurahMode)
+                              IconButton(
+                                tooltip: isArabicUi ? 'التالي' : 'Next',
+                                onPressed: () => cubit.next(),
+                                icon: const Icon(Icons.skip_next),
+                              ),
+                            IconButton(
+                              tooltip: isArabicUi ? 'إيقاف' : 'Stop',
+                              onPressed: () => cubit.stop(),
+                              icon: const Icon(Icons.close),
+                            ),
+                          ],
+                        ),
+                        StreamBuilder<Duration>(
+                          stream: cubit.positionStream,
+                          builder: (context, posSnap) {
+                            return StreamBuilder<Duration?>(
+                              stream: cubit.durationStream,
+                              builder: (context, durSnap) {
+                                final pos = posSnap.data ?? Duration.zero;
+                                final dur = durSnap.data ?? Duration.zero;
+                                final maxMs = dur.inMilliseconds;
+                                final value = maxMs <= 0
+                                    ? 0.0
+                                    : (pos.inMilliseconds / maxMs).clamp(
+                                        0.0,
+                                        1.0,
+                                      );
+                                return LinearProgressIndicator(value: value);
+                              },
+                            );
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            },
+          );
+        },
+      ),
     );
+  }
+
+  String _getSurahName(
+    SurahState state,
+    int? surahNumber, {
+    required bool isArabicUi,
+  }) {
+    if (state is SurahListLoaded && surahNumber != null) {
+      try {
+        final surah = state.surahs.firstWhere((s) => s.number == surahNumber);
+        return isArabicUi ? surah.name : surah.englishName;
+      } catch (e) {
+        // If surah not found, use first surah or default
+        if (state.surahs.isNotEmpty) {
+          final surah = state.surahs.first;
+          return isArabicUi ? surah.name : surah.englishName;
+        }
+      }
+    }
+    return isArabicUi ? 'القرآن الكريم' : 'Quran';
+  }
+
+  int? _getNumberOfAyahs(SurahState state, int surahNumber) {
+    if (state is SurahListLoaded) {
+      try {
+        final surah = state.surahs.firstWhere((s) => s.number == surahNumber);
+        return surah.numberOfAyahs;
+      } catch (e) {
+        // If surah not found, return null
+        return null;
+      }
+    }
+    return null;
   }
 }
 
@@ -321,13 +514,14 @@ class _CategoriesSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final titleStyle = Theme.of(context).textTheme.titleMedium?.copyWith(
-          fontWeight: FontWeight.w800,
-        );
+    final titleStyle = Theme.of(
+      context,
+    ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800);
 
     return Column(
-      crossAxisAlignment:
-          isArabicUi ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+      crossAxisAlignment: isArabicUi
+          ? CrossAxisAlignment.end
+          : CrossAxisAlignment.start,
       children: [
         Text(isArabicUi ? 'الأقسام' : 'Categories', style: titleStyle),
         const SizedBox(height: 12),
@@ -351,18 +545,18 @@ class _CategoriesSection extends StatelessWidget {
               label: isArabicUi ? 'القبلة' : 'Qiblah',
               icon: Icons.explore,
               onTap: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const QiblahScreen()),
-                );
+                Navigator.of(
+                  context,
+                ).push(MaterialPageRoute(builder: (_) => const QiblahScreen()));
               },
             ),
             _CategoryTile(
               label: isArabicUi ? 'الأدعية' : 'Duaa',
               icon: Icons.menu_book,
               onTap: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const DuaaScreen()),
-                );
+                Navigator.of(
+                  context,
+                ).push(MaterialPageRoute(builder: (_) => const DuaaScreen()));
               },
             ),
             _CategoryTile(
@@ -397,10 +591,9 @@ class _CategoriesSection extends StatelessWidget {
           isArabicUi
               ? 'يمكنك الوصول لكل ميزات التطبيق من هنا.'
               : 'Quick access to all app features.',
-          style: Theme.of(context)
-              .textTheme
-              .bodySmall
-              ?.copyWith(color: AppColors.textSecondary),
+          style: Theme.of(
+            context,
+          ).textTheme.bodySmall?.copyWith(color: AppColors.textSecondary),
           textAlign: isArabicUi ? TextAlign.right : TextAlign.left,
         ),
       ],
@@ -450,9 +643,9 @@ class _CategoryTile extends StatelessWidget {
                 textAlign: TextAlign.center,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w700),
               ),
             ],
           ),

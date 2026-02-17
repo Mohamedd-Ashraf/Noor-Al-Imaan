@@ -10,5 +10,6 @@ class ApiConstants {
   
   // Default edition
   static const String defaultEdition = 'quran-uthmani';
+  static const String simpleEdition = 'quran-simple';
   static const String defaultTranslation = 'en.asad';
 }

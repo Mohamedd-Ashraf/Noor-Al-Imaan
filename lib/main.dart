@@ -11,6 +11,7 @@ import 'core/audio/ayah_audio_cubit.dart';
 import 'core/widgets/onboarding_gate.dart';
 import 'features/quran/presentation/bloc/surah/surah_bloc.dart';
 import 'features/quran/presentation/bloc/ayah/ayah_bloc.dart';
+import 'package:quran_controller/quran_controller.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();

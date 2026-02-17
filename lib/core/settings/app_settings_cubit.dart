@@ -9,6 +9,7 @@ class AppSettingsState extends Equatable {
   final bool darkMode;
   final bool showTranslation;
   final String appLanguageCode;
+  final bool useUthmaniScript;
 
   const AppSettingsState({
     required this.arabicFontSize,
@@ -16,6 +17,7 @@ class AppSettingsState extends Equatable {
     required this.darkMode,
     required this.showTranslation,
     required this.appLanguageCode,
+    required this.useUthmaniScript,
   });
 
   factory AppSettingsState.initial(SettingsService service) {
@@ -25,6 +27,7 @@ class AppSettingsState extends Equatable {
       darkMode: service.getDarkMode(),
       showTranslation: service.getShowTranslation(),
       appLanguageCode: service.getAppLanguage(),
+      useUthmaniScript: service.getUseUthmaniScript(),
     );
   }
 
@@ -34,6 +37,7 @@ class AppSettingsState extends Equatable {
     bool? darkMode,
     bool? showTranslation,
     String? appLanguageCode,
+    bool? useUthmaniScript,
   }) {
     return AppSettingsState(
       arabicFontSize: arabicFontSize ?? this.arabicFontSize,
@@ -41,11 +45,19 @@ class AppSettingsState extends Equatable {
       darkMode: darkMode ?? this.darkMode,
       showTranslation: showTranslation ?? this.showTranslation,
       appLanguageCode: appLanguageCode ?? this.appLanguageCode,
+      useUthmaniScript: useUthmaniScript ?? this.useUthmaniScript,
     );
   }
 
   @override
-  List<Object?> get props => [arabicFontSize, translationFontSize, darkMode, showTranslation, appLanguageCode];
+  List<Object?> get props => [
+    arabicFontSize,
+    translationFontSize,
+    darkMode,
+    showTranslation,
+    appLanguageCode,
+    useUthmaniScript,
+  ];
 }
 
 class AppSettingsCubit extends Cubit<AppSettingsState> {
@@ -76,5 +88,10 @@ class AppSettingsCubit extends Cubit<AppSettingsState> {
   Future<void> setAppLanguage(String languageCode) async {
     await _service.setAppLanguage(languageCode);
     emit(state.copyWith(appLanguageCode: languageCode));
+  }
+
+  Future<void> setUseUthmaniScript(bool value) async {
+    await _service.setUseUthmaniScript(value);
+    emit(state.copyWith(useUthmaniScript: value));
   }
 }

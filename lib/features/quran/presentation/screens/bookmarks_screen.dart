@@ -216,7 +216,7 @@ class BookmarksScreenState extends State<BookmarksScreen> {
             },
             child: InkWell(
               onTap: () {
-                // Navigate to the specific surah and scroll to the ayah
+                // Navigate to the specific surah and scroll to the ayah or page
                 final surahNumber = bookmark['surahNumber'];
                 if (surahNumber != null) {
                   final isArabicUi = context
@@ -231,6 +231,18 @@ class BookmarksScreenState extends State<BookmarksScreen> {
                     savedName: bookmark['surahName'] as String?,
                   );
                   final ayahNumber = bookmark['ayahNumber'] as int?;
+
+                  // Check if this is a page bookmark
+                  int? pageNumber;
+                  final bookmarkId = bookmark['id'] as String?;
+                  if (bookmarkId != null && bookmarkId.contains(':page:')) {
+                    // Extract page number from ID like "2:page:5"
+                    final parts = bookmarkId.split(':');
+                    if (parts.length == 3) {
+                      pageNumber = int.tryParse(parts[2]);
+                    }
+                  }
+
                   Navigator.push(
                     context,
                     MaterialPageRoute(
@@ -238,6 +250,7 @@ class BookmarksScreenState extends State<BookmarksScreen> {
                         surahNumber: surahNumber,
                         surahName: surahName,
                         initialAyahNumber: ayahNumber,
+                        initialPageNumber: pageNumber,
                       ),
                     ),
                   );

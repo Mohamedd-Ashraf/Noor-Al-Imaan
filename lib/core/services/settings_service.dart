@@ -7,6 +7,7 @@ class SettingsService {
   static const String _keyDarkMode = 'dark_mode';
   static const String _keyShowTranslation = 'show_translation';
   static const String _keyAppLanguage = 'app_language';
+  static const String _keyUseUthmaniScript = 'use_uthmani_script';
   static const String _keyOnboardingComplete = 'onboarding_complete';
   static const String _keyAdhanNotificationsEnabled = 'adhan_notifications_enabled';
   static const String _keyAdhanIncludeFajr = 'adhan_include_fajr';
@@ -64,6 +65,15 @@ class SettingsService {
 
   String getAppLanguage() {
     return _prefs.getString(_keyAppLanguage) ?? 'en';
+  }
+
+  // Use Uthmani Script
+  Future<bool> setUseUthmaniScript(bool enabled) async {
+    return await _prefs.setBool(_keyUseUthmaniScript, enabled);
+  }
+
+  bool getUseUthmaniScript() {
+    return _prefs.getBool(_keyUseUthmaniScript) ?? true;
   }
 
   // Onboarding

@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../bloc/surah/surah_bloc.dart';
 import '../bloc/surah/surah_event.dart';
 import '../bloc/surah/surah_state.dart';
+import '../widgets/mushaf_page_view.dart';
 import '../../domain/usecases/get_surah.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/api_constants.dart';
@@ -16,12 +17,14 @@ class SurahDetailScreen extends StatefulWidget {
   final int surahNumber;
   final String surahName;
   final int? initialAyahNumber;
+  final int? initialPageNumber;
 
   const SurahDetailScreen({
     super.key,
     required this.surahNumber,
     required this.surahName,
     this.initialAyahNumber,
+    this.initialPageNumber,
   });
 
   @override
@@ -41,12 +44,21 @@ class _SurahDetailScreenState extends State<SurahDetailScreen> {
   bool _isLoadingTranslation = false;
   String? _translationError;
 
+  bool? _previousUthmaniSetting;
+
   @override
   void initState() {
     super.initState();
     _bookmarkService = di.sl<BookmarkService>();
 
-    context.read<SurahBloc>().add(GetSurahDetailEvent(widget.surahNumber));
+    final useUthmani = context.read<AppSettingsCubit>().state.useUthmaniScript;
+    final edition = useUthmani
+        ? ApiConstants.defaultEdition
+        : ApiConstants.simpleEdition;
+
+    context.read<SurahBloc>().add(
+      GetSurahDetailEvent(widget.surahNumber, edition: edition),
+    );
 
     _scrollController.addListener(() {
       if (_scrollController.offset > 400 && !_showScrollToTop) {
@@ -90,6 +102,24 @@ class _SurahDetailScreenState extends State<SurahDetailScreen> {
       (cubit) => cubit.state.showTranslation,
     );
 
+    final useUthmaniScript = context.select<AppSettingsCubit, bool>(
+      (cubit) => cubit.state.useUthmaniScript,
+    );
+
+    // Reload surah when script type changes
+    if (_previousUthmaniSetting != null &&
+        _previousUthmaniSetting != useUthmaniScript) {
+      final edition = useUthmaniScript
+          ? ApiConstants.defaultEdition
+          : ApiConstants.simpleEdition;
+      Future.microtask(() {
+        context.read<SurahBloc>().add(
+          GetSurahDetailEvent(widget.surahNumber, edition: edition),
+        );
+      });
+    }
+    _previousUthmaniSetting = useUthmaniScript;
+
     if (showTranslation) {
       _maybeLoadTranslation();
     }
@@ -121,6 +151,37 @@ class _SurahDetailScreenState extends State<SurahDetailScreen> {
               } else if (state is SurahDetailLoaded) {
                 final surah = state.surah;
 
+                // Use Mushaf page view when Uthmani script is enabled
+                if (useUthmaniScript) {
+                  return Scaffold(
+                    appBar: AppBar(
+                      title: Text(
+                        isArabicUi ? surah.name : surah.englishName,
+                        style: GoogleFonts.amiriQuran(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      centerTitle: true,
+                    ),
+                    body: MushafPageView(
+                      surah: surah,
+                      surahNumber: widget.surahNumber,
+                      initialPage:
+                          widget.initialPageNumber ??
+                          (widget.initialAyahNumber != null
+                              ? _findPageForAyah(
+                                  surah.ayahs,
+                                  widget.initialAyahNumber!,
+                                )
+                              : null),
+                      initialAyahNumber: widget.initialAyahNumber,
+                      isArabicUi: isArabicUi,
+                    ),
+                  );
+                }
+
+                // Regular scrollable view
                 final audioState = context.watch<AyahAudioCubit>().state;
                 final isThisSurahAudio =
                     audioState.surahNumber == widget.surahNumber &&
@@ -200,7 +261,8 @@ class _SurahDetailScreenState extends State<SurahDetailScreen> {
                                 ClipRect(
                                   child: SafeArea(
                                     child: Column(
-                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
                                       children: [
                                         const SizedBox(height: 20),
                                         Text(
@@ -258,30 +320,35 @@ class _SurahDetailScreenState extends State<SurahDetailScreen> {
                                     child: IgnorePointer(
                                       ignoring: !showCollapsedTitle,
                                       child: Text(
-                                        isArabicUi ? surah.name : surah.englishName,
+                                        isArabicUi
+                                            ? surah.name
+                                            : surah.englishName,
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
                                         textAlign: TextAlign.center,
-                                        style: (isArabicUi
-                                                ? GoogleFonts.amiriQuran(
-                                                    fontSize: 18,
-                                                    fontWeight: FontWeight.w700,
-                                                    height: 1.1,
-                                                  )
-                                                : GoogleFonts.cairo(
-                                                    fontSize: 16,
-                                                    fontWeight: FontWeight.w700,
-                                                  ))
-                                            .copyWith(
-                                              color: Colors.white,
-                                              shadows: const [
-                                                Shadow(
-                                                  offset: Offset(0, 1),
-                                                  blurRadius: 3,
-                                                  color: Colors.black26,
+                                        style:
+                                            (isArabicUi
+                                                    ? GoogleFonts.amiriQuran(
+                                                        fontSize: 18,
+                                                        fontWeight:
+                                                            FontWeight.w700,
+                                                        height: 1.1,
+                                                      )
+                                                    : GoogleFonts.cairo(
+                                                        fontSize: 16,
+                                                        fontWeight:
+                                                            FontWeight.w700,
+                                                      ))
+                                                .copyWith(
+                                                  color: Colors.white,
+                                                  shadows: const [
+                                                    Shadow(
+                                                      offset: Offset(0, 1),
+                                                      blurRadius: 3,
+                                                      color: Colors.black26,
+                                                    ),
+                                                  ],
                                                 ),
-                                              ],
-                                            ),
                                       ),
                                     ),
                                   ),
@@ -526,10 +593,12 @@ class _SurahDetailScreenState extends State<SurahDetailScreen> {
                                           ? surah.ayahs![index - 1]
                                           : null;
 
-                                        final showJuz =
-                                          prevAyah == null || ayah.juz != prevAyah.juz;
-                                        final showPage =
-                                          prevAyah == null || ayah.page != prevAyah.page;
+                                      final showJuz =
+                                          prevAyah == null ||
+                                          ayah.juz != prevAyah.juz;
+                                      final showPage =
+                                          prevAyah == null ||
+                                          ayah.page != prevAyah.page;
 
                                       final chips = <Widget>[];
 
@@ -631,8 +700,19 @@ class _SurahDetailScreenState extends State<SurahDetailScreen> {
                       const SizedBox(height: 16),
                       ElevatedButton.icon(
                         onPressed: () {
+                          final useUthmani = context
+                              .read<AppSettingsCubit>()
+                              .state
+                              .useUthmaniScript;
+                          final edition = useUthmani
+                              ? ApiConstants.defaultEdition
+                              : ApiConstants.simpleEdition;
+
                           context.read<SurahBloc>().add(
-                            GetSurahDetailEvent(widget.surahNumber),
+                            GetSurahDetailEvent(
+                              widget.surahNumber,
+                              edition: edition,
+                            ),
                           );
                         },
                         icon: const Icon(Icons.refresh),
@@ -828,6 +908,17 @@ class _SurahDetailScreenState extends State<SurahDetailScreen> {
         _didScrollToTarget = true;
       });
     });
+  }
+
+  int? _findPageForAyah(List<dynamic>? ayahs, int ayahNumber) {
+    if (ayahs == null || ayahs.isEmpty) return null;
+    try {
+      final ayah = ayahs.firstWhere((a) => a.numberInSurah == ayahNumber);
+      return ayah.page;
+    } catch (e) {
+      // If ayah not found, return first page
+      return ayahs.first.page;
+    }
   }
 
   void _maybeLoadTranslation() {

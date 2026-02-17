@@ -7,18 +7,9 @@ import 'package:just_audio/just_audio.dart';
 
 import '../services/ayah_audio_service.dart';
 
-enum AyahAudioMode {
-  ayah,
-  surah,
-}
+enum AyahAudioMode { ayah, surah }
 
-enum AyahAudioStatus {
-  idle,
-  buffering,
-  playing,
-  paused,
-  error,
-}
+enum AyahAudioStatus { idle, buffering, playing, paused, error }
 
 class AyahAudioState extends Equatable {
   final AyahAudioStatus status;
@@ -42,7 +33,13 @@ class AyahAudioState extends Equatable {
   bool isCurrent(int s, int a) => surahNumber == s && ayahNumber == a;
 
   @override
-  List<Object?> get props => [status, mode, surahNumber, ayahNumber, errorMessage];
+  List<Object?> get props => [
+    status,
+    mode,
+    surahNumber,
+    ayahNumber,
+    errorMessage,
+  ];
 
   AyahAudioState copyWith({
     AyahAudioStatus? status,
@@ -71,8 +68,8 @@ class AyahAudioCubit extends Cubit<AyahAudioState> {
   bool _initialized = false;
 
   AyahAudioCubit(this._service)
-      : _player = AudioPlayer(),
-        super(const AyahAudioState.idle()) {
+    : _player = AudioPlayer(),
+      super(const AyahAudioState.idle()) {
     _init();
   }
 
@@ -92,8 +89,11 @@ class AyahAudioCubit extends Cubit<AyahAudioState> {
     _playerSub = _player.playerStateStream.listen((ps) {
       if (isClosed) return;
       final processing = ps.processingState;
-      if (processing == ProcessingState.loading || processing == ProcessingState.buffering) {
-        emit(state.copyWith(status: AyahAudioStatus.buffering, clearError: true));
+      if (processing == ProcessingState.loading ||
+          processing == ProcessingState.buffering) {
+        emit(
+          state.copyWith(status: AyahAudioStatus.buffering, clearError: true),
+        );
         return;
       }
 
@@ -107,7 +107,14 @@ class AyahAudioCubit extends Cubit<AyahAudioState> {
         emit(state.copyWith(status: AyahAudioStatus.playing, clearError: true));
       } else {
         // If we have a target, treat as paused; otherwise idle.
-        emit(state.copyWith(status: state.hasTarget ? AyahAudioStatus.paused : AyahAudioStatus.idle, clearError: true));
+        emit(
+          state.copyWith(
+            status: state.hasTarget
+                ? AyahAudioStatus.paused
+                : AyahAudioStatus.idle,
+            clearError: true,
+          ),
+        );
       }
     });
 
@@ -115,7 +122,18 @@ class AyahAudioCubit extends Cubit<AyahAudioState> {
       if (isClosed) return;
       if (idx == null) return;
       if (state.mode != AyahAudioMode.surah) return;
-      // Playlist index is 0-based, ayah number is 1-based.
+
+      // Get the ayah number from the audio source tag
+      final sequence = _player.sequenceState;
+      if (sequence != null && idx < sequence.sequence.length) {
+        final tag = sequence.sequence[idx].tag;
+        if (tag is int) {
+          emit(state.copyWith(ayahNumber: tag));
+          return;
+        }
+      }
+
+      // Fallback: assume playlist starts from ayah 1
       emit(state.copyWith(ayahNumber: idx + 1));
     });
   }
@@ -128,7 +146,9 @@ class AyahAudioCubit extends Cubit<AyahAudioState> {
     required int surahNumber,
     required int ayahNumber,
   }) async {
-    if (state.mode == AyahAudioMode.ayah && state.isCurrent(surahNumber, ayahNumber) && _player.playing) {
+    if (state.mode == AyahAudioMode.ayah &&
+        state.isCurrent(surahNumber, ayahNumber) &&
+        _player.playing) {
       await pause();
       return;
     }
@@ -232,7 +252,11 @@ class AyahAudioCubit extends Cubit<AyahAudioState> {
       }
 
       final playlist = ConcatenatingAudioSource(children: children);
-      await _player.setAudioSource(playlist, initialIndex: 0, initialPosition: Duration.zero);
+      await _player.setAudioSource(
+        playlist,
+        initialIndex: 0,
+        initialPosition: Duration.zero,
+      );
       await _player.setLoopMode(LoopMode.off);
       await _player.setShuffleModeEnabled(false);
       await _player.play();
@@ -243,6 +267,63 @@ class AyahAudioCubit extends Cubit<AyahAudioState> {
           mode: AyahAudioMode.surah,
           surahNumber: surahNumber,
           ayahNumber: 1,
+          errorMessage: e.toString().replaceFirst('Exception: ', ''),
+        ),
+      );
+    }
+  }
+
+  /// Plays a specific range of ayahs from a surah
+  Future<void> playAyahRange({
+    required int surahNumber,
+    required int startAyah,
+    required int endAyah,
+  }) async {
+    if (!_initialized) {
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+    }
+    emit(
+      AyahAudioState(
+        status: AyahAudioStatus.buffering,
+        mode: AyahAudioMode.surah,
+        surahNumber: surahNumber,
+        ayahNumber: startAyah,
+      ),
+    );
+
+    try {
+      final children = <AudioSource>[];
+      for (var ayahNumber = startAyah; ayahNumber <= endAyah; ayahNumber++) {
+        final source = await _service.resolveAyahAudio(
+          surahNumber: surahNumber,
+          ayahNumber: ayahNumber,
+        );
+
+        if (source.isLocal) {
+          children.add(
+            AudioSource.file(source.localFilePath!, tag: ayahNumber),
+          );
+        } else {
+          children.add(AudioSource.uri(source.remoteUri!, tag: ayahNumber));
+        }
+      }
+
+      final playlist = ConcatenatingAudioSource(children: children);
+      await _player.setAudioSource(
+        playlist,
+        initialIndex: 0,
+        initialPosition: Duration.zero,
+      );
+      await _player.setLoopMode(LoopMode.off);
+      await _player.setShuffleModeEnabled(false);
+      await _player.play();
+    } catch (e) {
+      emit(
+        AyahAudioState(
+          status: AyahAudioStatus.error,
+          mode: AyahAudioMode.surah,
+          surahNumber: surahNumber,
+          ayahNumber: startAyah,
           errorMessage: e.toString().replaceFirst('Exception: ', ''),
         ),
       );

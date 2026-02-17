@@ -34,10 +34,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   String _formatTime(BuildContext context, DateTime dt) {
     final tod = TimeOfDay.fromDateTime(dt.toLocal());
-    return MaterialLocalizations.of(context).formatTimeOfDay(
-      tod,
-      alwaysUse24HourFormat: false,
-    );
+    return MaterialLocalizations.of(
+      context,
+    ).formatTimeOfDay(tod, alwaysUse24HourFormat: false);
   }
 
   String _languageLabel(String code, {required bool isArabicUi}) {
@@ -72,7 +71,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   void _refreshReciters() {
     setState(() {
-      _audioEditionsFuture = _audioEditionService.getVerseByVerseAudioEditions();
+      _audioEditionsFuture = _audioEditionService
+          .getVerseByVerseAudioEditions();
     });
   }
 
@@ -103,8 +103,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ExpansionPanelRadio(
                 value: 'prayer',
                 headerBuilder: (context, isExpanded) => ListTile(
-                  leading: const Icon(Icons.notifications_active_outlined, color: AppColors.primary),
-                  title: Text(isArabicUi ? 'تنبيهات الصلاة' : 'Prayer Notifications'),
+                  leading: const Icon(
+                    Icons.notifications_active_outlined,
+                    color: AppColors.primary,
+                  ),
+                  title: Text(
+                    isArabicUi ? 'تنبيهات الصلاة' : 'Prayer Notifications',
+                  ),
                 ),
                 body: Padding(
                   padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
@@ -112,7 +117,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     child: Column(
                       children: [
                         SwitchListTile(
-                          title: Text(isArabicUi ? 'تفعيل تنبيهات الأذان' : 'Enable Adhan Reminders'),
+                          title: Text(
+                            isArabicUi
+                                ? 'تفعيل تنبيهات الأذان'
+                                : 'Enable Adhan Reminders',
+                          ),
                           subtitle: Text(
                             isArabicUi
                                 ? 'تنبيه عند دخول وقت الصلاة'
@@ -137,7 +146,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         SwitchListTile(
                           title: Text(isArabicUi ? 'أذان الفجر' : 'Fajr Adhan'),
                           subtitle: Text(
-                            isArabicUi ? 'تشغيل تنبيه الفجر' : 'Include the Fajr reminder',
+                            isArabicUi
+                                ? 'تشغيل تنبيه الفجر'
+                                : 'Include the Fajr reminder',
                           ),
                           value: includeFajr,
                           onChanged: adhanEnabled
@@ -153,7 +164,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         ),
                         const Divider(height: 1),
                         SwitchListTile(
-                          title: Text(isArabicUi ? 'صوت الأذان' : 'Adhan Sound'),
+                          title: Text(
+                            isArabicUi ? 'صوت الأذان' : 'Adhan Sound',
+                          ),
                           subtitle: Text(
                             isArabicUi
                                 ? 'يستخدم التطبيق adhan.mp3 افتراضيًا'
@@ -176,17 +189,25 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                   if (!mounted) return;
                                   ScaffoldMessenger.of(context).showSnackBar(
                                     SnackBar(
-                                      content: Text(isArabicUi ? 'تم إرسال إشعار تجريبي' : 'Test notification sent'),
+                                      content: Text(
+                                        isArabicUi
+                                            ? 'تم إرسال إشعار تجريبي'
+                                            : 'Test notification sent',
+                                      ),
                                       duration: const Duration(seconds: 1),
                                     ),
                                   );
                                 },
                                 icon: const Icon(Icons.volume_up_outlined),
-                                label: Text(isArabicUi ? 'اختبار الآن' : 'Test now'),
+                                label: Text(
+                                  isArabicUi ? 'اختبار الآن' : 'Test now',
+                                ),
                               ),
                               OutlinedButton.icon(
                                 onPressed: () async {
-                                  await _adhanNotifications.scheduleTestIn(const Duration(seconds: 10));
+                                  await _adhanNotifications.scheduleTestIn(
+                                    const Duration(seconds: 10),
+                                  );
                                   if (!mounted) return;
                                   ScaffoldMessenger.of(context).showSnackBar(
                                     SnackBar(
@@ -200,60 +221,105 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                   );
                                 },
                                 icon: const Icon(Icons.timer_outlined),
-                                label: Text(isArabicUi ? 'اختبار بعد 10 ثوانٍ' : 'Test in 10s'),
+                                label: Text(
+                                  isArabicUi
+                                      ? 'اختبار بعد 10 ثوانٍ'
+                                      : 'Test in 10s',
+                                ),
                               ),
                               OutlinedButton.icon(
                                 onPressed: () async {
-                                  await _showAdhanScheduleDialog(isArabicUi: isArabicUi);
+                                  await _showAdhanScheduleDialog(
+                                    isArabicUi: isArabicUi,
+                                  );
                                 },
                                 icon: const Icon(Icons.list_alt_outlined),
-                                label: Text(isArabicUi ? 'عرض الجدول الحالي' : 'View current schedule'),
+                                label: Text(
+                                  isArabicUi
+                                      ? 'عرض الجدول الحالي'
+                                      : 'View current schedule',
+                                ),
                               ),
                               OutlinedButton.icon(
-                                onPressed: (defaultTargetPlatform == TargetPlatform.android)
+                                onPressed:
+                                    (defaultTargetPlatform ==
+                                        TargetPlatform.android)
                                     ? () async {
-                                        await _adhanNotifications.recreateAndroidChannels();
+                                        await _adhanNotifications
+                                            .recreateAndroidChannels();
                                         if (!mounted) return;
-                                        ScaffoldMessenger.of(context).showSnackBar(
+                                        ScaffoldMessenger.of(
+                                          context,
+                                        ).showSnackBar(
                                           SnackBar(
-                                            content: Text(isArabicUi ? 'تمت إعادة ضبط القنوات' : 'Notification channels reset'),
-                                            duration: const Duration(seconds: 1),
+                                            content: Text(
+                                              isArabicUi
+                                                  ? 'تمت إعادة ضبط القنوات'
+                                                  : 'Notification channels reset',
+                                            ),
+                                            duration: const Duration(
+                                              seconds: 1,
+                                            ),
                                           ),
                                         );
                                       }
                                     : null,
                                 icon: const Icon(Icons.restart_alt),
-                                label: Text(isArabicUi ? 'إعادة ضبط القنوات' : 'Reset channels'),
+                                label: Text(
+                                  isArabicUi
+                                      ? 'إعادة ضبط القنوات'
+                                      : 'Reset channels',
+                                ),
                               ),
                               OutlinedButton.icon(
                                 onPressed: () async {
-                                  await _adhanNotifications.requestPermissions();
+                                  await _adhanNotifications
+                                      .requestPermissions();
                                   if (!mounted) return;
                                   ScaffoldMessenger.of(context).showSnackBar(
                                     SnackBar(
-                                      content: Text(isArabicUi ? 'تم طلب الصلاحيات' : 'Permissions requested'),
+                                      content: Text(
+                                        isArabicUi
+                                            ? 'تم طلب الصلاحيات'
+                                            : 'Permissions requested',
+                                      ),
                                       duration: const Duration(seconds: 1),
                                     ),
                                   );
                                 },
                                 icon: const Icon(Icons.verified_user_outlined),
-                                label: Text(isArabicUi ? 'طلب الصلاحيات' : 'Request permissions'),
+                                label: Text(
+                                  isArabicUi
+                                      ? 'طلب الصلاحيات'
+                                      : 'Request permissions',
+                                ),
                               ),
                               OutlinedButton.icon(
                                 onPressed: adhanEnabled
                                     ? () async {
-                                        await _adhanNotifications.ensureScheduled();
+                                        await _adhanNotifications
+                                            .ensureScheduled();
                                         if (!mounted) return;
-                                        ScaffoldMessenger.of(context).showSnackBar(
+                                        ScaffoldMessenger.of(
+                                          context,
+                                        ).showSnackBar(
                                           SnackBar(
-                                            content: Text(isArabicUi ? 'تمت إعادة الجدولة' : 'Rescheduled reminders'),
-                                            duration: const Duration(seconds: 1),
+                                            content: Text(
+                                              isArabicUi
+                                                  ? 'تمت إعادة الجدولة'
+                                                  : 'Rescheduled reminders',
+                                            ),
+                                            duration: const Duration(
+                                              seconds: 1,
+                                            ),
                                           ),
                                         );
                                       }
                                     : null,
                                 icon: const Icon(Icons.schedule_outlined),
-                                label: Text(isArabicUi ? 'إعادة الجدولة' : 'Reschedule'),
+                                label: Text(
+                                  isArabicUi ? 'إعادة الجدولة' : 'Reschedule',
+                                ),
                               ),
                             ],
                           ),
@@ -267,8 +333,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ExpansionPanelRadio(
                 value: 'display',
                 headerBuilder: (context, isExpanded) => ListTile(
-                  leading: const Icon(Icons.palette_outlined, color: AppColors.primary),
-                  title: Text(isArabicUi ? 'إعدادات العرض' : 'Display Settings'),
+                  leading: const Icon(
+                    Icons.palette_outlined,
+                    color: AppColors.primary,
+                  ),
+                  title: Text(
+                    isArabicUi ? 'إعدادات العرض' : 'Display Settings',
+                  ),
                 ),
                 body: Padding(
                   padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
@@ -282,7 +353,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             children: [
                               Text(
                                 isArabicUi ? 'لغة التطبيق' : 'App Language',
-                                style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+                                style: Theme.of(context).textTheme.titleMedium
+                                    ?.copyWith(fontWeight: FontWeight.bold),
                               ),
                               const SizedBox(height: 12),
                               DropdownButtonFormField<String>(
@@ -291,25 +363,38 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                 decoration: InputDecoration(
                                   labelText: isArabicUi ? 'اللغة' : 'Language',
                                   border: const OutlineInputBorder(),
-                                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                                  contentPadding: const EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                    vertical: 12,
+                                  ),
                                 ),
                                 items: [
                                   DropdownMenuItem<String>(
                                     value: 'en',
-                                    child: Text(isArabicUi ? 'الإنجليزية' : 'English'),
+                                    child: Text(
+                                      isArabicUi ? 'الإنجليزية' : 'English',
+                                    ),
                                   ),
                                   DropdownMenuItem<String>(
                                     value: 'ar',
-                                    child: Text(isArabicUi ? 'العربية' : 'Arabic'),
+                                    child: Text(
+                                      isArabicUi ? 'العربية' : 'Arabic',
+                                    ),
                                   ),
                                 ],
                                 onChanged: (value) async {
                                   if (value == null || value.isEmpty) return;
-                                  await context.read<AppSettingsCubit>().setAppLanguage(value);
+                                  await context
+                                      .read<AppSettingsCubit>()
+                                      .setAppLanguage(value);
                                   if (!context.mounted) return;
                                   ScaffoldMessenger.of(context).showSnackBar(
                                     SnackBar(
-                                      content: Text(value == 'ar' ? 'تم تحديث لغة التطبيق' : 'App language updated'),
+                                      content: Text(
+                                        value == 'ar'
+                                            ? 'تم تحديث لغة التطبيق'
+                                            : 'App language updated',
+                                      ),
                                       duration: const Duration(seconds: 1),
                                     ),
                                   );
@@ -321,8 +406,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       ),
                       Card(
                         child: SwitchListTile(
-                          title: Text(isArabicUi ? 'الوضع الداكن' : 'Dark Mode'),
-                          subtitle: Text(isArabicUi ? 'استخدم الوضع الداكن' : 'Use dark theme'),
+                          title: Text(
+                            isArabicUi ? 'الوضع الداكن' : 'Dark Mode',
+                          ),
+                          subtitle: Text(
+                            isArabicUi
+                                ? 'استخدم الوضع الداكن'
+                                : 'Use dark theme',
+                          ),
                           value: settings.darkMode,
                           onChanged: (value) {
                             context.read<AppSettingsCubit>().setDarkMode(value);
@@ -337,8 +428,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                isArabicUi ? 'حجم الخط العربي' : 'Arabic Font Size',
-                                style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+                                isArabicUi
+                                    ? 'حجم الخط العربي'
+                                    : 'Arabic Font Size',
+                                style: Theme.of(context).textTheme.titleMedium
+                                    ?.copyWith(fontWeight: FontWeight.bold),
                               ),
                               const SizedBox(height: 8),
                               Row(
@@ -349,14 +443,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                       min: 18,
                                       max: 36,
                                       divisions: 18,
-                                      label: _arabicFontSizeDraft.round().toString(),
+                                      label: _arabicFontSizeDraft
+                                          .round()
+                                          .toString(),
                                       onChanged: (value) {
                                         setState(() {
                                           _arabicFontSizeDraft = value;
                                         });
                                       },
                                       onChangeEnd: (value) {
-                                        context.read<AppSettingsCubit>().setArabicFontSize(value);
+                                        context
+                                            .read<AppSettingsCubit>()
+                                            .setArabicFontSize(value);
                                       },
                                       activeColor: AppColors.primary,
                                     ),
@@ -366,7 +464,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                     style: Theme.of(context)
                                         .textTheme
                                         .titleMedium
-                                        ?.copyWith(color: AppColors.primary, fontWeight: FontWeight.bold),
+                                        ?.copyWith(
+                                          color: AppColors.primary,
+                                          fontWeight: FontWeight.bold,
+                                        ),
                                   ),
                                 ],
                               ),
@@ -399,8 +500,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ExpansionPanelRadio(
                 value: 'reading',
                 headerBuilder: (context, isExpanded) => ListTile(
-                  leading: const Icon(Icons.menu_book_outlined, color: AppColors.primary),
-                  title: Text(isArabicUi ? 'إعدادات القراءة' : 'Reading Settings'),
+                  leading: const Icon(
+                    Icons.menu_book_outlined,
+                    color: AppColors.primary,
+                  ),
+                  title: Text(
+                    isArabicUi ? 'إعدادات القراءة' : 'Reading Settings',
+                  ),
                 ),
                 body: Padding(
                   padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
@@ -408,13 +514,38 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     children: [
                       Card(
                         child: SwitchListTile(
-                          title: Text(isArabicUi ? 'إظهار الترجمة' : 'Show Translation'),
+                          title: Text(
+                            isArabicUi ? 'عرض المصحف' : 'Mushaf View',
+                          ),
                           subtitle: Text(
-                            isArabicUi ? 'عرض الترجمة أسفل النص العربي' : 'Display translation below Arabic text',
+                            isArabicUi
+                                ? 'عرض القرآن بنمط المصحف مع صفحات قابلة للتقليب والخط العثماني'
+                                : 'Display Quran in Mushaf style with flippable pages and Uthmani script',
+                          ),
+                          value: settings.useUthmaniScript,
+                          onChanged: (value) {
+                            context
+                                .read<AppSettingsCubit>()
+                                .setUseUthmaniScript(value);
+                          },
+                          activeColor: AppColors.primary,
+                        ),
+                      ),
+                      Card(
+                        child: SwitchListTile(
+                          title: Text(
+                            isArabicUi ? 'إظهار الترجمة' : 'Show Translation',
+                          ),
+                          subtitle: Text(
+                            isArabicUi
+                                ? 'عرض الترجمة أسفل النص العربي'
+                                : 'Display translation below Arabic text',
                           ),
                           value: settings.showTranslation,
                           onChanged: (value) {
-                            context.read<AppSettingsCubit>().setShowTranslation(value);
+                            context.read<AppSettingsCubit>().setShowTranslation(
+                              value,
+                            );
                           },
                           activeColor: AppColors.primary,
                         ),
@@ -427,8 +558,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  isArabicUi ? 'حجم خط الترجمة' : 'Translation Font Size',
-                                  style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+                                  isArabicUi
+                                      ? 'حجم خط الترجمة'
+                                      : 'Translation Font Size',
+                                  style: Theme.of(context).textTheme.titleMedium
+                                      ?.copyWith(fontWeight: FontWeight.bold),
                                 ),
                                 const SizedBox(height: 8),
                                 Row(
@@ -439,14 +573,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                         min: 12,
                                         max: 24,
                                         divisions: 12,
-                                        label: _translationFontSizeDraft.round().toString(),
+                                        label: _translationFontSizeDraft
+                                            .round()
+                                            .toString(),
                                         onChanged: (value) {
                                           setState(() {
                                             _translationFontSizeDraft = value;
                                           });
                                         },
                                         onChangeEnd: (value) {
-                                          context.read<AppSettingsCubit>().setTranslationFontSize(value);
+                                          context
+                                              .read<AppSettingsCubit>()
+                                              .setTranslationFontSize(value);
                                         },
                                         activeColor: AppColors.primary,
                                       ),
@@ -456,7 +594,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                       style: Theme.of(context)
                                           .textTheme
                                           .titleMedium
-                                          ?.copyWith(color: AppColors.primary, fontWeight: FontWeight.bold),
+                                          ?.copyWith(
+                                            color: AppColors.primary,
+                                            fontWeight: FontWeight.bold,
+                                          ),
                                     ),
                                   ],
                                 ),
@@ -489,8 +630,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ExpansionPanelRadio(
                 value: 'audio',
                 headerBuilder: (context, isExpanded) => ListTile(
-                  leading: const Icon(Icons.headphones_outlined, color: AppColors.primary),
-                  title: Text(isArabicUi ? 'الصوت دون إنترنت' : 'Offline Audio'),
+                  leading: const Icon(
+                    Icons.headphones_outlined,
+                    color: AppColors.primary,
+                  ),
+                  title: Text(
+                    isArabicUi ? 'الصوت دون إنترنت' : 'Offline Audio',
+                  ),
                 ),
                 body: Padding(
                   padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
@@ -498,8 +644,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     children: [
                       Card(
                         child: SwitchListTile(
-                          title: Text(isArabicUi ? 'تفعيل تنزيل الصوت دون إنترنت' : 'Enable Offline Audio Download'),
-                          subtitle: Text(isArabicUi ? 'تنزيل التلاوة وحفظها على الجهاز' : 'Optionally download recitation and save locally'),
+                          title: Text(
+                            isArabicUi
+                                ? 'تفعيل تنزيل الصوت دون إنترنت'
+                                : 'Enable Offline Audio Download',
+                          ),
+                          subtitle: Text(
+                            isArabicUi
+                                ? 'تنزيل التلاوة وحفظها على الجهاز'
+                                : 'Optionally download recitation and save locally',
+                          ),
                           value: _offlineAudio.enabled,
                           onChanged: (value) async {
                             await _offlineAudio.setEnabled(value);
@@ -521,11 +675,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                   Expanded(
                                     child: Text(
                                       isArabicUi ? 'القارئ' : 'Reciter',
-                                      style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .titleMedium
+                                          ?.copyWith(
+                                            fontWeight: FontWeight.bold,
+                                          ),
                                     ),
                                   ),
                                   IconButton(
-                                    tooltip: isArabicUi ? 'تحديث القائمة' : 'Refresh list',
+                                    tooltip: isArabicUi
+                                        ? 'تحديث القائمة'
+                                        : 'Refresh list',
                                     onPressed: _refreshReciters,
                                     icon: const Icon(Icons.refresh),
                                   ),
@@ -535,21 +696,30 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               FutureBuilder<List<AudioEdition>>(
                                 future: _audioEditionsFuture,
                                 builder: (context, snap) {
-                                  final all = (snap.data ?? const <AudioEdition>[]).toList();
+                                  final all =
+                                      (snap.data ?? const <AudioEdition>[])
+                                          .toList();
                                   final selected = _offlineAudio.edition;
 
-                                  final selectedEdition = all.where((e) => e.identifier == selected).cast<AudioEdition?>().firstOrNull;
+                                  final selectedEdition = all
+                                      .where((e) => e.identifier == selected)
+                                      .cast<AudioEdition?>()
+                                      .firstOrNull;
                                   if (!_didInitAudioLanguageFilter) {
                                     final lang = selectedEdition?.language;
-                                    if (lang != null && lang.trim().isNotEmpty) {
-                                      WidgetsBinding.instance.addPostFrameCallback((_) {
-                                        if (!mounted) return;
-                                        if (_didInitAudioLanguageFilter) return;
-                                        setState(() {
-                                          _audioLanguageFilter = lang;
-                                          _didInitAudioLanguageFilter = true;
-                                        });
-                                      });
+                                    if (lang != null &&
+                                        lang.trim().isNotEmpty) {
+                                      WidgetsBinding.instance
+                                          .addPostFrameCallback((_) {
+                                            if (!mounted) return;
+                                            if (_didInitAudioLanguageFilter)
+                                              return;
+                                            setState(() {
+                                              _audioLanguageFilter = lang;
+                                              _didInitAudioLanguageFilter =
+                                                  true;
+                                            });
+                                          });
                                     } else {
                                       _didInitAudioLanguageFilter = true;
                                     }
@@ -558,46 +728,79 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                   final languageCodes = <String>{};
                                   for (final e in all) {
                                     final lang = e.language;
-                                    if (lang != null && lang.trim().isNotEmpty) {
+                                    if (lang != null &&
+                                        lang.trim().isNotEmpty) {
                                       languageCodes.add(lang.trim());
                                     }
                                   }
-                                  final languages = languageCodes.toList()..sort();
+                                  final languages = languageCodes.toList()
+                                    ..sort();
 
-                                  final filtered = (_audioLanguageFilter == 'all')
+                                  final filtered =
+                                      (_audioLanguageFilter == 'all')
                                       ? all
-                                      : all.where((e) => e.language == _audioLanguageFilter).toList();
+                                      : all
+                                            .where(
+                                              (e) =>
+                                                  e.language ==
+                                                  _audioLanguageFilter,
+                                            )
+                                            .toList();
 
-                                  final reciterItems = (filtered.isNotEmpty ? filtered : all).toList();
-                                  if (!reciterItems.any((e) => e.identifier == selected)) {
-                                    reciterItems.insert(0, AudioEdition(identifier: selected));
+                                  final reciterItems =
+                                      (filtered.isNotEmpty ? filtered : all)
+                                          .toList();
+                                  if (!reciterItems.any(
+                                    (e) => e.identifier == selected,
+                                  )) {
+                                    reciterItems.insert(
+                                      0,
+                                      AudioEdition(identifier: selected),
+                                    );
                                   }
 
                                   return Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
                                       DropdownButtonFormField<String>(
                                         initialValue: _audioLanguageFilter,
                                         isExpanded: true,
                                         decoration: InputDecoration(
-                                          labelText: isArabicUi ? 'اللغة' : 'Language',
+                                          labelText: isArabicUi
+                                              ? 'اللغة'
+                                              : 'Language',
                                           border: const OutlineInputBorder(),
-                                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                                          contentPadding:
+                                              const EdgeInsets.symmetric(
+                                                horizontal: 12,
+                                                vertical: 12,
+                                              ),
                                         ),
                                         items: [
                                           DropdownMenuItem<String>(
                                             value: 'all',
-                                            child: Text(isArabicUi ? 'كل اللغات' : 'All languages'),
+                                            child: Text(
+                                              isArabicUi
+                                                  ? 'كل اللغات'
+                                                  : 'All languages',
+                                            ),
                                           ),
                                           ...languages.map(
                                             (code) => DropdownMenuItem<String>(
                                               value: code,
-                                              child: Text(_languageLabel(code, isArabicUi: isArabicUi)),
+                                              child: Text(
+                                                _languageLabel(
+                                                  code,
+                                                  isArabicUi: isArabicUi,
+                                                ),
+                                              ),
                                             ),
                                           ),
                                         ],
                                         onChanged: (value) {
-                                          if (value == null || value.isEmpty) return;
+                                          if (value == null || value.isEmpty)
+                                            return;
                                           setState(() {
                                             _audioLanguageFilter = value;
                                           });
@@ -608,34 +811,53 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                         initialValue: selected,
                                         isExpanded: true,
                                         decoration: InputDecoration(
-                                          labelText: isArabicUi ? 'القارئ' : 'Reciter',
+                                          labelText: isArabicUi
+                                              ? 'القارئ'
+                                              : 'Reciter',
                                           border: const OutlineInputBorder(),
-                                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                                          contentPadding:
+                                              const EdgeInsets.symmetric(
+                                                horizontal: 12,
+                                                vertical: 12,
+                                              ),
                                         ),
                                         items: reciterItems
                                             .map(
                                               (e) => DropdownMenuItem<String>(
                                                 value: e.identifier,
                                                 child: Text(
-                                                  e.displayNameForAppLanguage(settings.appLanguageCode),
-                                                  overflow: TextOverflow.ellipsis,
+                                                  e.displayNameForAppLanguage(
+                                                    settings.appLanguageCode,
+                                                  ),
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
                                                 ),
                                               ),
                                             )
                                             .toList(),
                                         onChanged: (value) async {
-                                          if (value == null || value.isEmpty) return;
+                                          if (value == null || value.isEmpty)
+                                            return;
                                           await _offlineAudio.setEdition(value);
                                           if (!context.mounted) return;
                                           try {
-                                            context.read<AyahAudioCubit>().stop();
+                                            context
+                                                .read<AyahAudioCubit>()
+                                                .stop();
                                           } catch (_) {}
 
-                                          final chosen = all.where((e) => e.identifier == value).cast<AudioEdition?>().firstOrNull;
+                                          final chosen = all
+                                              .where(
+                                                (e) => e.identifier == value,
+                                              )
+                                              .cast<AudioEdition?>()
+                                              .firstOrNull;
                                           final chosenLang = chosen?.language;
                                           setState(() {
-                                            if (chosenLang != null && chosenLang.trim().isNotEmpty) {
-                                              _audioLanguageFilter = chosenLang.trim();
+                                            if (chosenLang != null &&
+                                                chosenLang.trim().isNotEmpty) {
+                                              _audioLanguageFilter = chosenLang
+                                                  .trim();
                                             }
                                           });
                                         },
@@ -652,13 +874,26 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         const SizedBox(height: 12),
                         Card(
                           child: ListTile(
-                            leading: const Icon(Icons.download_for_offline, color: AppColors.primary),
-                            title: Text(isArabicUi ? 'تنزيل صوت القرآن' : 'Download Quran Audio'),
-                            subtitle: Text(isArabicUi ? 'تنزيل تلاوة آية بآية (حجم كبير)' : 'Downloads verse-by-verse recitation (large size)'),
+                            leading: const Icon(
+                              Icons.download_for_offline,
+                              color: AppColors.primary,
+                            ),
+                            title: Text(
+                              isArabicUi
+                                  ? 'تنزيل صوت القرآن'
+                                  : 'Download Quran Audio',
+                            ),
+                            subtitle: Text(
+                              isArabicUi
+                                  ? 'تنزيل تلاوة آية بآية (حجم كبير)'
+                                  : 'Downloads verse-by-verse recitation (large size)',
+                            ),
                             trailing: const Icon(Icons.chevron_right),
                             onTap: () {
                               Navigator.of(context).push(
-                                MaterialPageRoute(builder: (_) => const OfflineAudioScreen()),
+                                MaterialPageRoute(
+                                  builder: (_) => const OfflineAudioScreen(),
+                                ),
                               );
                             },
                           ),
@@ -672,7 +907,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ExpansionPanelRadio(
                 value: 'about',
                 headerBuilder: (context, isExpanded) => ListTile(
-                  leading: const Icon(Icons.info_outline, color: AppColors.primary),
+                  leading: const Icon(
+                    Icons.info_outline,
+                    color: AppColors.primary,
+                  ),
                   title: Text(isArabicUi ? 'حول' : 'About'),
                 ),
                 body: Padding(
@@ -681,14 +919,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     child: Column(
                       children: [
                         ListTile(
-                          leading: const Icon(Icons.info_outline, color: AppColors.primary),
+                          leading: const Icon(
+                            Icons.info_outline,
+                            color: AppColors.primary,
+                          ),
                           title: Text(isArabicUi ? 'الإصدار' : 'Version'),
                           subtitle: const Text('1.0.0'),
                         ),
                         const Divider(height: 1),
                         ListTile(
-                          leading: const Icon(Icons.book, color: AppColors.primary),
-                          title: Text(isArabicUi ? 'مصدر البيانات' : 'Data Source'),
+                          leading: const Icon(
+                            Icons.book,
+                            color: AppColors.primary,
+                          ),
+                          title: Text(
+                            isArabicUi ? 'مصدر البيانات' : 'Data Source',
+                          ),
                           subtitle: const Text('AlQuran.cloud API'),
                           onTap: _showDataSourceDialog,
                         ),
@@ -713,7 +959,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
       try {
         final decoded = jsonDecode(raw);
         if (decoded is List) {
-          items = decoded.whereType<Map>().map((e) => e.cast<String, dynamic>()).toList();
+          items = decoded
+              .whereType<Map>()
+              .map((e) => e.cast<String, dynamic>())
+              .toList();
         }
       } catch (_) {
         items = [];
@@ -723,7 +972,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final parsed = <({String label, DateTime time, int id})>[];
     for (final it in items) {
       final label = (it['label'] as String?) ?? '';
-      final id = (it['id'] is int) ? (it['id'] as int) : int.tryParse('${it['id']}') ?? 0;
+      final id = (it['id'] is int)
+          ? (it['id'] as int)
+          : int.tryParse('${it['id']}') ?? 0;
       final timeStr = it['time'] as String?;
       final dt = timeStr == null ? null : DateTime.tryParse(timeStr);
       if (dt == null) continue;
@@ -783,7 +1034,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           separatorBuilder: (_, __) => const Divider(height: 1),
                           itemBuilder: (context, index) {
                             final row = parsed[index];
-                            final day = MaterialLocalizations.of(context).formatFullDate(row.time);
+                            final day = MaterialLocalizations.of(
+                              context,
+                            ).formatFullDate(row.time);
                             final time = _formatTime(context, row.time);
                             return ListTile(
                               dense: true,
@@ -812,19 +1065,40 @@ class _SettingsScreenState extends State<SettingsScreen> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text(context.read<AppSettingsCubit>().state.appLanguageCode.toLowerCase().startsWith('ar')
-            ? 'مصدر البيانات'
-            : 'Data Source'),
+        title: Text(
+          context
+                  .read<AppSettingsCubit>()
+                  .state
+                  .appLanguageCode
+                  .toLowerCase()
+                  .startsWith('ar')
+              ? 'مصدر البيانات'
+              : 'Data Source',
+        ),
         content: Text(
-          context.read<AppSettingsCubit>().state.appLanguageCode.toLowerCase().startsWith('ar')
+          context
+                  .read<AppSettingsCubit>()
+                  .state
+                  .appLanguageCode
+                  .toLowerCase()
+                  .startsWith('ar')
               ? 'يستخدم هذا التطبيق واجهة AlQuran.cloud لتوفير نص القرآن الكريم.\nتوفّر الواجهة الوصول إلى القرآن بعدة إصدارات ولغات.'
               : 'This app uses the AlQuran.cloud API to provide authentic Quranic text. '
-                  'The API offers access to the Holy Quran in multiple editions and languages.',
+                    'The API offers access to the Holy Quran in multiple editions and languages.',
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: Text(context.read<AppSettingsCubit>().state.appLanguageCode.toLowerCase().startsWith('ar') ? 'إغلاق' : 'Close'),
+            child: Text(
+              context
+                      .read<AppSettingsCubit>()
+                      .state
+                      .appLanguageCode
+                      .toLowerCase()
+                      .startsWith('ar')
+                  ? 'إغلاق'
+                  : 'Close',
+            ),
           ),
         ],
       ),
@@ -883,7 +1157,9 @@ class _NextPrayerCountdownState extends State<_NextPrayerCountdown> {
   Widget build(BuildContext context) {
     return ListTile(
       leading: const Icon(Icons.access_time_filled, color: AppColors.primary),
-      title: Text('${widget.label} — ${MaterialLocalizations.of(context).formatFullDate(widget.target)}'),
+      title: Text(
+        '${widget.label} — ${MaterialLocalizations.of(context).formatFullDate(widget.target)}',
+      ),
       subtitle: Text('Starts in ${_formatDuration(_remaining)}'),
     );
   }
