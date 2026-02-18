@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/settings/app_settings_cubit.dart';
+import '../../../../core/widgets/islamic_logo.dart';
 import 'duaa_screen.dart';
 import 'prayer_times_screen.dart';
 import 'qiblah_screen.dart';
@@ -12,6 +13,7 @@ class MoreScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
     final isArabicUi = context
         .watch<AppSettingsCubit>()
         .state
@@ -27,6 +29,25 @@ class MoreScreen extends StatelessWidget {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
+          Container(
+            padding: const EdgeInsets.symmetric(vertical: 24),
+            child: Column(
+              children: [
+                IslamicLogo(size: 100, darkTheme: isDark),
+                const SizedBox(height: 12),
+                Text(
+                  isArabicUi ? 'تطبيق القرآن الكريم' : 'Quran Application',
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                    color: AppColors.primary,
+                    fontWeight: FontWeight.bold,
+                    fontFamily: 'Amiri',
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const Divider(),
+          const SizedBox(height: 16),
           _NavCard(
             title: isArabicUi ? 'مواقيت الصلاة' : 'Prayer Times',
             subtitle: isArabicUi

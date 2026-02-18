@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
@@ -74,6 +75,9 @@ class OfflineAudioService {
   final SharedPreferences _prefs;
   final http.Client _client;
 
+  static const int _totalQuranFiles = 6236;
+  static const int _minValidAudioBytes = 8 * 1024;
+
   OfflineAudioService(this._prefs, this._client);
 
   bool get enabled => _prefs.getBool(_keyEnabled) ?? false;
@@ -91,11 +95,22 @@ class OfflineAudioService {
 
   Future<Directory> _audioRootDir() async {
     final dir = await getApplicationDocumentsDirectory();
-    final root = Directory('${dir.path}${Platform.pathSeparator}offline_audio${Platform.pathSeparator}$edition');
+    final root = Directory(
+      '${dir.path}${Platform.pathSeparator}offline_audio${Platform.pathSeparator}$edition',
+    );
     if (!root.existsSync()) {
       root.createSync(recursive: true);
     }
     return root;
+  }
+
+  Future<Directory> _audioBaseDir() async {
+    final dir = await getApplicationDocumentsDirectory();
+    final base = Directory('${dir.path}${Platform.pathSeparator}offline_audio');
+    if (!base.existsSync()) {
+      base.createSync(recursive: true);
+    }
+    return base;
   }
 
   Future<Directory> _surahDir(int surahNumber) async {
@@ -156,7 +171,7 @@ class OfflineAudioService {
     if (!root.existsSync()) {
       return {
         'downloadedFiles': 0,
-        'totalFiles': 6236,
+        'totalFiles': _totalQuranFiles,
         'downloadedSurahs': 0,
         'totalSurahs': 114,
         'totalSizeMB': 0.0,
@@ -176,12 +191,299 @@ class OfflineAudioService {
 
     return {
       'downloadedFiles': fileCount,
-      'totalFiles': 6236,
+      'totalFiles': _totalQuranFiles,
       'downloadedSurahs': downloadedSurahs.length,
       'totalSurahs': 114,
       'totalSizeMB': totalSize / 1048576,
-      'percentage': (fileCount / 6236) * 100,
+      'percentage': (fileCount / _totalQuranFiles) * 100,
     };
+  }
+
+  /// Quick quality check from local files (no network):
+  /// returns whether files are likely old/high bitrate based on average file size.
+  Future<Map<String, dynamic>> assessCurrentEditionAudioQuality() async {
+    final stats = await getDownloadStatistics();
+    final downloadedFiles = (stats['downloadedFiles'] as num?)?.toInt() ?? 0;
+    final totalSizeMB = (stats['totalSizeMB'] as num?)?.toDouble() ?? 0.0;
+
+    if (downloadedFiles == 0) {
+      return {
+        'status': 'empty',
+        'averageFileKB': 0.0,
+        'estimatedBitrate': 'unknown',
+        'likelyHighBitrate': false,
+      };
+    }
+
+    final avgFileKB = (totalSizeMB * 1024) / downloadedFiles;
+
+    final bitrateStats = await analyzeCurrentEditionDownloadedBitrates(maxFiles: 300);
+    final dominantBitrate = (bitrateStats['dominantBitrate'] as String?) ?? 'unknown';
+    final dominantMatch = RegExp(r'^(\d+)kbps$').firstMatch(dominantBitrate);
+    final dominantBitrateNum = int.tryParse(dominantMatch?.group(1) ?? '');
+    final scannedFiles = (bitrateStats['scannedFiles'] as num?)?.toInt() ?? 0;
+
+    final estimatedBitrate = dominantBitrate != 'unknown'
+        ? dominantBitrate
+        : (avgFileKB > 95 ? 'likely 128kbps+' : 'likely 64kbps');
+
+    final likelyHighBitrate =
+        scannedFiles >= 30 && dominantBitrateNum != null && dominantBitrateNum > 96;
+
+    return {
+      'status': 'ok',
+      'averageFileKB': avgFileKB,
+      'estimatedBitrate': estimatedBitrate,
+      'likelyHighBitrate': likelyHighBitrate,
+      'scannedFiles': scannedFiles,
+      'dominantBitrate': dominantBitrate,
+    };
+  }
+
+  /// Get storage stats across ALL downloaded reciters/editions
+  Future<Map<String, dynamic>> getAllEditionsStorageStats() async {
+    final base = await _audioBaseDir();
+    if (!base.existsSync()) {
+      return {
+        'totalSizeMB': 0.0,
+        'currentEditionSizeMB': 0.0,
+        'otherEditionsSizeMB': 0.0,
+        'editionsCount': 0,
+        'otherEditionsCount': 0,
+      };
+    }
+
+    final currentEditionRoot = await _audioRootDir();
+    final editionDirs = base
+        .listSync()
+        .whereType<Directory>()
+        .toList();
+
+    int totalBytes = 0;
+    int currentBytes = 0;
+
+    for (final editionDir in editionDirs) {
+      int editionBytes = 0;
+      final files = editionDir
+          .listSync(recursive: true)
+          .whereType<File>()
+          .where((f) => f.path.endsWith('.mp3'));
+      for (final file in files) {
+        editionBytes += file.lengthSync();
+      }
+
+      totalBytes += editionBytes;
+      if (editionDir.path == currentEditionRoot.path) {
+        currentBytes = editionBytes;
+      }
+    }
+
+    final otherBytes = totalBytes - currentBytes;
+    final otherCount = editionDirs.where((d) => d.path != currentEditionRoot.path).length;
+
+    return {
+      'totalSizeMB': totalBytes / 1048576,
+      'currentEditionSizeMB': currentBytes / 1048576,
+      'otherEditionsSizeMB': otherBytes / 1048576,
+      'editionsCount': editionDirs.length,
+      'otherEditionsCount': otherCount,
+    };
+  }
+
+  /// Keep only the currently selected reciter files and remove old editions
+  Future<void> deleteOtherEditionsAudio() async {
+    final base = await _audioBaseDir();
+    if (!base.existsSync()) return;
+
+    final currentEditionRoot = await _audioRootDir();
+    final editionDirs = base
+        .listSync()
+        .whereType<Directory>()
+        .where((d) => d.path != currentEditionRoot.path)
+        .toList();
+
+    for (final dir in editionDirs) {
+      if (dir.existsSync()) {
+        await dir.delete(recursive: true);
+      }
+    }
+  }
+
+  String _force64KbpsUrl(String url) {
+    return url.replaceFirst(RegExp(r'/audio/\d+/'), '/audio/64/');
+  }
+
+  int? _detectMp3BitrateFromBytes(Uint8List bytes) {
+    if (bytes.length < 4) return null;
+
+    int offset = 0;
+    if (bytes.length >= 10 && bytes[0] == 0x49 && bytes[1] == 0x44 && bytes[2] == 0x33) {
+      final tagSize = ((bytes[6] & 0x7F) << 21) |
+          ((bytes[7] & 0x7F) << 14) |
+          ((bytes[8] & 0x7F) << 7) |
+          (bytes[9] & 0x7F);
+      offset = 10 + tagSize;
+    }
+
+    for (int i = offset; i + 3 < bytes.length; i++) {
+      final b1 = bytes[i];
+      final b2 = bytes[i + 1];
+      final b3 = bytes[i + 2];
+
+      final isSync = b1 == 0xFF && (b2 & 0xE0) == 0xE0;
+      if (!isSync) continue;
+
+      final versionBits = (b2 >> 3) & 0x03; // 00=2.5, 10=2, 11=1
+      final layerBits = (b2 >> 1) & 0x03; // 01=L3,10=L2,11=L1
+      final bitrateIndex = (b3 >> 4) & 0x0F;
+
+      if (versionBits == 0x01 || layerBits == 0x00 || bitrateIndex == 0x00 || bitrateIndex == 0x0F) {
+        continue;
+      }
+
+      final isMpeg1 = versionBits == 0x03;
+
+      const mpeg1Layer1 = [0, 32, 64, 96, 128, 160, 192, 224, 256, 288, 320, 352, 384, 416, 448, 0];
+      const mpeg1Layer2 = [0, 32, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320, 384, 0];
+      const mpeg1Layer3 = [0, 32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320, 0];
+      const mpeg2Layer1 = [0, 32, 48, 56, 64, 80, 96, 112, 128, 144, 160, 176, 192, 224, 256, 0];
+      const mpeg2Layer2Or3 = [0, 8, 16, 24, 32, 40, 48, 56, 64, 80, 96, 112, 128, 144, 160, 0];
+
+      List<int> table;
+      switch (layerBits) {
+        case 0x03: // Layer I
+          table = isMpeg1 ? mpeg1Layer1 : mpeg2Layer1;
+          break;
+        case 0x02: // Layer II
+          table = isMpeg1 ? mpeg1Layer2 : mpeg2Layer2Or3;
+          break;
+        case 0x01: // Layer III
+          table = isMpeg1 ? mpeg1Layer3 : mpeg2Layer2Or3;
+          break;
+        default:
+          return null;
+      }
+
+      final bitrate = table[bitrateIndex];
+      if (bitrate > 0) return bitrate;
+    }
+
+    return null;
+  }
+
+  Future<int?> _detectMp3BitrateFromFile(File file) async {
+    RandomAccessFile? raf;
+    try {
+      raf = await file.open();
+      final bytes = await raf.read(16384);
+      return _detectMp3BitrateFromBytes(bytes);
+    } catch (_) {
+      return null;
+    } finally {
+      await raf?.close();
+    }
+  }
+
+  Future<Map<String, dynamic>> analyzeCurrentEditionDownloadedBitrates({
+    int maxFiles = 0,
+  }) async {
+    final root = await _audioRootDir();
+    if (!root.existsSync()) {
+      return {
+        'scannedFiles': 0,
+        'unknownFiles': 0,
+        'distribution': <String, int>{},
+        'dominantBitrate': 'unknown',
+      };
+    }
+
+    final files = root
+        .listSync(recursive: true)
+        .whereType<File>()
+        .where((f) => f.path.endsWith('.mp3'))
+        .toList();
+
+    final toScan = maxFiles > 0 && files.length > maxFiles
+        ? files.take(maxFiles).toList()
+        : files;
+
+    final distribution = <String, int>{};
+    int unknownFiles = 0;
+
+    for (final file in toScan) {
+      final bitrate = await _detectMp3BitrateFromFile(file);
+      if (bitrate == null) {
+        unknownFiles++;
+        continue;
+      }
+      final key = '${bitrate}kbps';
+      distribution[key] = (distribution[key] ?? 0) + 1;
+    }
+
+    String dominantBitrate = 'unknown';
+    if (distribution.isNotEmpty) {
+      final sorted = distribution.entries.toList()
+        ..sort((a, b) => b.value.compareTo(a.value));
+      dominantBitrate = sorted.first.key;
+    }
+
+    return {
+      'scannedFiles': toScan.length,
+      'unknownFiles': unknownFiles,
+      'distribution': distribution,
+      'dominantBitrate': dominantBitrate,
+    };
+  }
+
+  Future<Map<String, dynamic>> inspectCurrentEditionDownloadPlan() async {
+    try {
+      final uri = Uri.parse(
+        '${ApiConstants.baseUrl}${ApiConstants.surahEndpoint}/1/$edition',
+      );
+      final res = await _client.get(uri);
+      if (res.statusCode != 200) {
+        return {
+          'edition': edition,
+          'sourceBitrate': 0,
+          'downloadBitrate': 64,
+          'status': 'unavailable',
+        };
+      }
+
+      final decoded = json.decode(res.body) as Map<String, dynamic>;
+      final data = decoded['data'] as Map<String, dynamic>;
+      final ayahs = (data['ayahs'] as List).cast<Map<String, dynamic>>();
+      if (ayahs.isEmpty) {
+        return {
+          'edition': edition,
+          'sourceBitrate': 0,
+          'downloadBitrate': 64,
+          'status': 'empty',
+        };
+      }
+
+      final sampleUrl = (ayahs.first['audio'] as String?) ?? '';
+      final match = RegExp(r'/audio/(\d+)/').firstMatch(sampleUrl);
+      final sourceBitrate = int.tryParse(match?.group(1) ?? '') ?? 0;
+
+      return {
+        'edition': edition,
+        'sourceBitrate': sourceBitrate,
+        'downloadBitrate': 64,
+        'sampleUrl': sampleUrl,
+        'optimizedSampleUrl': sampleUrl.isNotEmpty
+            ? _force64KbpsUrl(sampleUrl)
+            : '',
+        'status': 'ok',
+      };
+    } catch (_) {
+      return {
+        'edition': edition,
+        'sourceBitrate': 0,
+        'downloadBitrate': 64,
+        'status': 'error',
+      };
+    }
   }
 
   Future<List<String>> _fetchAyahAudioUrls(int surahNumber) async {
@@ -199,8 +501,9 @@ class OfflineAudioService {
     for (final a in ayahs) {
       final url = a['audio'];
       if (url is String && url.isNotEmpty) {
-        // Use 64kbps instead of 128kbps (65% smaller files)
-        final optimizedUrl = url.replaceAll('/128/', '/64/');
+        // Force 64kbps for any source bitrate (128/192/etc)
+        // Example: /audio/192/ar.alafasy/1.mp3 -> /audio/64/ar.alafasy/1.mp3
+        final optimizedUrl = _force64KbpsUrl(url);
         urls.add(optimizedUrl);
       } else {
         urls.add('');
@@ -288,9 +591,15 @@ class OfflineAudioService {
 
         if (url.isEmpty) continue;
 
-        // Skip if already downloaded
-        if (file.existsSync() && file.lengthSync() > 0) {
-          continue;
+        // Skip only if file looks valid; tiny partial files are treated as broken.
+        if (file.existsSync()) {
+          final existingBytes = file.lengthSync();
+          if (existingBytes >= _minValidAudioBytes) {
+            continue;
+          }
+          try {
+            file.deleteSync();
+          } catch (_) {}
         }
 
         tasks.add(_DownloadTask(
@@ -311,7 +620,8 @@ class OfflineAudioService {
     }
 
     // Second pass: Download in parallel batches
-    int completedCount = 0;
+    int successfulCount = 0;
+    int processedCount = 0;
     int failedCount = 0;
     var lastLoggedBatch = 0;
     
@@ -327,7 +637,7 @@ class OfflineAudioService {
       final totalBatches = (tasks.length / concurrentDownloads).ceil();
       
       if (batchNumber >= lastLoggedBatch + 10 || batchNumber == 1) {
-        print('📦 [Verse-by-Verse] Batch $batchNumber/$totalBatches (${completedCount}/${tasks.length} files completed)');
+        print('📦 [Verse-by-Verse] Batch $batchNumber/$totalBatches (${successfulCount}/${tasks.length} files successful)');
         lastLoggedBatch = batchNumber;
       }
       
@@ -342,32 +652,30 @@ class OfflineAudioService {
               totalSurahs: totalSurahs,
               currentAyah: task.ayahNumber,
               totalAyahs: totalAyahsCount,
-              completedFiles: completedCount,
+              completedFiles: successfulCount,
               totalFiles: tasks.length,
-              message: 'Downloading ${completedCount + 1}/${tasks.length}…',
+              message: 'Downloading ${processedCount + 1}/${tasks.length}…',
             ),
           );
 
-          try {
-            final resp = await _client.get(Uri.parse(task.url));
-            if (resp.statusCode == 200) {
-              await task.file.writeAsBytes(resp.bodyBytes, flush: true);
-            } else {
-              print('⚠️ [Verse-by-Verse] Failed HTTP ${resp.statusCode} for Surah ${task.surahNumber}:${task.ayahNumber}');
-              failedCount++;
-            }
-          } catch (e) {
-            print('❌ [Verse-by-Verse] Error downloading Surah ${task.surahNumber}:${task.ayahNumber}: $e');
+          final success = await _downloadTaskWithRetries(
+            task,
+            shouldCancel: shouldCancel,
+          );
+
+          if (success) {
+            successfulCount++;
+          } else {
             failedCount++;
           }
 
-          completedCount++;
+          processedCount++;
         }),
       );
     }
 
     print('✅ [Verse-by-Verse] Download complete!');
-    print('📊 [Verse-by-Verse] Summary: $completedCount successful, $failedCount failed');
+    print('📊 [Verse-by-Verse] Summary: $successfulCount successful, $failedCount failed');
 
     // Final progress update
     onProgress(
@@ -376,11 +684,60 @@ class OfflineAudioService {
         totalSurahs: totalSurahs,
         currentAyah: 0,
         totalAyahs: 0,
-        completedFiles: completedCount,
+        completedFiles: successfulCount,
         totalFiles: tasks.length,
-        message: 'Download complete! ($completedCount files)',
+        message: failedCount > 0
+            ? 'Download complete with $failedCount failed file(s) after retries'
+            : 'Download complete! ($successfulCount files)',
       ),
     );
+  }
+
+  Future<bool> _downloadTaskWithRetries(
+    _DownloadTask task, {
+    required bool Function() shouldCancel,
+    int maxAttempts = 3,
+  }) async {
+    for (int attempt = 1; attempt <= maxAttempts; attempt++) {
+      if (shouldCancel()) return false;
+
+      try {
+        final resp = await _client.get(Uri.parse(task.url));
+        if (resp.statusCode == 200 && resp.bodyBytes.length >= _minValidAudioBytes) {
+          await task.file.writeAsBytes(resp.bodyBytes, flush: true);
+          final bitrate = _detectMp3BitrateFromBytes(resp.bodyBytes);
+          print(
+            '🎵 [Bitrate] Surah ${task.surahNumber}:${task.ayahNumber} '
+            '=> ${bitrate != null ? '${bitrate}kbps' : 'unknown'} '
+            '(bytes=${resp.bodyBytes.length})',
+          );
+          return true;
+        }
+
+        print(
+          '⚠️ [Verse-by-Verse] Attempt $attempt/$maxAttempts failed '
+          'for Surah ${task.surahNumber}:${task.ayahNumber} '
+          '(HTTP ${resp.statusCode}, bytes=${resp.bodyBytes.length})',
+        );
+      } catch (e) {
+        print(
+          '❌ [Verse-by-Verse] Attempt $attempt/$maxAttempts error '
+          'for Surah ${task.surahNumber}:${task.ayahNumber}: $e',
+        );
+      }
+
+      try {
+        if (task.file.existsSync()) {
+          task.file.deleteSync();
+        }
+      } catch (_) {}
+
+      if (attempt < maxAttempts) {
+        await Future.delayed(Duration(milliseconds: 300 * attempt));
+      }
+    }
+
+    return false;
   }
 
   Future<File?> getLocalAyahAudioFile({

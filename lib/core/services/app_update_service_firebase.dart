@@ -1,0 +1,261 @@
+import 'dart:io';
+import 'package:firebase_remote_config/firebase_remote_config.dart';
+import 'package:package_info_plus/package_info_plus.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:in_app_update/in_app_update.dart' as iap;
+import '../models/app_update_info.dart';
+
+/// Premium app update service using Firebase Remote Config and In-App Updates
+/// 
+/// Features:
+/// - Firebase Remote Config for centralized update management
+/// - In-App Updates for Android (flexible and immediate updates)
+/// - App Store redirect for iOS
+/// - No need for external server hosting
+/// - Real-time update configuration changes
+class AppUpdateService {
+  final FirebaseRemoteConfig _remoteConfig;
+  final SharedPreferences _prefs;
+
+  // Remote Config keys
+  static const String _keyLatestVersion = 'latest_version';
+  static const String _keyMinimumVersion = 'minimum_version';
+  static const String _keyIsMandatory = 'is_mandatory';
+  static const String _keyDownloadUrl = 'download_url';
+  static const String _keyChangelogAr = 'changelog_ar';
+  static const String _keyChangelogEn = 'changelog_en';
+  static const String _keyReleaseDate = 'release_date';
+  static const String _keyEnableInAppUpdate = 'enable_in_app_update'; // Android only
+
+  // Preference keys
+  static const String _keyLastCheckTime = 'last_update_check_time';
+  static const String _keySkippedVersion = 'skipped_update_version';
+
+  AppUpdateService(this._remoteConfig, this._prefs);
+
+  /// Initialize Firebase Remote Config with default values
+  Future<void> initialize() async {
+    try {
+      await _remoteConfig.setConfigSettings(
+        RemoteConfigSettings(
+          fetchTimeout: const Duration(seconds: 10),
+          minimumFetchInterval: const Duration(hours: 1), // Fetch updates hourly
+        ),
+      );
+
+      // Set default values - these will be overridden by Firebase Console
+      await _remoteConfig.setDefaults({
+        _keyLatestVersion: '1.0.0',
+        _keyMinimumVersion: '1.0.0',
+        _keyIsMandatory: false,
+        _keyDownloadUrl: '',
+        _keyChangelogAr: '',
+        _keyChangelogEn: '',
+        _keyReleaseDate: DateTime.now().toIso8601String(),
+        _keyEnableInAppUpdate: true,
+      });
+
+      // Fetch and activate
+      await _remoteConfig.fetchAndActivate();
+    } catch (e) {
+      // If Remote Config fails, use defaults
+      // This ensures the app still works without Firebase
+    }
+  }
+
+  /// Check for app updates using Firebase Remote Config
+  Future<AppUpdateInfo?> checkForUpdate() async {
+    try {
+      // Fetch latest config from Firebase
+      await _remoteConfig.fetchAndActivate();
+
+      // Get current app version
+      final packageInfo = await PackageInfo.fromPlatform();
+      final currentVersion = packageInfo.version;
+
+      // Get update info from Remote Config
+      final latestVersion = _remoteConfig.getString(_keyLatestVersion);
+      final minimumVersion = _remoteConfig.getString(_keyMinimumVersion);
+      final isMandatory = _remoteConfig.getBool(_keyIsMandatory);
+      final downloadUrl = _remoteConfig.getString(_keyDownloadUrl);
+      final changelogAr = _remoteConfig.getString(_keyChangelogAr);
+      final changelogEn = _remoteConfig.getString(_keyChangelogEn);
+      final releaseDateStr = _remoteConfig.getString(_keyReleaseDate);
+
+      // Build changelog map
+      final changelogMap = <String, String>{};
+      if (changelogAr.isNotEmpty) changelogMap['ar'] = changelogAr;
+      if (changelogEn.isNotEmpty) changelogMap['en'] = changelogEn;
+
+      // Parse release date
+      DateTime? releaseDate;
+      try {
+        releaseDate = DateTime.parse(releaseDateStr);
+      } catch (_) {
+        releaseDate = null;
+      }
+
+      final updateInfo = AppUpdateInfo(
+        latestVersion: latestVersion,
+        currentVersion: currentVersion,
+        minimumVersion: minimumVersion.isNotEmpty ? minimumVersion : null,
+        isMandatory: isMandatory,
+        downloadUrl: downloadUrl.isNotEmpty ? downloadUrl : null,
+        changelogByLanguage: changelogMap.isNotEmpty ? changelogMap : null,
+        releaseDate: releaseDate,
+      );
+
+      // Update last check time
+      await _saveLastCheckTime();
+
+      // If no update available, return null
+      if (!updateInfo.hasUpdate) {
+        return null;
+      }
+
+      // If update is optional and user skipped this version, return null
+      if (!updateInfo.isMandatory && !updateInfo.isBelowMinimum) {
+        final skippedVersion = _prefs.getString(_keySkippedVersion);
+        if (skippedVersion == updateInfo.latestVersion) {
+          return null;
+        }
+      }
+
+      // If current version is below minimum, it's mandatory
+      if (updateInfo.isBelowMinimum) {
+        return AppUpdateInfo(
+          latestVersion: updateInfo.latestVersion,
+          currentVersion: updateInfo.currentVersion,
+          minimumVersion: updateInfo.minimumVersion,
+          isMandatory: true, // Force mandatory
+          downloadUrl: updateInfo.downloadUrl,
+          changelogByLanguage: updateInfo.changelogByLanguage,
+          releaseDate: updateInfo.releaseDate,
+        );
+      }
+
+      return updateInfo;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /// Check if in-app update is available (Android only)
+  Future<bool> checkInAppUpdateAvailability() async {
+    if (!Platform.isAndroid) return false;
+
+    try {
+      final enableInAppUpdate = _remoteConfig.getBool(_keyEnableInAppUpdate);
+      if (!enableInAppUpdate) return false;
+
+      final updateInfo = await iap.InAppUpdate.checkForUpdate();
+      return updateInfo.updateAvailability == iap.UpdateAvailability.updateAvailable;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  /// Perform flexible in-app update (Android only)
+  /// User can continue using the app while downloading
+  Future<bool> performFlexibleUpdate() async {
+    if (!Platform.isAndroid) return false;
+
+    try {
+      final updateInfo = await iap.InAppUpdate.checkForUpdate();
+      if (updateInfo.updateAvailability != iap.UpdateAvailability.updateAvailable) {
+        return false;
+      }
+
+      if (updateInfo.flexibleUpdateAllowed) {
+        await iap.InAppUpdate.startFlexibleUpdate();
+        return true;
+      }
+      return false;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  /// Perform immediate in-app update (Android only)
+  /// Blocks the app until update is completed - for mandatory updates
+  Future<bool> performImmediateUpdate() async {
+    if (!Platform.isAndroid) return false;
+
+    try {
+      final updateInfo = await iap.InAppUpdate.checkForUpdate();
+      if (updateInfo.updateAvailability != iap.UpdateAvailability.updateAvailable) {
+        return false;
+      }
+
+      if (updateInfo.immediateUpdateAllowed) {
+        await iap.InAppUpdate.performImmediateUpdate();
+        return true;
+      }
+      return false;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  /// Complete flexible update if one was downloaded
+  Future<void> completeFlexibleUpdate() async {
+    if (!Platform.isAndroid) return;
+
+    try {
+      await iap.InAppUpdate.completeFlexibleUpdate();
+    } catch (e) {
+      // Ignore errors
+    }
+  }
+
+  /// Check if enough time has passed since last check
+  Future<bool> shouldCheckForUpdate({
+    Duration minInterval = const Duration(hours: 12),
+  }) async {
+    final lastCheck = _prefs.getInt(_keyLastCheckTime);
+    if (lastCheck == null) return true;
+
+    final lastCheckTime = DateTime.fromMillisecondsSinceEpoch(lastCheck);
+    final now = DateTime.now();
+
+    return now.difference(lastCheckTime) >= minInterval;
+  }
+
+  /// Save the time of last update check
+  Future<void> _saveLastCheckTime() async {
+    await _prefs.setInt(
+      _keyLastCheckTime,
+      DateTime.now().millisecondsSinceEpoch,
+    );
+  }
+
+  /// Mark a version as skipped (user chose "Later" for optional update)
+  Future<void> skipVersion(String version) async {
+    await _prefs.setString(_keySkippedVersion, version);
+  }
+
+  /// Clear skipped version
+  Future<void> clearSkippedVersion() async {
+    await _prefs.remove(_keySkippedVersion);
+  }
+
+  /// Force check for updates (ignores time interval and skipped versions)
+  Future<AppUpdateInfo?> forceCheckForUpdate() async {
+    await clearSkippedVersion();
+    return checkForUpdate();
+  }
+
+  /// Get update availability status (for UI indicators)
+  Future<iap.UpdateAvailability> getUpdateAvailability() async {
+    if (!Platform.isAndroid) {
+      return iap.UpdateAvailability.updateNotAvailable;
+    }
+
+    try {
+      final info = await iap.InAppUpdate.checkForUpdate();
+      return info.updateAvailability;
+    } catch (e) {
+      return iap.UpdateAvailability.updateNotAvailable;
+    }
+  }
+}

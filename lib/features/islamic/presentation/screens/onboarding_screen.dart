@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/settings/app_settings_cubit.dart';
+import '../../../../core/widgets/islamic_logo.dart';
 
 class OnboardingScreen extends StatelessWidget {
   final VoidCallback onContinue;
@@ -11,6 +12,7 @@ class OnboardingScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
     final isArabicUi = context
         .watch<AppSettingsCubit>()
         .state
@@ -19,43 +21,64 @@ class OnboardingScreen extends StatelessWidget {
         .startsWith('ar');
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text(isArabicUi ? 'بدء الاستخدام' : 'Onboarding'),
-        centerTitle: true,
-      ),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment:
-              isArabicUi ? CrossAxisAlignment.end : CrossAxisAlignment.start,
-          children: [
-            Text(
-              isArabicUi
-                  ? 'هذه صفحة تمهيدية (ستقوم أنت بتعديلها لاحقاً).'
-                  : 'This is a placeholder onboarding screen (you will customize it later).',
-              style: Theme.of(context).textTheme.titleMedium,
-              textAlign: isArabicUi ? TextAlign.right : TextAlign.left,
-            ),
-            const SizedBox(height: 12),
-            Text(
-              isArabicUi
-                  ? 'اضغط متابعة للانتقال للتطبيق.'
-                  : 'Tap Continue to enter the app.',
-              style: Theme.of(context)
-                  .textTheme
-                  .bodyMedium
-                  ?.copyWith(color: AppColors.textSecondary),
-              textAlign: isArabicUi ? TextAlign.right : TextAlign.left,
-            ),
-            const Spacer(),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: onContinue,
-                child: Text(isArabicUi ? 'متابعة' : 'Continue'),
+      backgroundColor: isDark ? AppColors.darkBackground : AppColors.background,
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Spacer(),
+              IslamicLogo(
+                size: 200,
+                darkTheme: isDark,
               ),
-            ),
-          ],
+              const SizedBox(height: 48),
+              Text(
+                isArabicUi ? 'مرحباً بك في تطبيق القرآن الكريم' : 'Welcome to Quran App',
+                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                  color: AppColors.primary,
+                  fontWeight: FontWeight.bold,
+                  fontFamily: 'Amiri',
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 16),
+              Text(
+                isArabicUi
+                    ? 'استمتع بتجربة قراءة متميزة مع تصميم هادئ وجميل مصمم لراحتك.'
+                    : 'Enjoy a premium reading experience with a serene design crafted for your comfort.',
+                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                  color: AppColors.textSecondary,
+                  height: 1.5,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const Spacer(),
+              SizedBox(
+                width: double.infinity,
+                height: 56,
+                child: ElevatedButton(
+                  onPressed: onContinue,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    elevation: 0,
+                  ),
+                  child: Text(
+                    isArabicUi ? 'بدء الاستخدام' : 'Get Started',
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

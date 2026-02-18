@@ -11,6 +11,7 @@ import '../bloc/surah/surah_state.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/settings/app_settings_cubit.dart';
 import '../../../../core/audio/ayah_audio_cubit.dart';
+import '../../../../core/widgets/islamic_logo.dart';
 import '../../../islamic/presentation/screens/duaa_screen.dart';
 import '../../../islamic/presentation/screens/prayer_times_screen.dart';
 import '../../../islamic/presentation/screens/qiblah_screen.dart';
@@ -122,6 +123,13 @@ class HomeScreenState extends State<HomeScreen>
         .startsWith('ar');
     return Scaffold(
       appBar: AppBar(
+        leading: Padding(
+          padding: const EdgeInsets.all(8.0),
+          child: IslamicLogo(
+            size: 32,
+            darkTheme: context.watch<AppSettingsCubit>().state.darkMode,
+          ),
+        ),
         title: Text(isArabicUi ? 'القرآن الكريم' : 'Quran'),
         centerTitle: true,
         flexibleSpace: Container(

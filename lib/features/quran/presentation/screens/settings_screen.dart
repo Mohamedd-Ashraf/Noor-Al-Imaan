@@ -393,7 +393,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               Container(
                                 padding: const EdgeInsets.all(12),
                                 decoration: BoxDecoration(
-                                  color: AppColors.surface,
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .surfaceContainerLowest,
                                   borderRadius: BorderRadius.circular(8),
                                 ),
                                 child: Text(
@@ -401,7 +403,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                   textAlign: TextAlign.center,
                                   style: TextStyle(
                                     fontSize: _arabicFontSizeDraft,
-                                    color: AppColors.arabicText,
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .onSurface,
                                     fontWeight: FontWeight.w500,
                                   ),
                                 ),
@@ -524,14 +528,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                   width: double.infinity,
                                   padding: const EdgeInsets.all(12),
                                   decoration: BoxDecoration(
-                                    color: AppColors.surface,
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .surfaceContainerLowest,
                                     borderRadius: BorderRadius.circular(8),
                                   ),
                                   child: Text(
                                     'In the name of Allah, the Most Gracious, the Most Merciful.',
                                     style: TextStyle(
                                       fontSize: _translationFontSizeDraft,
-                                      color: AppColors.textSecondary,
+                                      color: Theme.of(context)
+                                          .colorScheme
+                                          .onSurfaceVariant,
                                       height: 1.4,
                                     ),
                                   ),

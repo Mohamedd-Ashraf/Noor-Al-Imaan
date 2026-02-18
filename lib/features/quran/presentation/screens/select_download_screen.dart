@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/quran_structure.dart';
 import '../../../../core/constants/surah_names.dart';
 
@@ -20,6 +19,7 @@ class _SelectDownloadScreenState extends State<SelectDownloadScreen> {
   @override
   Widget build(BuildContext context) {
     final isArabicUi = Localizations.localeOf(context).languageCode == 'ar';
+    final scheme = Theme.of(context).colorScheme;
 
     return Scaffold(
       appBar: AppBar(
@@ -30,7 +30,7 @@ class _SelectDownloadScreenState extends State<SelectDownloadScreen> {
           // Tab selector
           Container(
             padding: const EdgeInsets.all(8),
-            color: AppColors.surface,
+            color: scheme.surface,
             child: Row(
               children: [
                 Expanded(
@@ -78,12 +78,13 @@ class _SelectDownloadScreenState extends State<SelectDownloadScreen> {
 
   Widget _buildTab({required int index, required String label, required IconData icon}) {
     final isSelected = _selectedTab == index;
+    final scheme = Theme.of(context).colorScheme;
     return InkWell(
       onTap: () => setState(() => _selectedTab = index),
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 12),
         decoration: BoxDecoration(
-          color: isSelected ? AppColors.primary : Colors.transparent,
+          color: isSelected ? scheme.primary : Colors.transparent,
           borderRadius: BorderRadius.circular(8),
         ),
         child: Column(
@@ -91,14 +92,14 @@ class _SelectDownloadScreenState extends State<SelectDownloadScreen> {
           children: [
             Icon(
               icon,
-              color: isSelected ? Colors.white : AppColors.textSecondary,
+              color: isSelected ? scheme.onPrimary : scheme.onSurfaceVariant,
               size: 20,
             ),
             const SizedBox(height: 4),
             Text(
               label,
               style: TextStyle(
-                color: isSelected ? Colors.white : AppColors.textSecondary,
+                color: isSelected ? scheme.onPrimary : scheme.onSurfaceVariant,
                 fontSize: 12,
                 fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
               ),
@@ -110,6 +111,7 @@ class _SelectDownloadScreenState extends State<SelectDownloadScreen> {
   }
 
   Widget _buildJuzSelector(bool isArabicUi) {
+    final scheme = Theme.of(context).colorScheme;
     return GridView.builder(
       padding: const EdgeInsets.all(16),
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
@@ -122,7 +124,6 @@ class _SelectDownloadScreenState extends State<SelectDownloadScreen> {
       itemBuilder: (context, index) {
         final juzNumber = index + 1;
         final isSelected = _selectedJuz.contains(juzNumber);
-        final juzInfo = QuranStructure.juzNames[index];
 
         return InkWell(
           onTap: () {
@@ -137,10 +138,10 @@ class _SelectDownloadScreenState extends State<SelectDownloadScreen> {
           child: Container(
             padding: const EdgeInsets.symmetric(vertical: 4),
             decoration: BoxDecoration(
-              color: isSelected ? AppColors.primary : AppColors.surface,
+              color: isSelected ? scheme.primary : scheme.surface,
               borderRadius: BorderRadius.circular(12),
               border: Border.all(
-                color: isSelected ? AppColors.primary : AppColors.cardBorder,
+                color: isSelected ? scheme.primary : scheme.outline.withValues(alpha: 0.4),
                 width: 2,
               ),
             ),
@@ -152,7 +153,7 @@ class _SelectDownloadScreenState extends State<SelectDownloadScreen> {
                   style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
-                    color: isSelected ? Colors.white : AppColors.textPrimary,
+                    color: isSelected ? scheme.onPrimary : scheme.onSurface,
                     height: 1.0,
                   ),
                 ),
@@ -161,7 +162,7 @@ class _SelectDownloadScreenState extends State<SelectDownloadScreen> {
                   isArabicUi ? 'جزء' : 'Juz',
                   style: TextStyle(
                     fontSize: 9,
-                    color: isSelected ? Colors.white : AppColors.textSecondary,
+                    color: isSelected ? scheme.onPrimary : scheme.onSurfaceVariant,
                     height: 1.0,
                   ),
                 ),
@@ -174,6 +175,7 @@ class _SelectDownloadScreenState extends State<SelectDownloadScreen> {
   }
 
   Widget _buildPopularSelector(bool isArabicUi) {
+    final scheme = Theme.of(context).colorScheme;
     return ListView.builder(
       padding: const EdgeInsets.all(16),
       itemCount: QuranStructure.popularSections.length,
@@ -201,7 +203,7 @@ class _SelectDownloadScreenState extends State<SelectDownloadScreen> {
                 children: [
                   Icon(
                     isSelected ? Icons.check_circle : Icons.circle_outlined,
-                    color: isSelected ? AppColors.primary : AppColors.textSecondary,
+                    color: isSelected ? scheme.primary : scheme.onSurfaceVariant,
                   ),
                   const SizedBox(width: 12),
                   Expanded(
@@ -213,7 +215,7 @@ class _SelectDownloadScreenState extends State<SelectDownloadScreen> {
                           style: TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
-                            color: AppColors.textPrimary,
+                            color: scheme.onSurface,
                           ),
                         ),
                         const SizedBox(height: 4),
@@ -221,7 +223,7 @@ class _SelectDownloadScreenState extends State<SelectDownloadScreen> {
                           '${surahs.length} ${isArabicUi ? 'سورة' : 'Surahs'}',
                           style: TextStyle(
                             fontSize: 14,
-                            color: AppColors.textSecondary,
+                            color: scheme.onSurfaceVariant,
                           ),
                         ),
                       ],
@@ -237,6 +239,8 @@ class _SelectDownloadScreenState extends State<SelectDownloadScreen> {
   }
 
   Widget _buildCustomSelector(bool isArabicUi) {
+    final scheme = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return ListView.builder(
       padding: const EdgeInsets.all(16),
       itemCount: 114,
@@ -248,12 +252,16 @@ class _SelectDownloadScreenState extends State<SelectDownloadScreen> {
 
         return Card(
           margin: const EdgeInsets.only(bottom: 8),
-          color: isSelected ? AppColors.primary.withValues(alpha: 0.1) : AppColors.surface,
+          color: isSelected
+              ? scheme.primary.withValues(alpha: isDark ? 0.22 : 0.10)
+              : scheme.surface,
           elevation: isSelected ? 2 : 0,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
             side: BorderSide(
-              color: isSelected ? AppColors.primary : AppColors.cardBorder,
+              color: isSelected
+                  ? scheme.primary
+                  : scheme.outline.withValues(alpha: 0.4),
               width: isSelected ? 2 : 1,
             ),
           ),
@@ -263,7 +271,9 @@ class _SelectDownloadScreenState extends State<SelectDownloadScreen> {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
-                    color: isSelected ? AppColors.primary : AppColors.cardBorder,
+                    color: isSelected
+                        ? scheme.primary
+                        : scheme.surfaceContainerHighest,
                     borderRadius: BorderRadius.circular(6),
                   ),
                   child: Text(
@@ -271,7 +281,7 @@ class _SelectDownloadScreenState extends State<SelectDownloadScreen> {
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.bold,
-                      color: isSelected ? Colors.white : AppColors.textSecondary,
+                      color: isSelected ? scheme.onPrimary : scheme.onSurfaceVariant,
                     ),
                   ),
                 ),
@@ -282,14 +292,14 @@ class _SelectDownloadScreenState extends State<SelectDownloadScreen> {
                     style: TextStyle(
                       fontSize: 16,
                       fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-                      color: isSelected ? AppColors.primary : AppColors.textPrimary,
+                      color: isSelected ? scheme.primary : scheme.onSurface,
                     ),
                   ),
                 ),
               ],
             ),
             value: isSelected,
-            activeColor: AppColors.primary,
+            activeColor: scheme.primary,
             onChanged: (value) {
               setState(() {
                 if (value == true) {
@@ -307,14 +317,16 @@ class _SelectDownloadScreenState extends State<SelectDownloadScreen> {
 
   Widget _buildBottomBar(BuildContext context, bool isArabicUi) {
     final selectedCount = _getSelectedSurahs().length;
+    final scheme = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: scheme.surface,
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.1),
+            color: scheme.shadow.withValues(alpha: isDark ? 0.16 : 0.10),
             blurRadius: 10,
             offset: const Offset(0, -2),
           ),
@@ -331,7 +343,7 @@ class _SelectDownloadScreenState extends State<SelectDownloadScreen> {
                   isArabicUi ? 'تم الاختيار:' : 'Selected:',
                   style: TextStyle(
                     fontSize: 12,
-                    color: AppColors.textSecondary,
+                    color: scheme.onSurfaceVariant,
                   ),
                 ),
                 Text(
@@ -339,7 +351,7 @@ class _SelectDownloadScreenState extends State<SelectDownloadScreen> {
                   style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
-                    color: AppColors.primary,
+                    color: scheme.primary,
                   ),
                 ),
               ],

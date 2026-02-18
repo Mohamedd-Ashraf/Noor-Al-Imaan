@@ -1,0 +1,81 @@
+# Firebase Remote Config - Default Parameters
+# Copy these to Firebase Console → Remote Config
+
+latest_version:
+  Type: String
+  Value: "1.0.0"
+  Description: "Latest available version of the app"
+
+minimum_version:
+  Type: String
+  Value: "1.0.0"
+  Description: "Minimum required version (users below this must update)"
+
+is_mandatory:
+  Type: Boolean
+  Value: false
+  Description: "Whether this update is mandatory for all users"
+
+download_url:
+  Type: String
+  Value: "https://play.google.com/store/apps/details?id=com.yourcompany.quraan"
+  Description: "Download URL for the update (Play Store for Android, App Store for iOS)"
+  
+  # For Android:
+  # https://play.google.com/store/apps/details?id=YOUR_PACKAGE_NAME
+  
+  # For iOS:
+  # https://apps.apple.com/app/idYOUR_APP_ID
+
+changelog_ar:
+  Type: String
+  Value: |
+    التحديثات الجديدة:
+    • تحسينات في الأداء
+    • إصلاح مشاكل الصوت
+    • تحسين واجهة المستخدم
+    • إضافة خاصية العلامات المرجعية المحسنة
+  Description: "Changelog in Arabic"
+
+changelog_en:
+  Type: String
+  Value: |
+    What's New:
+    • Performance improvements
+    • Audio playback fixes
+    • Enhanced user interface
+    • Improved bookmarks feature
+  Description: "Changelog in English"
+
+release_date:
+  Type: String
+  Value: "2026-02-18T00:00:00.000Z"
+  Description: "Release date in ISO 8601 format"
+
+enable_in_app_update:
+  Type: Boolean
+  Value: true
+  Description: "Enable in-app updates for Android (uses Google Play In-App Updates API)"
+
+---
+
+# Example Scenarios:
+
+# 1. Optional Update (اختياري)
+latest_version: "1.1.0"
+minimum_version: "1.0.0"
+is_mandatory: false
+# → Users can skip this update
+
+# 2. Mandatory Update (إلزامي)
+latest_version: "2.0.0"
+minimum_version: "2.0.0"
+is_mandatory: true
+# → All users must update
+
+# 3. Force old versions only (إجبار نسخ قديمة فقط)
+latest_version: "2.5.0"
+minimum_version: "2.0.0"
+is_mandatory: false
+# → Users below 2.0.0 must update
+# → Users on 2.0.0+ can skip

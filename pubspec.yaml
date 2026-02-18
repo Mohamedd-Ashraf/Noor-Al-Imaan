@@ -82,6 +82,11 @@ dependencies:
   # App Updates
   package_info_plus: ^8.0.0
   url_launcher: ^6.3.1
+  in_app_update: ^4.2.2
+
+  # Firebase
+  firebase_core: ^3.8.1
+  firebase_remote_config: ^5.1.4
 
   # Background downloads
   flutter_downloader: ^1.11.10
@@ -104,6 +109,15 @@ dev_dependencies:
   # package. See that file for information about deactivating specific lint
   # rules and activating additional ones.
   flutter_lints: ^6.0.0
+  flutter_launcher_icons: ^0.14.4
+
+flutter_launcher_icons:
+  android: "launcher_icon"
+  ios: true
+  image_path: "assets/logo/generated/logo_concept_1_luxury_v2.svg"
+  min_sdk_android: 21
+  adaptive_icon_background: "#0F5132"
+  adaptive_icon_foreground: "assets/logo/generated/logo_concept_1_luxury_v2.svg"
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
@@ -121,6 +135,8 @@ flutter:
     - assets/ui-ux/
     - assets/offline/
     - assets/update-config.json
+    - assets/logo/generated/
+    - assets/logo/logo_dark.svg
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

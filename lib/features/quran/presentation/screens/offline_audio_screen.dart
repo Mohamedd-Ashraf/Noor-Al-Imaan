@@ -28,6 +28,11 @@ class _OfflineAudioScreenState extends State<OfflineAudioScreen> {
   OfflineAudioProgress? _progress;
   String? _error;
   Map<String, dynamic>? _downloadStats;
+  Map<String, dynamic>? _allStorageStats;
+  Map<String, dynamic>? _qualityStats;
+  Map<String, dynamic>? _downloadPlan;
+  Map<String, dynamic>? _fileBitrateStats;
+  String? _confirmedDownloadPlanEdition;
 
   @override
   void initState() {
@@ -40,11 +45,85 @@ class _OfflineAudioScreenState extends State<OfflineAudioScreen> {
 
   Future<void> _loadDownloadStats() async {
     final stats = await _service.getDownloadStatistics();
+    final allStats = await _service.getAllEditionsStorageStats();
+    final qualityStats = await _service.assessCurrentEditionAudioQuality();
+    final plan = await _service.inspectCurrentEditionDownloadPlan();
+    final bitrateStats = await _service.analyzeCurrentEditionDownloadedBitrates(maxFiles: 600);
     if (mounted) {
       setState(() {
         _downloadStats = stats;
+        _allStorageStats = allStats;
+        _qualityStats = qualityStats;
+        _downloadPlan = plan;
+        _fileBitrateStats = bitrateStats;
       });
     }
+  }
+
+  Future<bool> _confirmDownloadPlanBeforeStart({
+    required bool isArabicUi,
+    required bool isSelective,
+    int selectedSurahsCount = 0,
+  }) async {
+    final currentEdition = _service.edition;
+    if (_confirmedDownloadPlanEdition == currentEdition) {
+      return true;
+    }
+
+    final latestPlan = await _service.inspectCurrentEditionDownloadPlan();
+    final sourceBitrate = _toInt(latestPlan['sourceBitrate']);
+    final downloadBitrate = _toInt(latestPlan['downloadBitrate'], fallback: 64);
+
+    if (!mounted) return false;
+
+    final sourceLabel = sourceBitrate > 0
+        ? '${sourceBitrate}kbps'
+        : (isArabicUi ? 'غير معروف' : 'Unknown');
+
+    final proceed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(
+          isArabicUi ? 'تأكيد جودة التنزيل' : 'Confirm download quality',
+        ),
+        content: Text(
+          isArabicUi
+              ? 'القارئ: $currentEdition\nجودة المصدر من الخادم: $sourceLabel\nالجودة التي سيحمّلها التطبيق: ${downloadBitrate}kbps\n\n${isSelective ? 'سيتم تنزيل $selectedSurahsCount سورة محددة.' : 'سيتم تنزيل جميع السور.'}'
+              : 'Reciter: $currentEdition\nSource bitrate from API: $sourceLabel\nBitrate that app will download: ${downloadBitrate}kbps\n\n${isSelective ? 'Will download $selectedSurahsCount selected surah(s).' : 'Will download all surahs.'}',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text(isArabicUi ? 'إلغاء' : 'Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: Text(isArabicUi ? 'متابعة' : 'Continue'),
+          ),
+        ],
+      ),
+    );
+
+    if (proceed == true) {
+      _confirmedDownloadPlanEdition = currentEdition;
+      return true;
+    }
+    return false;
+  }
+
+  Future<void> _cleanupOldEditions({required bool isArabicUi}) async {
+    await _service.deleteOtherEditionsAudio();
+    await _loadDownloadStats();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          isArabicUi
+              ? 'تم حذف ملفات القرّاء القديمة وتوفير مساحة.'
+              : 'Old reciter files deleted and storage was freed.',
+        ),
+      ),
+    );
   }
 
   void _refreshReciters() {
@@ -87,7 +166,69 @@ class _OfflineAudioScreenState extends State<OfflineAudioScreen> {
     return fallback;
   }
 
+  Widget _buildOrnamentedPanel({
+    required Widget child,
+    required ColorScheme scheme,
+    bool highlighted = false,
+    EdgeInsetsGeometry padding = const EdgeInsets.all(16),
+  }) {
+    final borderColor = highlighted
+        ? AppColors.secondary.withValues(alpha: 0.7)
+        : scheme.primary.withValues(alpha: 0.45);
+    final innerBorderColor = highlighted
+        ? AppColors.accent.withValues(alpha: 0.55)
+        : scheme.outline.withValues(alpha: 0.45);
+
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: highlighted
+              ? [
+                  scheme.primaryContainer.withValues(alpha: 0.65),
+                  scheme.surfaceContainerHighest.withValues(alpha: 0.75),
+                ]
+              : [
+                  scheme.surfaceContainer.withValues(alpha: 0.85),
+                  scheme.surfaceContainerHigh.withValues(alpha: 0.85),
+                ],
+        ),
+        border: Border.all(color: borderColor, width: 1.8),
+      ),
+      child: Container(
+        margin: const EdgeInsets.all(4),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: innerBorderColor, width: 1.2),
+        ),
+        child: Stack(
+          children: [
+            Positioned(top: 8, left: 8, child: Icon(Icons.diamond, size: 10, color: AppColors.secondary.withValues(alpha: 0.55))),
+            Positioned(top: 8, right: 8, child: Icon(Icons.diamond, size: 10, color: AppColors.secondary.withValues(alpha: 0.55))),
+            Positioned(bottom: 8, left: 8, child: Icon(Icons.diamond, size: 10, color: AppColors.secondary.withValues(alpha: 0.55))),
+            Positioned(bottom: 8, right: 8, child: Icon(Icons.diamond, size: 10, color: AppColors.secondary.withValues(alpha: 0.55))),
+            Padding(
+              padding: padding,
+              child: child,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Future<void> _start() async {
+    final isArabicUi = context.read<AppSettingsCubit>().state.appLanguageCode.toLowerCase().startsWith('ar');
+
+    final canStart = await _confirmDownloadPlanBeforeStart(
+      isArabicUi: isArabicUi,
+      isSelective: false,
+    );
+    if (!canStart) return;
+
     setState(() {
       _isRunning = true;
       _cancelRequested = false;
@@ -95,9 +236,8 @@ class _OfflineAudioScreenState extends State<OfflineAudioScreen> {
       _progress = null;
     });
 
-    final isArabicUi = context.read<AppSettingsCubit>().state.appLanguageCode.toLowerCase().startsWith('ar');
-
     try {
+      await _service.deleteOtherEditionsAudio();
       await _service.downloadAllQuranAudio(
         onProgress: (p) {
           if (!mounted) return;
@@ -148,6 +288,13 @@ class _OfflineAudioScreenState extends State<OfflineAudioScreen> {
 
     if (selectedSurahs == null || selectedSurahs.isEmpty) return;
 
+    final canStart = await _confirmDownloadPlanBeforeStart(
+      isArabicUi: isArabicUi,
+      isSelective: true,
+      selectedSurahsCount: selectedSurahs.length,
+    );
+    if (!canStart) return;
+
     setState(() {
       _isRunning = true;
       _cancelRequested = false;
@@ -156,6 +303,7 @@ class _OfflineAudioScreenState extends State<OfflineAudioScreen> {
     });
 
     try {
+      await _service.deleteOtherEditionsAudio();
       await _service.downloadSurahs(
         surahNumbers: selectedSurahs,
         onProgress: (p) {
@@ -198,6 +346,8 @@ class _OfflineAudioScreenState extends State<OfflineAudioScreen> {
   Widget build(BuildContext context) {
     final settings = context.watch<AppSettingsCubit>().state;
     final isArabicUi = settings.appLanguageCode.toLowerCase().startsWith('ar');
+    final scheme = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final p = _progress;
     final progressValue = (p == null || p.totalFiles == 0)
         ? null
@@ -206,6 +356,37 @@ class _OfflineAudioScreenState extends State<OfflineAudioScreen> {
     final downloadedSurahs = _toInt(_downloadStats?['downloadedSurahs']);
     final percentage = _toDouble(_downloadStats?['percentage']);
     final totalSizeMB = _toDouble(_downloadStats?['totalSizeMB']);
+    // Real-world 64kbps verse-by-verse Quran size varies by reciter and pauses.
+    final expectedFullSizeMB = 820.0;
+    final expectedMinSizeMB = 700.0;
+    final expectedMaxSizeMB = 900.0;
+    final sizeProgressPercent = expectedFullSizeMB <= 0
+      ? 0.0
+      : ((totalSizeMB / expectedFullSizeMB) * 100).clamp(0.0, 100.0);
+    final avgFileKB = downloadedFiles > 0
+      ? (totalSizeMB * 1024) / downloadedFiles
+      : 0.0;
+    final otherEditionsSizeMB = _toDouble(_allStorageStats?['otherEditionsSizeMB']);
+    final otherEditionsCount = _toInt(_allStorageStats?['otherEditionsCount']);
+    final averageFileKB = _toDouble(_qualityStats?['averageFileKB']);
+    final estimatedBitrate = (_qualityStats?['estimatedBitrate'] as String?) ?? 'unknown';
+    final likelyHighBitrate = _qualityStats?['likelyHighBitrate'] == true;
+    final currentEdition = (_downloadPlan?['edition'] as String?) ?? _service.edition;
+    final sourceBitrate = _toInt(_downloadPlan?['sourceBitrate']);
+    final plannedBitrate = _toInt(_downloadPlan?['downloadBitrate'], fallback: 64);
+    final sourceBitrateLabel = sourceBitrate > 0
+      ? '${sourceBitrate}kbps'
+      : (isArabicUi ? 'غير معروف' : 'Unknown');
+    final scannedFiles = _toInt(_fileBitrateStats?['scannedFiles']);
+    final unknownBitrateFiles = _toInt(_fileBitrateStats?['unknownFiles']);
+    final dominantDownloadedBitrate =
+      (_fileBitrateStats?['dominantBitrate'] as String?) ?? 'unknown';
+    final distribution =
+      (_fileBitrateStats?['distribution'] as Map?)?.cast<String, dynamic>() ??
+      const <String, dynamic>{};
+    final distributionText = distribution.entries
+      .map((e) => '${e.key}: ${e.value}')
+      .join(' | ');
 
     return Scaffold(
       appBar: AppBar(
@@ -355,7 +536,10 @@ class _OfflineAudioScreenState extends State<OfflineAudioScreen> {
                                     if (chosenLang != null && chosenLang.trim().isNotEmpty) {
                                       _audioLanguageFilter = chosenLang.trim();
                                     }
+                                    _confirmedDownloadPlanEdition = null;
                                   });
+
+                                  await _loadDownloadStats();
 
                                   if (!context.mounted) return;
                                   ScaffoldMessenger.of(context).showSnackBar(
@@ -375,31 +559,16 @@ class _OfflineAudioScreenState extends State<OfflineAudioScreen> {
             const SizedBox(height: 16),
             // Download Statistics
             if (_downloadStats != null)
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [
-                      AppColors.primary.withValues(alpha: 0.15),
-                      AppColors.secondary.withValues(alpha: 0.15),
-                    ],
-                  ),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(
-                    color: AppColors.primary. withValues(alpha: 0.3),
-                    width: 2,
-                  ),
-                ),
+              _buildOrnamentedPanel(
+                scheme: scheme,
+                highlighted: true,
                 child: Column(
                   children: [
                     Row(
                       children: [
                         Icon(
                           Icons.analytics_outlined,
-                          color: AppColors.primary,
+                          color: scheme.primary,
                           size: 24,
                         ),
                         const SizedBox(width: 8),
@@ -408,7 +577,7 @@ class _OfflineAudioScreenState extends State<OfflineAudioScreen> {
                           style: TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
-                            color: AppColors.textPrimary,
+                            color: scheme.onSurface,
                           ),
                         ),
                       ],
@@ -446,14 +615,14 @@ class _OfflineAudioScreenState extends State<OfflineAudioScreen> {
                             Icon(
                               Icons.storage,
                               size: 16,
-                              color: AppColors.textSecondary,
+                              color: scheme.onSurfaceVariant,
                             ),
                             const SizedBox(width: 4),
                             Text(
                               isArabicUi ? 'الحجم:' : 'Size:',
                               style: TextStyle(
                                 fontSize: 12,
-                                color: AppColors.textSecondary,
+                                color: scheme.onSurfaceVariant,
                               ),
                             ),
                           ],
@@ -463,10 +632,36 @@ class _OfflineAudioScreenState extends State<OfflineAudioScreen> {
                           style: TextStyle(
                             fontSize: 14,
                             fontWeight: FontWeight.bold,
-                            color: AppColors.primary,
+                            color: scheme.primary,
                           ),
                         ),
                       ],
+                    ),
+                    const SizedBox(height: 6),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        isArabicUi
+                            ? 'تقدّم الحجم: ${sizeProgressPercent.toStringAsFixed(1)}% من ~${expectedFullSizeMB.toStringAsFixed(0)}MB (النطاق الطبيعي ${expectedMinSizeMB.toStringAsFixed(0)}–${expectedMaxSizeMB.toStringAsFixed(0)}MB، متوسط الملف ${avgFileKB.toStringAsFixed(0)}KB)'
+                            : 'Size progress: ${sizeProgressPercent.toStringAsFixed(1)}% of ~${expectedFullSizeMB.toStringAsFixed(0)}MB (normal range ${expectedMinSizeMB.toStringAsFixed(0)}-${expectedMaxSizeMB.toStringAsFixed(0)}MB, avg ${avgFileKB.toStringAsFixed(0)}KB/file)',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: scheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        isArabicUi
+                            ? 'تقدير الجودة الحالية: $estimatedBitrate (متوسط فعلي ${averageFileKB.toStringAsFixed(0)}KB/ملف)'
+                            : 'Current quality estimate: $estimatedBitrate (actual avg ${averageFileKB.toStringAsFixed(0)}KB/file)',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: scheme.onSurfaceVariant,
+                        ),
+                      ),
                     ),
                     if (downloadedSurahs > 0) ...[
                       const SizedBox(height: 12),
@@ -477,8 +672,80 @@ class _OfflineAudioScreenState extends State<OfflineAudioScreen> {
                           icon: const Icon(Icons.delete_outline, size: 18),
                           label: Text(isArabicUi ? 'إدارة التحميلات' : 'Manage Downloads'),
                           style: OutlinedButton.styleFrom(
-                            foregroundColor: AppColors.error,
-                            side: BorderSide(color: AppColors.error),
+                            foregroundColor: scheme.error,
+                            side: BorderSide(color: scheme.error),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton.icon(
+                          onPressed: _isRunning
+                              ? null
+                              : () async {
+                                  final latestQuality =
+                                      await _service.assessCurrentEditionAudioQuality();
+                                  final isHigh = latestQuality['likelyHighBitrate'] == true;
+
+                                  if (!isHigh) {
+                                    if (!mounted) return;
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: Text(
+                                          isArabicUi
+                                              ? 'الملفات الحالية تبدو محسّنة بالفعل (64kbps تقريبًا). لن يتم الحذف.'
+                                              : 'Current files already look optimized (~64kbps). No deletion needed.',
+                                        ),
+                                      ),
+                                    );
+                                    return;
+                                  }
+
+                                  final confirmed = await showDialog<bool>(
+                                    context: context,
+                                    builder: (context) => AlertDialog(
+                                      title: Text(
+                                        isArabicUi
+                                            ? 'إعادة بناء ملفات الصوت؟'
+                                            : 'Rebuild audio files?',
+                                      ),
+                                      content: Text(
+                                        isArabicUi
+                                            ? 'سيتم حذف الملفات الحالية لهذا القارئ ثم إعادة تنزيلها بجودة 64kbps فقط لضمان أقل حجم.'
+                                            : 'This will delete current files for this reciter, then re-download at 64kbps only for minimum size.',
+                                      ),
+                                      actions: [
+                                        TextButton(
+                                          onPressed: () => Navigator.pop(context, false),
+                                          child: Text(isArabicUi ? 'إلغاء' : 'Cancel'),
+                                        ),
+                                        ElevatedButton(
+                                          onPressed: () => Navigator.pop(context, true),
+                                          child: Text(isArabicUi ? 'متابعة' : 'Continue'),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                  if (confirmed != true) return;
+                                  await _service.deleteAllAudio();
+                                  await _loadDownloadStats();
+                                  if (!mounted) return;
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text(
+                                        isArabicUi
+                                            ? 'تم حذف الملفات الحالية. ابدأ تنزيل جديد بضغط Download أو Select.'
+                                            : 'Current files deleted. Start a fresh 64kbps download using Download or Select.',
+                                      ),
+                                    ),
+                                  );
+                                },
+                          icon: const Icon(Icons.tune),
+                          label: Text(
+                            isArabicUi
+                                ? 'ضمان أقل حجم (إعادة بناء 64kbps)'
+                                : 'Ensure minimum size (rebuild 64kbps)',
                           ),
                         ),
                       ),
@@ -486,9 +753,130 @@ class _OfflineAudioScreenState extends State<OfflineAudioScreen> {
                   ],
                 ),
               ),
+            if (_allStorageStats != null && otherEditionsSizeMB > 1) ...[
+              const SizedBox(height: 12),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: scheme.tertiaryContainer.withValues(alpha: isDark ? 0.35 : 0.45),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: scheme.tertiary.withValues(alpha: 0.45),
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      isArabicUi
+                          ? 'ملفات قرّاء قديمة تستهلك مساحة'
+                          : 'Old reciter files are using space',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: scheme.onSurface,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      isArabicUi
+                          ? 'هناك $otherEditionsCount إصدار/قارئ قديم بحجم ${otherEditionsSizeMB.toStringAsFixed(0)} MB. يمكنك حذفها مع الإبقاء على القارئ الحالي فقط.'
+                          : 'There are $otherEditionsCount old reciter edition(s) using ${otherEditionsSizeMB.toStringAsFixed(0)} MB. You can remove them and keep only the current reciter.',
+                      style: TextStyle(color: scheme.onSurfaceVariant),
+                    ),
+                    const SizedBox(height: 10),
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        onPressed: _isRunning
+                            ? null
+                            : () => _cleanupOldEditions(isArabicUi: isArabicUi),
+                        icon: const Icon(Icons.cleaning_services_outlined),
+                        label: Text(
+                          isArabicUi
+                              ? 'حذف ملفات القرّاء القديمة'
+                              : 'Delete old reciter files',
+                        ),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: scheme.tertiary,
+                          side: BorderSide(color: scheme.tertiary),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+            const SizedBox(height: 12),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: scheme.primaryContainer.withValues(alpha: isDark ? 0.28 : 0.35),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: scheme.primary.withValues(alpha: 0.35)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    isArabicUi ? 'خطة التحميل الحالية' : 'Current download plan',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: scheme.onSurface,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    isArabicUi
+                        ? 'القارئ: $currentEdition\nجودة المصدر: $sourceBitrateLabel\nسيتم التحميل فعليًا: ${plannedBitrate}kbps'
+                        : 'Reciter: $currentEdition\nSource bitrate: $sourceBitrateLabel\nActual download bitrate: ${plannedBitrate}kbps',
+                    style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 12),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 10),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: scheme.surfaceContainerHigh,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: scheme.outline.withValues(alpha: 0.35)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    isArabicUi
+                        ? 'فحص bitrate للملفات المحمّلة'
+                        : 'Downloaded files bitrate check',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: scheme.onSurface,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    isArabicUi
+                        ? 'Dominant: $dominantDownloadedBitrate | تم فحص $scannedFiles ملف | غير معروف: $unknownBitrateFiles'
+                        : 'Dominant: $dominantDownloadedBitrate | Scanned: $scannedFiles files | Unknown: $unknownBitrateFiles',
+                    style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 12),
+                  ),
+                  if (distributionText.isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      distributionText,
+                      style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 11),
+                    ),
+                  ],
+                ],
+              ),
+            ),
             const SizedBox(height: 16),
             // Warning if files are too large (old 128kbps files)
-            if (_downloadStats != null && totalSizeMB > 500)
+            if (_downloadStats != null && likelyHighBitrate)
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(16),
@@ -524,11 +912,11 @@ class _OfflineAudioScreenState extends State<OfflineAudioScreen> {
                     const SizedBox(height: 8),
                     Text(
                       isArabicUi
-                          ? 'ملفاتك الحالية ${totalSizeMB.toStringAsFixed(0)} ميجا - يجب أن تكون ~295 ميجا فقط. من المحتمل أنك قمت بتحميل النسخة القديمة (128kbps).'
-                          : 'Your current files are ${totalSizeMB.toStringAsFixed(0)} MB - should be only ~295 MB. You likely downloaded the old version (128kbps).',
+                          ? 'تم اكتشاف bitrate مرتفع في الملفات الحالية. الحجم الحالي ${totalSizeMB.toStringAsFixed(0)}MB ويبدو أعلى من النطاق الطبيعي لـ64kbps (${expectedMinSizeMB.toStringAsFixed(0)}–${expectedMaxSizeMB.toStringAsFixed(0)}MB).'
+                          : 'High bitrate was detected in current files. Current size is ${totalSizeMB.toStringAsFixed(0)}MB and appears above typical 64kbps range (${expectedMinSizeMB.toStringAsFixed(0)}-${expectedMaxSizeMB.toStringAsFixed(0)}MB).',
                       style: TextStyle(
                         fontSize: 13,
-                        color: AppColors.textSecondary,
+                        color: scheme.onSurfaceVariant,
                       ),
                     ),
                     const SizedBox(height: 12),
@@ -581,19 +969,12 @@ class _OfflineAudioScreenState extends State<OfflineAudioScreen> {
                   ],
                 ),
               ),
-            if (_downloadStats != null && (_downloadStats!['totalSizeMB'] as double) > 500)
+            if (_downloadStats != null && totalSizeMB > 500)
               const SizedBox(height: 16),
-            Container(
-              width: double.infinity,
+            _buildOrnamentedPanel(
+              scheme: scheme,
+              highlighted: false,
               padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: AppColors.primary.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: AppColors.primary.withValues(alpha: 0.3),
-                  width: 1,
-                ),
-              ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -602,7 +983,7 @@ class _OfflineAudioScreenState extends State<OfflineAudioScreen> {
                       Icon(
                         Icons.download_outlined,
                         size: 20,
-                        color: AppColors.primary,
+                        color: scheme.primary,
                       ),
                       const SizedBox(width: 8),
                       Expanded(
@@ -612,7 +993,7 @@ class _OfflineAudioScreenState extends State<OfflineAudioScreen> {
                               : 'Optimized Download (64kbps - Smaller Size)',
                           style: TextStyle(
                             fontWeight: FontWeight.bold,
-                            color: AppColors.primary,
+                            color: scheme.primary,
                           ),
                         ),
                       ),
@@ -621,10 +1002,10 @@ class _OfflineAudioScreenState extends State<OfflineAudioScreen> {
                   const SizedBox(height: 8),
                   Text(
                     isArabicUi
-                        ? 'سيتم تنزيل 6236 ملف صوتي (64kbps). حجم صغير: ~295 ميجابايت. 15-45 دقيقة.'
-                        : 'Will download 6,236 audio files (64kbps). Small size: ~295 MB total. 15-45 minutes.',
+                    ? 'سيتم تنزيل 6236 ملف صوتي (64kbps). الحجم المعتاد يعتمد على القارئ ويكون غالبًا بين ${expectedMinSizeMB.toStringAsFixed(0)} و${expectedMaxSizeMB.toStringAsFixed(0)} ميجابايت.'
+                    : 'Will download 6,236 audio files (64kbps). Typical total size depends on reciter and is often between ${expectedMinSizeMB.toStringAsFixed(0)} and ${expectedMaxSizeMB.toStringAsFixed(0)} MB.',
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: AppColors.textSecondary,
+                          color: scheme.onSurfaceVariant,
                         ),
                   ),
                 ],
@@ -670,14 +1051,14 @@ class _OfflineAudioScreenState extends State<OfflineAudioScreen> {
                         ? '${p.completedFiles} من ${p.totalFiles} ملف'
                         : '${p.completedFiles} of ${p.totalFiles} files',
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: AppColors.textSecondary,
+                          color: scheme.onSurfaceVariant,
                         ),
                   ),
                   Text(
                     '${p.percentage.toStringAsFixed(1)}%',
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
                           fontWeight: FontWeight.bold,
-                          color: AppColors.primary,
+                          color: scheme.primary,
                         ),
                   ),
                 ],
@@ -687,8 +1068,8 @@ class _OfflineAudioScreenState extends State<OfflineAudioScreen> {
                 value: progressValue,
                 minHeight: 10,
                 borderRadius: BorderRadius.circular(10),
-                backgroundColor: AppColors.divider,
-                valueColor: const AlwaysStoppedAnimation(AppColors.primary),
+                backgroundColor: scheme.surfaceContainerHighest,
+                valueColor: AlwaysStoppedAnimation<Color>(scheme.primary),
               ),
               const SizedBox(height: 12),
             ],
@@ -750,27 +1131,43 @@ class _OfflineAudioScreenState extends State<OfflineAudioScreen> {
     required double percentage,
     required bool isArabicUi,
   }) {
+    final scheme = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            scheme.surface,
+            scheme.surfaceContainerLowest,
+          ],
+        ),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: AppColors.cardBorder,
+          color: AppColors.secondary.withValues(alpha: isDark ? 0.40 : 0.30),
         ),
+        boxShadow: [
+          BoxShadow(
+            color: scheme.shadow.withValues(alpha: isDark ? 0.15 : 0.08),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       child: Column(
         children: [
           Row(
             children: [
-              Icon(icon, size: 20, color: AppColors.primary),
+              Icon(icon, size: 20, color: scheme.primary),
               const SizedBox(width: 6),
               Expanded(
                 child: Text(
                   label,
                   style: TextStyle(
                     fontSize: 12,
-                    color: AppColors.textSecondary,
+                    color: scheme.onSurfaceVariant,
                   ),
                 ),
               ),
@@ -782,7 +1179,7 @@ class _OfflineAudioScreenState extends State<OfflineAudioScreen> {
             style: TextStyle(
               fontSize: 24,
               fontWeight: FontWeight.bold,
-              color: AppColors.primary,
+              color: scheme.primary,
             ),
           ),
           const SizedBox(height: 4),
@@ -790,7 +1187,7 @@ class _OfflineAudioScreenState extends State<OfflineAudioScreen> {
             '${percentage.toStringAsFixed(1)}%',
             style: TextStyle(
               fontSize: 11,
-              color: AppColors.textSecondary,
+              color: scheme.onSurfaceVariant,
             ),
           ),
         ],
