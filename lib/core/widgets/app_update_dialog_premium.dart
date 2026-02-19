@@ -8,7 +8,7 @@ import '../services/app_update_service_firebase.dart';
 Future<void> showPremiumUpdateDialog({
   required BuildContext context,
   required AppUpdateInfo updateInfo,
-  required AppUpdateService updateService,
+  required AppUpdateServiceFirebase updateService,
   String languageCode = 'ar',
 }) {
   return showDialog(
@@ -25,7 +25,7 @@ Future<void> showPremiumUpdateDialog({
 /// Premium update dialog with In-App Update support for Android
 class AppUpdateDialogPremium extends StatefulWidget {
   final AppUpdateInfo updateInfo;
-  final AppUpdateService updateService;
+  final AppUpdateServiceFirebase updateService;
   final String languageCode;
 
   const AppUpdateDialogPremium({
@@ -41,6 +41,8 @@ class AppUpdateDialogPremium extends StatefulWidget {
 
 class _AppUpdateDialogPremiumState extends State<AppUpdateDialogPremium> {
   bool _isUpdating = false;
+  bool _isDownloading = false;
+  double _downloadProgress = 0.0;
 
   @override
   Widget build(BuildContext context) {
@@ -202,18 +204,40 @@ class _AppUpdateDialogPremiumState extends State<AppUpdateDialogPremium> {
                 ),
               ],
 
-              // Loading indicator
-              if (_isUpdating) ...[
+              // Loading/Download indicator
+              if (_isUpdating || _isDownloading) ...[
                 const SizedBox(height: 16),
-                const Center(
-                  child: CircularProgressIndicator(),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  isArabic ? 'جاري التحديث...' : 'Updating...',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: Colors.grey.shade600),
-                ),
+                if (_isDownloading) ...[
+                  // Download progress bar
+                  LinearProgressIndicator(
+                    value: _downloadProgress,
+                    backgroundColor: Colors.grey.shade200,
+                    valueColor: AlwaysStoppedAnimation<Color>(Colors.blue.shade600),
+                    minHeight: 8,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    isArabic 
+                        ? 'جاري التحميل... ${(_downloadProgress * 100).toStringAsFixed(0)}%'
+                        : 'Downloading... ${(_downloadProgress * 100).toStringAsFixed(0)}%',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: Colors.grey.shade700,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ] else ...[
+                  const Center(
+                    child: CircularProgressIndicator(),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    isArabic ? 'جاري التحديث...' : 'Updating...',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: Colors.grey.shade600),
+                  ),
+                ],
               ],
             ],
           ),
@@ -252,36 +276,35 @@ class _AppUpdateDialogPremiumState extends State<AppUpdateDialogPremium> {
   }
 
   Future<void> _handleUpdate() async {
+    final isArabic = widget.languageCode.startsWith('ar');
+    
     setState(() => _isUpdating = true);
 
     try {
-      if (Platform.isAndroid) {
-        // Try in-app update first for Android
+      if (Platform.isAndroid && widget.updateInfo.downloadUrl != null) {
+        // Try in-app update first
         final inAppAvailable =
             await widget.updateService.checkInAppUpdateAvailability();
 
         if (inAppAvailable) {
+          // Use Google Play in-app update
           bool success;
           if (widget.updateInfo.isMandatory ||
               widget.updateInfo.isBelowMinimum) {
-            // Immediate update for mandatory updates
             success = await widget.updateService.performImmediateUpdate();
           } else {
-            // Flexible update for optional updates
             success = await widget.updateService.performFlexibleUpdate();
             if (success && context.mounted) {
               Navigator.of(context).pop();
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
                   content: Text(
-                    widget.languageCode.startsWith('ar')
+                    isArabic
                         ? 'جاري تحميل التحديث في الخلفية...'
                         : 'Downloading update in background...',
                   ),
                   action: SnackBarAction(
-                    label: widget.languageCode.startsWith('ar')
-                        ? 'تثبيت'
-                        : 'Install',
+                    label: isArabic ? 'تثبيت' : 'Install',
                     onPressed: () {
                       widget.updateService.completeFlexibleUpdate();
                     },
@@ -293,21 +316,89 @@ class _AppUpdateDialogPremiumState extends State<AppUpdateDialogPremium> {
             return;
           }
 
-          if (!success) {
-            // Fallback to store
-            await _openStore();
+          if (success) {
+            return; // Update handled by Play Store
+          }
+        }
+
+        // Fallback to direct APK download
+        setState(() {
+          _isUpdating = false;
+          _isDownloading = true;
+          _downloadProgress = 0.0;
+        });
+
+        print('📥 Starting direct APK download...');
+        
+        final success = await widget.updateService.downloadAndInstallApk(
+          url: widget.updateInfo.downloadUrl!,
+          onProgress: (progress) {
+            if (mounted) {
+              setState(() => _downloadProgress = progress);
+            }
+          },
+        );
+
+        if (success) {
+          // APK downloaded and installation started
+          if (context.mounted) {
+            // Show success message
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                  isArabic
+                      ? 'اكتمل التحميل! يرجى اتباع التعليمات لتثبيت التحديث'
+                      : 'Download complete! Please follow the instructions to install',
+                ),
+                backgroundColor: Colors.green,
+                duration: const Duration(seconds: 5),
+              ),
+            );
+            
+            // Close dialog if not mandatory
+            if (!widget.updateInfo.isMandatory) {
+              Navigator.of(context).pop();
+            }
           }
         } else {
-          // In-app update not available, open Play Store
-          await _openStore();
+          // Download failed, show error
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                  isArabic
+                      ? 'فشل التحميل. يرجى المحاولة مرة أخرى'
+                      : 'Download failed. Please try again',
+                ),
+                backgroundColor: Colors.red,
+              ),
+            );
+          }
         }
       } else {
-        // iOS or other platforms - open store
+        // iOS or no download URL - open store
         await _openStore();
+      }
+    } catch (e) {
+      print('❌ Error during update: $e');
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              isArabic
+                  ? 'حدث خطأ أثناء التحديث'
+                  : 'An error occurred during update',
+            ),
+            backgroundColor: Colors.red,
+          ),
+        );
       }
     } finally {
       if (mounted) {
-        setState(() => _isUpdating = false);
+        setState(() {
+          _isUpdating = false;
+          _isDownloading = false;
+        });
       }
     }
   }

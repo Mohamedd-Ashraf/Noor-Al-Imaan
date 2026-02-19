@@ -3,7 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'core/di/injection_container.dart' as di;
+import 'firebase_options.dart';
+import 'core/di/injection_container_firebase.dart' as di;
 import 'core/services/adhan_notification_service.dart';
 import 'core/services/app_update_service_firebase.dart';
 import 'core/widgets/app_update_dialog_premium.dart';
@@ -18,13 +19,15 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
   // Initialize Firebase
-  await Firebase.initializeApp();
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
   
   // Initialize dependency injection
   await di.init();
 
   // Initialize update service
-  final updateService = di.sl<AppUpdateService>();
+  final updateService = di.sl<AppUpdateServiceFirebase>();
   await updateService.initialize();
 
   // Notifications are used for prayer reminders (adhan). Initialize early.
@@ -46,17 +49,21 @@ class MyApp extends StatelessWidget {
 
   /// Check for app updates in the background
   Future<void> _checkForUpdates(BuildContext context, String languageCode) async {
-    final updateService = di.sl<AppUpdateService>();
+    print('🔍 _checkForUpdates called');
+    final updateService = di.sl<AppUpdateServiceFirebase>();
     
-    // Only check if enough time has passed since last check
-    final shouldCheck = await updateService.shouldCheckForUpdate();
-    if (!shouldCheck) return;
+    // Force check for testing (remove shouldCheckForUpdate check temporarily)
+    // final shouldCheck = await updateService.shouldCheckForUpdate();
+    // print('⏰ Should check: $shouldCheck');
+    // if (!shouldCheck) return;
 
     // Check for updates
     final updateInfo = await updateService.checkForUpdate();
+    print('📦 Update info: $updateInfo');
     
     // Show dialog if update is available
     if (updateInfo != null && context.mounted) {
+      print('🎉 Showing update dialog');
       // Delay slightly to ensure UI is ready
       await Future.delayed(const Duration(milliseconds: 500));
       if (context.mounted) {
@@ -67,6 +74,8 @@ class MyApp extends StatelessWidget {
           languageCode: languageCode,
         );
       }
+    } else {
+      print('⚠️ No update to show (updateInfo: $updateInfo, mounted: ${context.mounted})');
     }
   }
 
@@ -101,7 +110,8 @@ class MyApp extends StatelessWidget {
             home: Builder(
               builder: (context) {
                 // Check for updates after the app loads
-                WidgetsBinding.instance.addPostFrameCallback((_) {
+                WidgetsBinding.instance.addPostFrameCallback((_) async {
+                  print('📲 App loaded, checking for updates...');
                   _checkForUpdates(context, settings.appLanguageCode);
                 });
                 return const OnboardingGate();

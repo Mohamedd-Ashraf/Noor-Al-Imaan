@@ -1,5 +1,4 @@
-﻿import 'package:flutter/material.dart';
-import 'package:flutter_svg/flutter_svg.dart';
+import "package:flutter/material.dart";
 
 class IslamicLogo extends StatelessWidget {
   final double size;
@@ -13,26 +12,18 @@ class IslamicLogo extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Determine which logo to use based on the theme
-    // Concept 1 is the high-luxury emerald and gold version
-    // Concept 2 is a darker navy and gold variant
-    final String assetPath = darkTheme 
-        ? 'assets/logo/generated/logo_concept_2_monoline_navy.svg'
-        : 'assets/logo/generated/logo_concept_1_luxury_v2.svg';
+    // Now using the transparent versions of your original files!
+    // No more white background boxes.
+    final String assetPath = darkTheme
+        ? "assets/logo/files/transparent/Splash_dark_transparent.png"
+        : "assets/logo/files/transparent/splash_light_transparent.png";
 
     return Center(
-      child: SvgPicture.asset(
+      child: Image.asset(
         assetPath,
         width: size,
         height: size,
-        placeholderBuilder: (BuildContext context) => const SizedBox(
-          width: 50,
-          height: 50,
-          child: CircularProgressIndicator(
-            strokeWidth: 2,
-            valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFD4AF37)),
-          ),
-        ),
+        fit: BoxFit.contain,
       ),
     );
   }

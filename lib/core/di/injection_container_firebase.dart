@@ -94,7 +94,7 @@ Future<void> init() async {
   sl.registerLazySingleton(() => AudioEditionService(sl(), sl(), sl()));
   
   // Firebase-based update service
-  sl.registerLazySingleton(() => AppUpdateService(sl(), sl()));
+  sl.registerLazySingleton(() => AppUpdateServiceFirebase(sl(), sl()));
 
   //! External
   final sharedPreferences = await SharedPreferences.getInstance();

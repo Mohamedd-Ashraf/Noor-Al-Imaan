@@ -3,6 +3,9 @@ import 'package:firebase_remote_config/firebase_remote_config.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:in_app_update/in_app_update.dart' as iap;
+import 'package:dio/dio.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:open_file/open_file.dart';
 import '../models/app_update_info.dart';
 
 /// Premium app update service using Firebase Remote Config and In-App Updates
@@ -13,35 +16,38 @@ import '../models/app_update_info.dart';
 /// - App Store redirect for iOS
 /// - No need for external server hosting
 /// - Real-time update configuration changes
-class AppUpdateService {
+class AppUpdateServiceFirebase {
   final FirebaseRemoteConfig _remoteConfig;
   final SharedPreferences _prefs;
 
   // Remote Config keys
   static const String _keyLatestVersion = 'latest_version';
   static const String _keyMinimumVersion = 'minimum_version';
-  static const String _keyIsMandatory = 'is_mandatory';
+  static const String _keyIsMandatory = 'mandatory_update';
   static const String _keyDownloadUrl = 'download_url';
   static const String _keyChangelogAr = 'changelog_ar';
   static const String _keyChangelogEn = 'changelog_en';
   static const String _keyReleaseDate = 'release_date';
-  static const String _keyEnableInAppUpdate = 'enable_in_app_update'; // Android only
+  static const String _keyEnableInAppUpdate = 'use_in_app_update'; // Android only
+  static const String _keyUpdatePriority = 'update_priority';
 
   // Preference keys
   static const String _keyLastCheckTime = 'last_update_check_time';
   static const String _keySkippedVersion = 'skipped_update_version';
 
-  AppUpdateService(this._remoteConfig, this._prefs);
+  AppUpdateServiceFirebase(this._remoteConfig, this._prefs);
 
   /// Initialize Firebase Remote Config with default values
   Future<void> initialize() async {
+    print('🚀 Initializing Firebase Remote Config...');
     try {
       await _remoteConfig.setConfigSettings(
         RemoteConfigSettings(
           fetchTimeout: const Duration(seconds: 10),
-          minimumFetchInterval: const Duration(hours: 1), // Fetch updates hourly
+          minimumFetchInterval: Duration.zero, // For testing - fetch immediately
         ),
       );
+      print('✅ Remote Config settings configured');
 
       // Set default values - these will be overridden by Firebase Console
       await _remoteConfig.setDefaults({
@@ -53,11 +59,15 @@ class AppUpdateService {
         _keyChangelogEn: '',
         _keyReleaseDate: DateTime.now().toIso8601String(),
         _keyEnableInAppUpdate: true,
+        _keyUpdatePriority: 3,
       });
+      print('✅ Remote Config defaults set');
 
       // Fetch and activate
-      await _remoteConfig.fetchAndActivate();
+      final activated = await _remoteConfig.fetchAndActivate();
+      print('✅ Remote Config fetched and activated: $activated');
     } catch (e) {
+      print('❌ Error initializing Remote Config: $e');
       // If Remote Config fails, use defaults
       // This ensures the app still works without Firebase
     }
@@ -66,12 +76,16 @@ class AppUpdateService {
   /// Check for app updates using Firebase Remote Config
   Future<AppUpdateInfo?> checkForUpdate() async {
     try {
+      print('🔄 Checking for updates...');
+      
       // Fetch latest config from Firebase
       await _remoteConfig.fetchAndActivate();
+      print('✅ Remote Config fetched and activated');
 
       // Get current app version
       final packageInfo = await PackageInfo.fromPlatform();
       final currentVersion = packageInfo.version;
+      print('📱 Current version: $currentVersion');
 
       // Get update info from Remote Config
       final latestVersion = _remoteConfig.getString(_keyLatestVersion);
@@ -81,6 +95,10 @@ class AppUpdateService {
       final changelogAr = _remoteConfig.getString(_keyChangelogAr);
       final changelogEn = _remoteConfig.getString(_keyChangelogEn);
       final releaseDateStr = _remoteConfig.getString(_keyReleaseDate);
+
+      print('🆕 Latest version: $latestVersion');
+      print('⚠️ Mandatory: $isMandatory');
+      print('🔗 Download URL: $downloadUrl');
 
       // Build changelog map
       final changelogMap = <String, String>{};
@@ -110,13 +128,17 @@ class AppUpdateService {
 
       // If no update available, return null
       if (!updateInfo.hasUpdate) {
+        print('ℹ️ No update available');
         return null;
       }
 
+      print('🎯 Update available!');
+      
       // If update is optional and user skipped this version, return null
       if (!updateInfo.isMandatory && !updateInfo.isBelowMinimum) {
         final skippedVersion = _prefs.getString(_keySkippedVersion);
         if (skippedVersion == updateInfo.latestVersion) {
+          print('⏭️ User skipped this version');
           return null;
         }
       }
@@ -136,6 +158,7 @@ class AppUpdateService {
 
       return updateInfo;
     } catch (e) {
+      print('❌ Error checking for update: $e');
       return null;
     }
   }
@@ -257,5 +280,86 @@ class AppUpdateService {
     } catch (e) {
       return iap.UpdateAvailability.updateNotAvailable;
     }
+  }
+
+  /// Download APK file directly from URL with progress callback
+  /// Returns the path to the downloaded file
+  Future<String?> downloadApk({
+    required String url,
+    required void Function(double progress) onProgress,
+  }) async {
+    try {
+      print('📥 Starting APK download from: $url');
+      
+      // Get temporary directory
+      final dir = await getTemporaryDirectory();
+      final filePath = '${dir.path}/app_update.apk';
+      
+      // Delete old file if exists
+      final file = File(filePath);
+      if (await file.exists()) {
+        await file.delete();
+        print('🗑️ Deleted old APK file');
+      }
+
+      // Download with progress
+      final dio = Dio();
+      await dio.download(
+        url,
+        filePath,
+        onReceiveProgress: (received, total) {
+          if (total != -1) {
+            final progress = received / total;
+            onProgress(progress);
+            print('📊 Download progress: ${(progress * 100).toStringAsFixed(1)}%');
+          }
+        },
+      );
+
+      print('✅ APK downloaded successfully to: $filePath');
+      return filePath;
+    } catch (e) {
+      print('❌ Error downloading APK: $e');
+      return null;
+    }
+  }
+
+  /// Install APK file (opens installation prompt)
+  Future<bool> installApk(String filePath) async {
+    if (!Platform.isAndroid) {
+      print('⚠️ APK installation only supported on Android');
+      return false;
+    }
+
+    try {
+      print('📦 Opening APK for installation: $filePath');
+      
+      final result = await OpenFile.open(filePath);
+      
+      if (result.type == ResultType.done) {
+        print('✅ APK installation started');
+        return true;
+      } else {
+        print('❌ Failed to open APK: ${result.message}');
+        return false;
+      }
+    } catch (e) {
+      print('❌ Error installing APK: $e');
+      return false;
+    }
+  }
+
+  /// Download and install APK in one step
+  Future<bool> downloadAndInstallApk({
+    required String url,
+    required void Function(double progress) onProgress,
+  }) async {
+    final filePath = await downloadApk(url: url, onProgress: onProgress);
+    
+    if (filePath == null) {
+      return false;
+    }
+
+    return await installApk(filePath);
   }
 }

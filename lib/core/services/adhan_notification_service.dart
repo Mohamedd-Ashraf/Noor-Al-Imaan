@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:adhan/adhan.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:timezone/data/latest.dart' as tz;
@@ -21,19 +22,19 @@ import 'prayer_times_cache_service.dart';
 class AdhanNotificationService {
   static const String _channelName = 'Prayer Times';
   static const String _channelDescription = 'Prayer time reminders with Adhan sound.';
+  static const MethodChannel _androidAdhanPlayerChannel =
+      MethodChannel('quraan/adhan_player');
 
-  // Using v2 channel ID to force recreation with adhan.mp3 sound
-  static const String _channelId = 'adhan_prayer_times_v2';
+  // V3: Silent channel. We rely on the native MediaPlayer via MethodChannel for audio.
+  // This avoids conflicts/ducking/cutting between notification sound and media player.
+  static const String _channelId = 'adhan_prayer_times_v3_silent';
   
   // Old channel IDs to clean up
   static const List<String> _oldChannelIds = [
     'adhan_prayer_times',
     'adhan_prayer_times_custom',
+    'adhan_prayer_times_v2',
   ];
-
-  // Android: expects a file at android/app/src/main/res/raw/adhan.(mp3|wav|ogg)
-  static const AndroidNotificationSound _adhanSound =
-      RawResourceAndroidNotificationSound('adhan');
 
   // iOS: expects a bundled sound file (e.g. Runner -> adhan.caf)
   static const String _iosAdhanSoundName = 'adhan.caf';
@@ -44,6 +45,12 @@ class AdhanNotificationService {
   final SettingsService _settings;
   final LocationService _location;
   final PrayerTimesCacheService _cache;
+
+  final List<Timer> _inAppTimers = [];
+  bool _isAdhanPlaying = false;
+  DateTime? _lastAdhanStartedAt;
+  String? _lastInAppScheduleSignature;
+  DateTime? _lastInAppScheduleAt;
 
   AdhanNotificationService(
     this._plugin,
@@ -72,6 +79,103 @@ class AdhanNotificationService {
     await _plugin.initialize(initSettings);
 
     await recreateAndroidChannels();
+    await _initAdhanPlayer();
+  }
+
+  Future<void> _initAdhanPlayer() async {
+    // Android playback is handled natively via MethodChannel.
+  }
+
+  Future<void> _playFullAdhanAudio() async {
+    try {
+      final now = DateTime.now();
+      if (_isAdhanPlaying) {
+        debugPrint('🔇 [Adhan] Ignored duplicate trigger while already playing');
+        return;
+      }
+      final lastStart = _lastAdhanStartedAt;
+      if (lastStart != null && now.difference(lastStart) < const Duration(seconds: 35)) {
+        debugPrint('🔇 [Adhan] Ignored duplicate trigger within cooldown window');
+        return;
+      }
+
+      _isAdhanPlaying = true;
+      _lastAdhanStartedAt = now;
+
+      if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+        final soundId = _settings.getSelectedAdhanSound();
+        final ok = await _androidAdhanPlayerChannel.invokeMethod<bool>(
+          'playAdhan',
+          {'soundName': soundId},
+        );
+        if (ok == true) {
+          debugPrint('🔊 [Adhan] Native adhan started: $soundId');
+          return;
+        }
+      }
+
+      // Fallback: trigger immediate notification sound if native playback is unavailable.
+      await _plugin.show(
+        999003,
+        'Prayer Time',
+        'Adhan is playing',
+        _notificationDetails(),
+      );
+      debugPrint('🔔 [Adhan] Fallback notification sound triggered');
+    } catch (e) {
+      debugPrint('Adhan playback error: $e');
+    } finally {
+      _isAdhanPlaying = false;
+    }
+  }
+
+  void _clearInAppTimers() {
+    for (final t in _inAppTimers) {
+      t.cancel();
+    }
+    _inAppTimers.clear();
+  }
+
+  void _scheduleInAppAdhanFromPreview(List<Map<String, dynamic>> preview) {
+    final normalizedTimes = <String>[];
+    for (final item in preview) {
+      final timeIso = item['time'] as String?;
+      if (timeIso != null && timeIso.isNotEmpty) {
+        normalizedTimes.add(timeIso);
+      }
+    }
+    normalizedTimes.sort();
+    final signature = normalizedTimes.join('|');
+    final lastSignature = _lastInAppScheduleSignature;
+    final lastAt = _lastInAppScheduleAt;
+    if (lastSignature == signature && lastAt != null && DateTime.now().difference(lastAt) < const Duration(minutes: 2)) {
+      debugPrint('🔔 [Adhan] In-app timer schedule unchanged, skipping reschedule');
+      return;
+    }
+
+    _lastInAppScheduleSignature = signature;
+    _lastInAppScheduleAt = DateTime.now();
+    _clearInAppTimers();
+
+    final now = DateTime.now();
+    final end = now.add(const Duration(hours: 48));
+
+    for (final item in preview) {
+      final timeIso = item['time'] as String?;
+      if (timeIso == null || timeIso.isEmpty) continue;
+      final dt = DateTime.tryParse(timeIso);
+      if (dt == null) continue;
+      if (!dt.isAfter(now) || dt.isAfter(end)) continue;
+
+      final delay = dt.difference(now);
+      _inAppTimers.add(
+        Timer(delay, () async {
+          await _playFullAdhanAudio();
+        }),
+      );
+    }
+
+    debugPrint('🔔 [Adhan] Scheduled ${_inAppTimers.length} in-app adhan timer(s)');
   }
 
   Future<void> recreateAndroidChannels() async {
@@ -92,17 +196,16 @@ class AdhanNotificationService {
       await android.deleteNotificationChannel(_channelId);
     } catch (_) {}
 
-    // Create new Adhan channel with adhan.mp3 sound
+    // Create new Adhan channel with SILENT settings as we play audio via native MediaPlayer
     await android.createNotificationChannel(
       const AndroidNotificationChannel(
         _channelId,
         _channelName,
         description: _channelDescription,
         importance: Importance.max,
-        playSound: true,
+        playSound: false, // Ensure no double audio triggers
         enableVibration: true,
-        sound: _adhanSound,
-        audioAttributesUsage: AudioAttributesUsage.alarm,
+        // sound: _adhanSound, // DO NOT USE
       ),
     );
   }
@@ -141,6 +244,13 @@ class AdhanNotificationService {
 
   Future<void> disable() async {
     await _settings.setAdhanNotificationsEnabled(false);
+    _clearInAppTimers();
+    _isAdhanPlaying = false;
+    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+      try {
+        await _androidAdhanPlayerChannel.invokeMethod<void>('stopAdhan');
+      } catch (_) {}
+    }
     await cancelAll();
   }
 
@@ -185,12 +295,14 @@ class AdhanNotificationService {
         return ta.compareTo(tb);
       });
       await _settings.setAdhanSchedulePreview(jsonEncode(preview));
+      _scheduleInAppAdhanFromPreview(preview);
     } catch (_) {
       // Ignore preview persistence failures.
     }
   }
 
   Future<void> testNow() async {
+    await _playFullAdhanAudio();
     await _plugin.show(
       999001,
       'Adhan Test',
@@ -201,6 +313,10 @@ class AdhanNotificationService {
 
   Future<void> scheduleTestIn(Duration delay) async {
     final when = tz.TZDateTime.now(tz.local).add(delay);
+
+    Timer(delay, () async {
+      await _playFullAdhanAudio();
+    });
 
     await _plugin.zonedSchedule(
       999002,
@@ -318,16 +434,15 @@ class AdhanNotificationService {
         channelDescription: _channelDescription,
         importance: Importance.max,
         priority: Priority.max,
-        playSound: true,
+        playSound: false, // SILENT
         enableVibration: true,
-        sound: _adhanSound,
+        // sound: _adhanSound, // REMOVED
         category: AndroidNotificationCategory.alarm,
         visibility: NotificationVisibility.public,
-        fullScreenIntent: true, // Show full screen for alarm-like behavior
+        fullScreenIntent: true,
         audioAttributesUsage: AudioAttributesUsage.alarm,
         ongoing: false,
         autoCancel: true,
-        timeoutAfter: 60000, // Auto-dismiss after 1 minute
       ),
       iOS: DarwinNotificationDetails(
         presentAlert: true,

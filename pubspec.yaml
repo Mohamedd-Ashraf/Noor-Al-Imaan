@@ -83,6 +83,8 @@ dependencies:
   package_info_plus: ^8.0.0
   url_launcher: ^6.3.1
   in_app_update: ^4.2.2
+  dio: ^5.4.0
+  open_file: ^3.3.2
 
   # Firebase
   firebase_core: ^3.8.1
@@ -114,10 +116,10 @@ dev_dependencies:
 flutter_launcher_icons:
   android: "launcher_icon"
   ios: true
-  image_path: "assets/logo/generated/logo_concept_1_luxury_v2.svg"
+  image_path: "assets/logo/files/transparent/main_logo_transparent.png"
   min_sdk_android: 21
   adaptive_icon_background: "#0F5132"
-  adaptive_icon_foreground: "assets/logo/generated/logo_concept_1_luxury_v2.svg"
+  adaptive_icon_foreground: "assets/logo/files/transparent/main_logo_transparent.png"
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
@@ -130,13 +132,13 @@ flutter:
   # the material Icons class.
   uses-material-design: true
 
-  # To add assets to your application, add an assets section, like this:
   assets:
     - assets/ui-ux/
     - assets/offline/
     - assets/update-config.json
-    - assets/logo/generated/
-    - assets/logo/logo_dark.svg
+    - assets/logo/files/
+    - assets/logo/files/transparent/
+    - assets/sound/
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

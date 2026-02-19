@@ -136,4 +136,56 @@ class PrayerCalculationConstants {
     params = applyAsrMethod(params, asrMethod);
     return params;
   }
+
+  /// Guess the best calculation method based on GPS coordinates.
+  /// Returns a method ID string matching [calculationMethods].
+  /// Defaults to 'egyptian' when no region matches.
+  static String methodFromCoordinates(double lat, double lng) {
+    // Saudi Arabia
+    if (lat >= 16.0 && lat <= 32.5 && lng >= 34.5 && lng <= 55.5) {
+      return 'umm_al_qura';
+    }
+    // Egypt / Libya / Syria / Lebanon / Iraq / Sudan
+    if (lat >= 20.0 && lat <= 37.0 && lng >= 24.0 && lng <= 48.0) {
+      return 'egyptian';
+    }
+    // UAE / Bahrain / Oman
+    if (lat >= 22.0 && lat <= 26.5 && lng >= 51.0 && lng <= 60.0) {
+      return 'dubai';
+    }
+    // Qatar
+    if (lat >= 24.4 && lat <= 26.3 && lng >= 50.5 && lng <= 51.7) {
+      return 'qatar';
+    }
+    // Kuwait
+    if (lat >= 28.5 && lat <= 30.1 && lng >= 46.5 && lng <= 48.5) {
+      return 'kuwait';
+    }
+    // Turkey
+    if (lat >= 36.0 && lat <= 42.5 && lng >= 26.0 && lng <= 44.8) {
+      return 'turkey';
+    }
+    // Pakistan / Bangladesh / India / Afghanistan
+    if (lat >= 7.0 && lat <= 38.0 && lng >= 60.0 && lng <= 97.5) {
+      return 'karachi';
+    }
+    // Iran
+    if (lat >= 25.0 && lat <= 40.0 && lng >= 44.0 && lng <= 63.5) {
+      return 'tehran';
+    }
+    // Singapore / Malaysia / Indonesia
+    if (lat >= -11.0 && lat <= 7.5 && lng >= 95.0 && lng <= 141.0) {
+      return 'singapore';
+    }
+    // North America
+    if (lat >= 24.0 && lat <= 71.0 && lng >= -170.0 && lng <= -52.0) {
+      return 'north_america';
+    }
+    // Morocco / Algeria / Tunisia (Northwest Africa)
+    if (lat >= 19.0 && lat <= 38.0 && lng >= -17.5 && lng <= 15.0) {
+      return 'muslim_world_league';
+    }
+    // Default: Egyptian (widely used in Arab world)
+    return 'egyptian';
+  }
 }

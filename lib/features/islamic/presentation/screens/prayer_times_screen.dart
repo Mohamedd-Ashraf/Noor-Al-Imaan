@@ -5,11 +5,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../../core/constants/app_colors.dart';
+import '../../../../core/constants/prayer_calculation_constants.dart';
 import '../../../../core/services/location_service.dart';
 import '../../../../core/services/settings_service.dart';
 import '../../../../core/services/prayer_times_cache_service.dart';
 import '../../../../core/settings/app_settings_cubit.dart';
 import '../../../../core/di/injection_container.dart' as di;
+import 'adhan_settings_screen.dart';
 
 class PrayerTimesScreen extends StatefulWidget {
   const PrayerTimesScreen({super.key});
@@ -26,6 +28,7 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen> {
 
   PrayerTimes? _prayerTimes;
   Coordinates? _coordinates;
+  String _calcMethodId = 'egyptian';
 
   @override
   void initState() {
@@ -55,12 +58,10 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen> {
     try {
       final pos = await _location.getPosition();
       final coords = Coordinates(pos.latitude, pos.longitude);
+      final settings = di.sl<SettingsService>();
 
       // Save location to local storage for future use
-      await di.sl<SettingsService>().setLastKnownCoordinates(
-        pos.latitude,
-        pos.longitude,
-      );
+      await settings.setLastKnownCoordinates(pos.latitude, pos.longitude);
 
       // Cache prayer times for next 30 days (offline support)
       await di.sl<PrayerTimesCacheService>().cachePrayerTimes(
@@ -68,9 +69,22 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen> {
         pos.longitude,
       );
 
-      final params = CalculationMethod.muslim_world_league.getParameters();
-      final now = DateTime.now();
+      // Auto-detect calculation method if user hasn't manually overridden it
+      if (settings.getPrayerMethodAutoDetected()) {
+        final autoMethod = PrayerCalculationConstants.methodFromCoordinates(
+          pos.latitude, pos.longitude,
+        );
+        await settings.setPrayerCalculationMethod(autoMethod);
+      }
 
+      final calcMethod = settings.getPrayerCalculationMethod();
+      final asrMethod = settings.getPrayerAsrMethod();
+      final params = PrayerCalculationConstants.getCompleteParameters(
+        calculationMethod: calcMethod,
+        asrMethod: asrMethod,
+      );
+
+      final now = DateTime.now();
       final prayerTimes = PrayerTimes(
         coords,
         DateComponents(now.year, now.month, now.day),
@@ -82,6 +96,7 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen> {
         _loading = false;
         _coordinates = coords;
         _prayerTimes = prayerTimes;
+        _calcMethodId = calcMethod;
       });
     } catch (e) {
       if (!mounted) return;
@@ -144,6 +159,19 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen> {
         ),
         actions: [
           IconButton(
+            onPressed: () async {
+              await Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => const AdhanSettingsScreen(),
+                ),
+              );
+              // Reload after returning from settings (method may have changed)
+              _load();
+            },
+            icon: const Icon(Icons.settings_rounded),
+            tooltip: isArabicUi ? 'إعدادات الأذان' : 'Adhan Settings',
+          ),
+          IconButton(
             onPressed: _load,
             icon: const Icon(Icons.refresh),
           ),
@@ -168,6 +196,7 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen> {
                   isArabicUi: isArabicUi,
                   prayerTimes: _prayerTimes!,
                   coordinates: _coordinates!,
+                  calcMethodId: _calcMethodId,
                   formatTime: (dt) => _formatTime(context, dt),
                 ),
     );
@@ -178,12 +207,14 @@ class _PrayerTimesBody extends StatelessWidget {
   final bool isArabicUi;
   final PrayerTimes prayerTimes;
   final Coordinates coordinates;
+  final String calcMethodId;
   final String Function(DateTime) formatTime;
 
   const _PrayerTimesBody({
     required this.isArabicUi,
     required this.prayerTimes,
     required this.coordinates,
+    required this.calcMethodId,
     required this.formatTime,
   });
 
@@ -228,18 +259,26 @@ class _PrayerTimesBody extends StatelessWidget {
           time: formatTime(prayerTimes.isha),
         ),
         const SizedBox(height: 12),
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Text(
-              isArabicUi
-                  ? 'ملاحظة: طريقة الحساب الافتراضية هي Muslim World League. يمكن إضافة خيار لتغيير طريقة الحساب لاحقاً.'
-                  : 'Note: Default calculation method is Muslim World League. We can add a selector later.',
-              style: Theme.of(context).textTheme.bodyMedium,
-              textAlign: isArabicUi ? TextAlign.right : TextAlign.left,
+        Builder(builder: (context) {
+          final methodInfo =
+              PrayerCalculationConstants.calculationMethods[calcMethodId];
+          final methodLabel = methodInfo == null
+              ? calcMethodId
+              : (isArabicUi ? methodInfo.nameAr : methodInfo.nameEn);
+          return Card(
+            child: ListTile(
+              leading: const Icon(Icons.calculate_rounded, color: AppColors.primary),
+              title: Text(
+                isArabicUi ? 'طريقة الحساب' : 'Calculation Method',
+                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+              ),
+              subtitle: Text(
+                methodLabel,
+                style: const TextStyle(fontSize: 14),
+              ),
             ),
-          ),
-        ),
+          );
+        }),
       ],
     );
   }

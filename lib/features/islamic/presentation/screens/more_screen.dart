@@ -4,6 +4,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/settings/app_settings_cubit.dart';
 import '../../../../core/widgets/islamic_logo.dart';
+import 'adhan_settings_screen.dart';
 import 'duaa_screen.dart';
 import 'prayer_times_screen.dart';
 import 'qiblah_screen.dart';
@@ -57,6 +58,18 @@ class MoreScreen extends StatelessWidget {
             onTap: () {
               Navigator.of(context).push(
                 MaterialPageRoute(builder: (_) => const PrayerTimesScreen()),
+              );
+            },
+          ),
+          _NavCard(
+            title: isArabicUi ? 'إعدادات الأذان' : 'Adhan Settings',
+            subtitle: isArabicUi
+                ? 'اختر صوت الأذان وطريقة الحساب'
+                : 'Choose adhan sound & calculation method',
+            icon: Icons.volume_up_rounded,
+            onTap: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const AdhanSettingsScreen()),
               );
             },
           ),

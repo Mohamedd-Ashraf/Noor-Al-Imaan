@@ -23,6 +23,8 @@ class SettingsService {
   static const String _keyAdhanSchedulePreview = 'adhan_schedule_preview';
   static const String _keyPrayerCalculationMethod = 'prayer_calculation_method';
   static const String _keyPrayerAsrMethod = 'prayer_asr_method';
+  static const String _keySelectedAdhanSound = 'selected_adhan_sound';
+  static const String _keyPrayerMethodAutoDetected = 'prayer_method_auto_detected';
 
   final SharedPreferences _prefs;
 
@@ -183,8 +185,8 @@ class SettingsService {
   }
 
   String getPrayerCalculationMethod() {
-    // Default: Muslim World League (widely used)
-    return _prefs.getString(_keyPrayerCalculationMethod) ?? 'muslim_world_league';
+    // Default: Egyptian General Authority (most commonly used in Arab world)
+    return _prefs.getString(_keyPrayerCalculationMethod) ?? 'egyptian';
   }
 
   // Prayer Asr Calculation Method
@@ -195,5 +197,23 @@ class SettingsService {
   String getPrayerAsrMethod() {
     // Default: Standard (Shafi, Maliki, Hanbali)
     return _prefs.getString(_keyPrayerAsrMethod) ?? 'standard';
+  }
+
+  // Selected Adhan Sound
+  Future<bool> setSelectedAdhanSound(String soundId) async {
+    return await _prefs.setString(_keySelectedAdhanSound, soundId);
+  }
+
+  String getSelectedAdhanSound() {
+    return _prefs.getString(_keySelectedAdhanSound) ?? 'adhan_1';
+  }
+
+  // Whether the prayer method was auto-detected from GPS
+  Future<bool> setPrayerMethodAutoDetected(bool autoDetected) async {
+    return await _prefs.setBool(_keyPrayerMethodAutoDetected, autoDetected);
+  }
+
+  bool getPrayerMethodAutoDetected() {
+    return _prefs.getBool(_keyPrayerMethodAutoDetected) ?? true;
   }
 }
