@@ -100,7 +100,8 @@ class AyahAudioCubit extends Cubit<AyahAudioState> {
     if (isClosed) return;
     _initialized = true;
 
-    _playerSub = _player.playerStateStream.listen((ps) {
+    _playerSub = _player.playerStateStream.listen(
+      (ps) {
       if (isClosed) return;
       final processing = ps.processingState;
       if (processing == ProcessingState.loading ||
@@ -130,7 +131,17 @@ class AyahAudioCubit extends Cubit<AyahAudioState> {
           ),
         );
       }
-    });
+    },
+      onError: (Object e, StackTrace st) {
+        if (isClosed) return;
+        emit(
+          state.copyWith(
+            status: AyahAudioStatus.error,
+            errorMessage: e.toString().replaceFirst('Exception: ', ''),
+          ),
+        );
+      },
+    );
 
     _indexSub = _player.currentIndexStream.listen((idx) {
       if (isClosed) return;

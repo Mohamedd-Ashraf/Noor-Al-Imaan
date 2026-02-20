@@ -19,6 +19,22 @@ class AyahAudioSource {
   bool get isLocal => localFilePath != null;
 }
 
+/// Maps alquran.cloud edition IDs to their everyayah.com folder names.
+/// everyayah.com is more reliable than cdn.islamic.network used by alquran.cloud.
+const Map<String, String> _everyAyahFolders = {
+  'ar.alafasy': 'Alafasy_128kbps',
+  'ar.abdurrahmaansudais': 'Abdurrahmaan_As-Sudais_192kbps',
+  'ar.husary': 'Husary_128kbps',
+  'ar.husarymujawwad': 'Husary_Mujawwad_128kbps',
+  'ar.minshawi': 'Minshawy_Murattal_128kbps',
+  'ar.minshawimujawwad': 'Minshawy_Mujawwad_128kbps',
+  'ar.muhammadayyoub': 'Muhammad_Ayyoub_128kbps',
+  'ar.muhammadjibreel': 'muhammad_jibreel_128kbps',
+  'ar.saoodshuraym': 'Saood_ash-Shuraym_128kbps',
+  'ar.shaatree': 'Abu_Bakr_Ash-Shaatree_128kbps',
+  'ar.parhizgar': 'Parhizgar_48kbps',
+};
+
 class AyahAudioService {
   final http.Client _client;
   final NetworkInfo _networkInfo;
@@ -32,6 +48,16 @@ class AyahAudioService {
   String _key(int surahNumber, int ayahNumber, String edition) => '$edition:$surahNumber:$ayahNumber';
 
   String _surahKey(int surahNumber, String edition) => '$edition:$surahNumber';
+
+  /// Builds an everyayah.com URL directly without hitting the alquran.cloud API.
+  /// Returns null if the edition is not supported by everyayah.com.
+  Uri? _buildDirectUri(int surahNumber, int ayahNumber, String edition) {
+    final folder = _everyAyahFolders[edition];
+    if (folder == null) return null;
+    final s = surahNumber.toString().padLeft(3, '0');
+    final a = ayahNumber.toString().padLeft(3, '0');
+    return Uri.parse('https://everyayah.com/data/$folder/$s$a.mp3');
+  }
 
   Future<List<Uri>> _fetchSurahAyahAudioUris({
     required int surahNumber,
@@ -96,6 +122,14 @@ class AyahAudioService {
       return AyahAudioSource.remote(cached);
     }
 
+    // Try direct everyayah.com URL first (reliable, no API call needed).
+    final directUri = _buildDirectUri(surahNumber, ayahNumber, edition);
+    if (directUri != null) {
+      _urlCache[cacheKey] = directUri;
+      return AyahAudioSource.remote(directUri);
+    }
+
+    // Fall back to alquran.cloud API for editions not on everyayah.com.
     final reference = '$surahNumber:$ayahNumber';
     final uri = Uri.parse(
       '${ApiConstants.baseUrl}${ApiConstants.ayahEndpoint}/$reference/$edition',
@@ -145,24 +179,35 @@ class AyahAudioService {
       }
     }
 
-    // 2) Fill missing with remote URLs (single API call) if connected.
+    // 2) Fill missing with remote URLs if connected.
     final hasMissing = sources.any((e) => e == null);
     if (hasMissing) {
       if (!await _networkInfo.isConnected) {
         throw Exception('No internet connection and surah audio is not downloaded.');
       }
 
-      final uris = await _fetchSurahAyahAudioUris(surahNumber: surahNumber, edition: edition);
-      for (var i = 0; i < numberOfAyahs; i++) {
-        if (sources[i] != null) continue;
-        if (i >= uris.length) {
-          throw Exception('Audio is not available for this surah.');
+      // Prefer direct everyayah.com URLs if edition is supported (avoids unreliable CDN).
+      final directSupported = _everyAyahFolders.containsKey(edition);
+      if (directSupported) {
+        for (var i = 0; i < numberOfAyahs; i++) {
+          if (sources[i] != null) continue;
+          final ayahNumber = i + 1;
+          final uri = _buildDirectUri(surahNumber, ayahNumber, edition)!;
+          sources[i] = AyahAudioSource.remote(uri);
         }
-        final uri = uris[i];
-        if (uri.toString().isEmpty) {
-          throw Exception('Audio URL is not available for this ayah');
+      } else {
+        final uris = await _fetchSurahAyahAudioUris(surahNumber: surahNumber, edition: edition);
+        for (var i = 0; i < numberOfAyahs; i++) {
+          if (sources[i] != null) continue;
+          if (i >= uris.length) {
+            throw Exception('Audio is not available for this surah.');
+          }
+          final uri = uris[i];
+          if (uri.toString().isEmpty) {
+            throw Exception('Audio URL is not available for this ayah');
+          }
+          sources[i] = AyahAudioSource.remote(uri);
         }
-        sources[i] = AyahAudioSource.remote(uri);
       }
     }
 

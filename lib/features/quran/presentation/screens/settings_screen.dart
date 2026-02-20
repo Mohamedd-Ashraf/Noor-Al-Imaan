@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/settings/app_settings_cubit.dart';
 import '../../../../core/di/injection_container.dart' as di;
@@ -18,6 +19,7 @@ class SettingsScreen extends StatefulWidget {
 class _SettingsScreenState extends State<SettingsScreen> {
   double _arabicFontSizeDraft = 24.0;
   double _translationFontSizeDraft = 16.0;
+  String _version = '';
 
   late final OfflineAudioService _offlineAudio;
   late final AudioEditionService _audioEditionService;
@@ -52,6 +54,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _offlineAudio = di.sl<OfflineAudioService>();
     _audioEditionService = di.sl<AudioEditionService>();
     _audioEditionsFuture = _audioEditionService.getVerseByVerseAudioEditions();
+    PackageInfo.fromPlatform().then((info) {
+      if (mounted) setState(() => _version = info.version);
+    });
   }
 
   void _refreshReciters() {
@@ -578,8 +583,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 leading: const Icon(Icons.verified_rounded,
                     color: AppColors.primary),
                 title: _TileTitle(isAr ? 'الإصدار' : 'Version'),
-                trailing: const Text('1.0.0',
-                    style: TextStyle(
+                trailing: Text(_version.isEmpty ? '...' : _version,
+                    style: const TextStyle(
                         color: AppColors.textSecondary, fontSize: 13)),
               ),
               const Divider(height: 1, indent: 56),

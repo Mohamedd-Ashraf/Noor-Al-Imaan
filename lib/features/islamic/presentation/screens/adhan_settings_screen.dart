@@ -331,37 +331,37 @@ class _AdhanSettingsScreenState extends State<AdhanSettingsScreen> {
 
           const SizedBox(height: 8),
 
-          // ── Asr Method ─────────────────────────────────────────
-          _SectionHeader(title: isAr ? 'حساب العصر' : 'Asr Calculation'),
-          Card(
-            child: Column(
-              children: PrayerCalculationConstants.asrMethods.entries
-                  .map((entry) => RadioListTile<String>(
-                        value: entry.key,
-                        groupValue: _selectedAsrMethod,
-                        activeColor: AppColors.primary,
-                        title: Text(
-                          isAr ? entry.value.nameAr : entry.value.nameEn,
-                          style: const TextStyle(fontSize: 14),
-                        ),
-                        subtitle: Text(
-                          isAr
-                              ? entry.value.descriptionAr
-                              : entry.value.description,
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: AppColors.textSecondary,
-                          ),
-                        ),
-                        onChanged: (v) {
-                          if (v != null) setState(() => _selectedAsrMethod = v);
-                        },
-                      ))
-                  .toList(),
-            ),
-          ),
+          // // ── Asr Method ─────────────────────────────────────────
+          // _SectionHeader(title: isAr ? 'حساب العصر' : 'Asr Calculation'),
+          // Card(
+          //   child: Column(
+          //     children: PrayerCalculationConstants.asrMethods.entries
+          //         .map((entry) => RadioListTile<String>(
+          //               value: entry.key,
+          //               groupValue: _selectedAsrMethod,
+          //               activeColor: AppColors.primary,
+          //               title: Text(
+          //                 isAr ? entry.value.nameAr : entry.value.nameEn,
+          //                 style: const TextStyle(fontSize: 14),
+          //               ),
+          //               subtitle: Text(
+          //                 isAr
+          //                     ? entry.value.descriptionAr
+          //                     : entry.value.description,
+          //                 style: TextStyle(
+          //                   fontSize: 12,
+          //                   color: AppColors.textSecondary,
+          //                 ),
+          //               ),
+          //               onChanged: (v) {
+          //                 if (v != null) setState(() => _selectedAsrMethod = v);
+          //               },
+          //             ))
+          //         .toList(),
+          //   ),
+          // ),
 
-          const SizedBox(height: 8),
+          // const SizedBox(height: 8),
 
           // ── Adhan Schedule Status ─────────────────────────────
           _SectionHeader(title: isAr ? 'جدول الأذان' : 'Adhan Schedule'),

@@ -52,8 +52,8 @@ class AppUpdateServiceFirebase {
 
       // Set default values - these will be overridden by Firebase Console
       await _remoteConfig.setDefaults({
-        _keyLatestVersion: '1.0.0',
-        _keyMinimumVersion: '1.0.0',
+        _keyLatestVersion: '1.0.3',
+        _keyMinimumVersion: '1.0.3',
         _keyIsMandatory: false,
         _keyDownloadUrl: '',
         _keyChangelogAr: '',

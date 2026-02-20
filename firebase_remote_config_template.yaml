@@ -3,12 +3,12 @@
 
 latest_version:
   Type: String
-  Value: "1.0.0"
+  Value: "1.0.3"
   Description: "Latest available version of the app"
 
 minimum_version:
   Type: String
-  Value: "1.0.0"
+  Value: "1.0.3"
   Description: "Minimum required version (users below this must update)"
 
 is_mandatory:
