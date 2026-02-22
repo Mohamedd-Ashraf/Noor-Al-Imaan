@@ -255,7 +255,7 @@ class _AppUpdateDialogPremiumState extends State<AppUpdateDialogPremium> {
             ],
           ),
         ),
-        actions: _isUpdating
+        actions: (_isUpdating || _isDownloading)
             ? null
             : [
                 // "Later" button (only for optional updates)

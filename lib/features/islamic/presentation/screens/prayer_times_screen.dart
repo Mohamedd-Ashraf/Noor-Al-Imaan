@@ -29,6 +29,8 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen> {
   PrayerTimes? _prayerTimes;
   Coordinates? _coordinates;
   String _calcMethodId = 'egyptian';
+  bool _locationFromCache = false;
+  bool _updatingLocation = false;
 
   @override
   void initState() {
@@ -36,12 +38,45 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen> {
     _load();
   }
 
+  /// Loads prayer times. Uses cached coordinates by default to avoid
+  /// prompting the user for location every time.
   Future<void> _load() async {
     setState(() {
       _loading = true;
       _error = null;
       _prayerTimes = null;
       _coordinates = null;
+      _locationFromCache = false;
+    });
+
+    final settings = di.sl<SettingsService>();
+    final cachedCoords = settings.getLastKnownCoordinates();
+
+    if (cachedCoords != null) {
+      // Use saved coordinates – no need to ask for location permission again
+      _computePrayerTimes(cachedCoords, settings, fromCache: true);
+      return;
+    }
+
+    // No cached location yet – fetch fresh GPS
+    await _fetchFreshLocation(settings);
+  }
+
+  /// Forces a fresh GPS reading and saves the new coordinates to cache.
+  Future<void> _updateLocation() async {
+    setState(() => _updatingLocation = true);
+    final settings = di.sl<SettingsService>();
+    await _fetchFreshLocation(settings);
+    setState(() => _updatingLocation = false);
+  }
+
+  Future<void> _fetchFreshLocation(SettingsService settings) async {
+    setState(() {
+      _loading = true;
+      _error = null;
+      _prayerTimes = null;
+      _coordinates = null;
+      _locationFromCache = false;
     });
 
     final permission = await _location.ensurePermission();
@@ -58,7 +93,6 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen> {
     try {
       final pos = await _location.getPosition();
       final coords = Coordinates(pos.latitude, pos.longitude);
-      final settings = di.sl<SettingsService>();
 
       // Save location to local storage for future use
       await settings.setLastKnownCoordinates(pos.latitude, pos.longitude);
@@ -77,27 +111,8 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen> {
         await settings.setPrayerCalculationMethod(autoMethod);
       }
 
-      final calcMethod = settings.getPrayerCalculationMethod();
-      final asrMethod = settings.getPrayerAsrMethod();
-      final params = PrayerCalculationConstants.getCompleteParameters(
-        calculationMethod: calcMethod,
-        asrMethod: asrMethod,
-      );
-
-      final now = DateTime.now();
-      final prayerTimes = PrayerTimes(
-        coords,
-        DateComponents(now.year, now.month, now.day),
-        params,
-      );
-
       if (!mounted) return;
-      setState(() {
-        _loading = false;
-        _coordinates = coords;
-        _prayerTimes = prayerTimes;
-        _calcMethodId = calcMethod;
-      });
+      _computePrayerTimes(coords, settings, fromCache: false);
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -107,6 +122,36 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen> {
             : e.toString();
       });
     }
+  }
+
+  /// Computes prayer times from given [coords] and updates state.
+  void _computePrayerTimes(
+    Coordinates coords,
+    SettingsService settings, {
+    required bool fromCache,
+  }) {
+    final calcMethod = settings.getPrayerCalculationMethod();
+    final asrMethod = settings.getPrayerAsrMethod();
+    final params = PrayerCalculationConstants.getCompleteParameters(
+      calculationMethod: calcMethod,
+      asrMethod: asrMethod,
+    );
+
+    final now = DateTime.now();
+    final prayerTimes = PrayerTimes(
+      coords,
+      DateComponents(now.year, now.month, now.day),
+      params,
+    );
+
+    if (!mounted) return;
+    setState(() {
+      _loading = false;
+      _coordinates = coords;
+      _prayerTimes = prayerTimes;
+      _calcMethodId = calcMethod;
+      _locationFromCache = fromCache;
+    });
   }
 
   String _permissionError(LocationPermissionState state) {
@@ -158,6 +203,25 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen> {
           ),
         ),
         actions: [
+          // Update / change location
+          _updatingLocation
+              ? const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 12),
+                  child: SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  ),
+                )
+              : IconButton(
+                  onPressed: _updateLocation,
+                  icon: const Icon(Icons.my_location_rounded),
+                  tooltip:
+                      isArabicUi ? 'تحديث الموقع' : 'Update Location',
+                ),
           IconButton(
             onPressed: () async {
               await Navigator.of(context).push(
@@ -197,6 +261,8 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen> {
                   prayerTimes: _prayerTimes!,
                   coordinates: _coordinates!,
                   calcMethodId: _calcMethodId,
+                  locationFromCache: _locationFromCache,
+                  onUpdateLocation: _updateLocation,
                   formatTime: (dt) => _formatTime(context, dt),
                 ),
     );
@@ -208,6 +274,8 @@ class _PrayerTimesBody extends StatelessWidget {
   final PrayerTimes prayerTimes;
   final Coordinates coordinates;
   final String calcMethodId;
+  final bool locationFromCache;
+  final VoidCallback onUpdateLocation;
   final String Function(DateTime) formatTime;
 
   const _PrayerTimesBody({
@@ -215,6 +283,8 @@ class _PrayerTimesBody extends StatelessWidget {
     required this.prayerTimes,
     required this.coordinates,
     required this.calcMethodId,
+    required this.locationFromCache,
+    required this.onUpdateLocation,
     required this.formatTime,
   });
 
@@ -223,15 +293,36 @@ class _PrayerTimesBody extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        Text(
-          isArabicUi
-              ? 'الموقع: ${coordinates.latitude.toStringAsFixed(5)}, ${coordinates.longitude.toStringAsFixed(5)}'
-              : 'Location: ${coordinates.latitude.toStringAsFixed(5)}, ${coordinates.longitude.toStringAsFixed(5)}',
-          style: Theme.of(context)
-              .textTheme
-              .bodySmall
-              ?.copyWith(color: AppColors.textSecondary),
-          textAlign: isArabicUi ? TextAlign.right : TextAlign.left,
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Expanded(
+              child: Text(
+                isArabicUi
+                    ? 'الموقع: ${coordinates.latitude.toStringAsFixed(5)}, ${coordinates.longitude.toStringAsFixed(5)}'
+                    : 'Location: ${coordinates.latitude.toStringAsFixed(5)}, ${coordinates.longitude.toStringAsFixed(5)}',
+                style: Theme.of(context)
+                    .textTheme
+                    .bodySmall
+                    ?.copyWith(color: AppColors.textSecondary),
+                textAlign: isArabicUi ? TextAlign.right : TextAlign.left,
+              ),
+            ),
+            if (locationFromCache)
+              Padding(
+                padding: const EdgeInsetsDirectional.only(start: 8),
+                child: ActionChip(
+                  avatar: const Icon(Icons.my_location_rounded, size: 14),
+                  label: Text(
+                    isArabicUi ? 'تحديث الموقع' : 'Update Location',
+                    style: const TextStyle(fontSize: 11),
+                  ),
+                  onPressed: onUpdateLocation,
+                  visualDensity: VisualDensity.compact,
+                  padding: EdgeInsets.zero,
+                ),
+              ),
+          ],
         ),
         const SizedBox(height: 12),
         _PrayerTile(

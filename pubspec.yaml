@@ -91,10 +91,8 @@ dependencies:
   flutter_downloader: ^1.11.10
   permission_handler: ^11.3.1
   flutter_timezone: ^5.0.1
-  flutter_qiblah: ^3.1.0+1
 
   # Maps
-  latlong2: ^0.9.1
 
 dev_dependencies:
   flutter_test:

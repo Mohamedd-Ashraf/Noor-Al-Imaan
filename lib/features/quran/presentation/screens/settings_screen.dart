@@ -6,6 +6,8 @@ import '../../../../core/settings/app_settings_cubit.dart';
 import '../../../../core/di/injection_container.dart' as di;
 import '../../../../core/services/offline_audio_service.dart';
 import '../../../../core/services/audio_edition_service.dart';
+import '../../../../core/services/app_update_service_firebase.dart';
+import '../../../../core/widgets/app_update_dialog_premium.dart';
 import '../../../../core/audio/ayah_audio_cubit.dart';
 import 'offline_audio_screen.dart';
 
@@ -20,6 +22,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   double _arabicFontSizeDraft = 24.0;
   double _translationFontSizeDraft = 16.0;
   String _version = '';
+  bool _checkingForUpdate = false;
 
   late final OfflineAudioService _offlineAudio;
   late final AudioEditionService _audioEditionService;
@@ -589,6 +592,28 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
               const Divider(height: 1, indent: 56),
               ListTile(
+                leading: _checkingForUpdate
+                    ? const SizedBox(
+                        width: 24,
+                        height: 24,
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2, color: AppColors.primary),
+                      )
+                    : const Icon(Icons.system_update_rounded,
+                        color: AppColors.primary),
+                title: _TileTitle(
+                    isAr ? 'البحث عن تحديثات' : 'Check for Updates'),
+                subtitle: _TileSubtitle(isAr
+                    ? 'التحقق من توفر إصدار جديد'
+                    : 'Look for a newer version of the app'),
+                trailing: _checkingForUpdate
+                    ? null
+                    : const Icon(Icons.chevron_right_rounded,
+                        color: AppColors.primary),
+                onTap: _checkingForUpdate ? null : _manualCheckForUpdates,
+              ),
+              const Divider(height: 1, indent: 56),
+              ListTile(
                 leading:
                     const Icon(Icons.cloud_outlined, color: AppColors.primary),
                 title: _TileTitle(isAr ? 'مصدر البيانات' : 'Data Source'),
@@ -614,6 +639,67 @@ class _SettingsScreenState extends State<SettingsScreen> {
         contentPadding:
             const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       );
+
+  Future<void> _manualCheckForUpdates() async {
+    final isAr = context
+        .read<AppSettingsCubit>()
+        .state
+        .appLanguageCode
+        .toLowerCase()
+        .startsWith('ar');
+
+    if (_checkingForUpdate) return;
+    setState(() => _checkingForUpdate = true);
+
+    try {
+      final updateService = di.sl<AppUpdateServiceFirebase>();
+      final updateInfo = await updateService.forceCheckForUpdate();
+
+      if (!mounted) return;
+
+      if (updateInfo != null) {
+        await showPremiumUpdateDialog(
+          context: context,
+          updateInfo: updateInfo,
+          updateService: updateService,
+          languageCode: isAr ? 'ar' : 'en',
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              isAr
+                  ? '✅ أنت تستخدم أحدث إصدار من التطبيق'
+                  : '✅ You are using the latest version',
+            ),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      final isAr2 = context
+          .read<AppSettingsCubit>()
+          .state
+          .appLanguageCode
+          .toLowerCase()
+          .startsWith('ar');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            isAr2
+                ? '❌ فشل التحقق من التحديثات. تأكد من اتصالك بالإنترنت.'
+                : '❌ Failed to check for updates. Check your connection.',
+          ),
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _checkingForUpdate = false);
+    }
+  }
 
   void _showDataSourceDialog() {
     final isAr = context
