@@ -505,32 +505,39 @@ class _SelectDownloadScreenState extends State<SelectDownloadScreen> {
               color: scheme.outlineVariant.withValues(alpha: 0.5)),
         ),
       ),
-      child: SwitchListTile(
-        dense: true,
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 16, vertical: 0),
-        secondary: Icon(
-          Icons.download_done_rounded,
-          color: _skipDownloaded ? AppColors.primary : scheme.onSurfaceVariant,
-          size: 20,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+        child: Row(
+          children: [
+            Icon(
+              Icons.download_done_rounded,
+              color: _skipDownloaded
+                  ? AppColors.primary
+                  : scheme.onSurfaceVariant,
+              size: 16,
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                ar ? 'تخطي المحمَّل بالكامل' : 'Skip fully downloaded',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                  color: scheme.onSurfaceVariant,
+                ),
+              ),
+            ),
+            Transform.scale(
+              scale: 0.8,
+              child: Switch(
+                value: _skipDownloaded,
+                activeColor: AppColors.primary,
+                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                onChanged: (v) => setState(() => _skipDownloaded = v),
+              ),
+            ),
+          ],
         ),
-        title: Text(
-          ar ? 'تخطي المحمَّل بالكامل' : 'Skip fully downloaded',
-          style: TextStyle(
-            fontSize: 13,
-            fontWeight: FontWeight.w500,
-            color: scheme.onSurface,
-          ),
-        ),
-        subtitle: Text(
-          ar
-              ? 'يُظهر السور والأجزاء المحمَّلة كمكتملة ويستبعدها من التحميل'
-              : 'Shows already-downloaded items as completed and excludes them',
-          style: TextStyle(fontSize: 11, color: scheme.onSurfaceVariant),
-        ),
-        value: _skipDownloaded,
-        activeColor: AppColors.primary,
-        onChanged: (v) => setState(() => _skipDownloaded = v),
       ),
     );
   }

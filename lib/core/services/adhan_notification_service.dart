@@ -295,6 +295,8 @@ class AdhanNotificationService {
     }
     await cancelAll();
     await _cancelAllNativeAlarms();
+    // Clear the schedule preview so the UI schedule dialog shows empty, not stale data.
+    await _settings.setAdhanSchedulePreview('[]');
   }
 
   /// Stops the currently playing Adhan without disabling future scheduled notifications.
@@ -358,10 +360,11 @@ class AdhanNotificationService {
 
   Future<void> testNow() async {
     await _playFullAdhanAudio();
+    final isArabic = _settings.getAppLanguage() == 'ar';
     await _plugin.show(
       999001,
-      'Adhan Test',
-      'If you hear the Adhan, reminders are working.',
+      isArabic ? 'اختبار الأذان' : 'Adhan Test',
+      isArabic ? 'إذا سمعت الأذان، فالتذكيرات تعمل بشكل صحيح ✓' : 'If you hear the Adhan, reminders are working.',
       _notificationDetails(),
     );
   }
@@ -456,6 +459,15 @@ class AdhanNotificationService {
     }
 
     final includeFajr = _settings.getAdhanIncludeFajr();
+    final isArabic = _settings.getAppLanguage() == 'ar';
+
+    const arabicNames = {
+      'fajr': 'الفجر',
+      'dhuhr': 'الظهر',
+      'asr': 'العصر',
+      'maghrib': 'المغرب',
+      'isha': 'العشاء',
+    };
 
     final items = <_PrayerNotifItem>[
       _PrayerNotifItem(Prayer.fajr, 'Fajr', prayerTimesMap['fajr']!, enabled: includeFajr),
@@ -474,10 +486,14 @@ class AdhanNotificationService {
       if (localTime.isBefore(tz.TZDateTime.now(tz.local))) continue;
 
       final id = _notificationId(date, item.prayer);
+      final arabicName = arabicNames[item.prayer.name] ?? item.label;
+      final notifTitle = isArabic ? 'حان وقت الصلاة' : 'Prayer Time';
+      final notifBody = isArabic ? 'حان وقت $arabicName' : '${item.label} time';
+
       await _plugin.zonedSchedule(
         id,
-        'Prayer Time',
-        '${item.label} time',
+        notifTitle,
+        notifBody,
         localTime,
         _notificationDetails(),
         androidScheduleMode: await _androidScheduleMode(),

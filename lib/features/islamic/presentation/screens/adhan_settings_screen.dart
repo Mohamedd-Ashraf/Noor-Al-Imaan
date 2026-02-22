@@ -54,6 +54,17 @@ class _AdhanSettingsScreenState extends State<AdhanSettingsScreen>
     _adhanService = di.sl<AdhanNotificationService>();
     _load();
     _checkBatteryStatus();
+    // Listen for native callback when preview audio finishes naturally
+    _adhanChannel.setMethodCallHandler(_handleNativeCallback);
+  }
+
+  Future<dynamic> _handleNativeCallback(MethodCall call) async {
+    if (call.method == 'previewCompleted' && mounted) {
+      setState(() {
+        _isPreviewPlaying = false;
+        _previewingId = null;
+      });
+    }
   }
 
   void _load() {
@@ -90,6 +101,7 @@ class _AdhanSettingsScreenState extends State<AdhanSettingsScreen>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _adhanChannel.setMethodCallHandler(null);
     _stopPreview();
     super.dispose();
   }
@@ -108,14 +120,8 @@ class _AdhanSettingsScreenState extends State<AdhanSettingsScreen>
     try {
       if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
         await _adhanChannel.invokeMethod('playAdhan', {'soundName': soundId});
-        Future.delayed(const Duration(seconds: 3), () {
-          if (mounted && _previewingId == soundId) {
-            setState(() {
-              _isPreviewPlaying = false;
-              _previewingId = null;
-            });
-          }
-        });
+        // UI resets via _handleNativeCallback('previewCompleted') when audio ends naturally.
+        // No hardcoded timer — the stop button stays visible until the sound actually finishes.
       }
     } catch (e) {
       debugPrint('Preview error: $e');
@@ -444,7 +450,11 @@ class _AdhanSettingsScreenState extends State<AdhanSettingsScreen>
                         final prefs = di.sl<SettingsService>();
                         final raw = prefs.getAdhanSchedulePreview();
                         if (!context.mounted) return;
-                        await _showScheduleDialog(isAr: isAr, raw: raw);
+                        await _showScheduleDialog(
+                          isAr: isAr,
+                          raw: raw,
+                          notificationsEnabled: _notificationsEnabled,
+                        );
                       },
                       style: OutlinedButton.styleFrom(
                         foregroundColor: AppColors.primary,
@@ -667,7 +677,7 @@ class _AdhanSettingsScreenState extends State<AdhanSettingsScreen>
   }
 
   Future<void> _showScheduleDialog(
-      {required bool isAr, String? raw}) async {
+      {required bool isAr, String? raw, bool notificationsEnabled = true}) async {
     List<Map<String, dynamic>> items = [];
     if (raw != null && raw.trim().isNotEmpty) {
       try {
@@ -824,15 +834,22 @@ class _AdhanSettingsScreenState extends State<AdhanSettingsScreen>
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.event_busy_rounded,
-                            size: 48,
-                            color: AppColors.textSecondary
-                                .withValues(alpha: 0.4)),
+                        Icon(
+                          notificationsEnabled
+                              ? Icons.event_busy_rounded
+                              : Icons.notifications_off_rounded,
+                          size: 48,
+                          color: AppColors.textSecondary.withValues(alpha: 0.4),
+                        ),
                         const SizedBox(height: 14),
                         Text(
-                          isAr
-                              ? '\u0644\u0627 \u064a\u0648\u062c\u062f \u062c\u062f\u0648\u0644 \u0628\u0639\u062f.\n\u0627\u062d\u0641\u0638 \u0627\u0644\u0625\u0639\u062f\u0627\u062f\u0627\u062a \u0623\u0648\u0644\u0627\u064b.'
-                              : 'No schedule yet.\nSave settings first.',
+                          notificationsEnabled
+                              ? (isAr
+                                  ? 'لا يوجد جدول بعد.\nاحفظ الإعدادات أولاً.'
+                                  : 'No schedule yet.\nSave settings first.')
+                              : (isAr
+                                  ? 'إشعارات الأذان معطّلة.\nفعّلها واحفظ الإعدادات.'
+                                  : 'Adhan notifications are off.\nEnable them and save.'),
                           textAlign: TextAlign.center,
                           style: const TextStyle(
                               color: AppColors.textSecondary, fontSize: 14),

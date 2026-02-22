@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Prevents the Android resource shrinker from removing adhan audio files.
+  These files are referenced dynamically via resources.getIdentifier(soundName, "raw", packageName)
+  which bypasses static analysis. Without this file, the shrinker removes adhan_2.mp3–adhan_10.mp3
+  in release builds because they appear "unreferenced".
+-->
+<resources xmlns:tools="http://schemas.android.com/tools"
+    tools:keep="@raw/adhan,@raw/adhan_1,@raw/adhan_2,@raw/adhan_3,@raw/adhan_4,@raw/adhan_5,@raw/adhan_6,@raw/adhan_7,@raw/adhan_8,@raw/adhan_9,@raw/adhan_10" />

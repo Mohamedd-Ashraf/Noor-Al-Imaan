@@ -97,7 +97,7 @@ Future<void> init() async {
   sl.registerLazySingleton(() => AudioEditionService(sl(), sl(), sl()));
   sl.registerLazySingleton(() => AudioDownloadStateService(sl()));
   sl.registerLazySingleton(
-    () => AudioDownloadNotificationService(sl()),
+    () => AudioDownloadNotificationService(sl(), sl()),
   );
   sl.registerFactory(
     () => DownloadManagerCubit(

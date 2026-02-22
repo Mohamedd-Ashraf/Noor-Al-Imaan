@@ -58,9 +58,14 @@ class AdhanAlarmReceiver : BroadcastReceiver() {
         fun cancelAlarms(context: Context, ids: List<Int>) {
             val am = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
             for (id in ids) {
+                // The Intent MUST have the same action as the one used in pendingIntentFor().
+                // Android matches PendingIntents by action (among other fields); without it
+                // FLAG_NO_CREATE returns null and the alarm is never cancelled.
                 val pi = PendingIntent.getBroadcast(
                     context, id,
-                    Intent(context, AdhanAlarmReceiver::class.java),
+                    Intent(context, AdhanAlarmReceiver::class.java).apply {
+                        action = ACTION_FIRE
+                    },
                     PendingIntent.FLAG_NO_CREATE or PendingIntent.FLAG_IMMUTABLE
                 ) ?: continue
                 am.cancel(pi)
@@ -123,6 +128,13 @@ class AdhanAlarmReceiver : BroadcastReceiver() {
     // ── Fire ─────────────────────────────────────────────────────────────────
 
     private fun handleFire(context: Context, intent: Intent) {
+        // Safety check: don't play if the user has disabled Adhan notifications.
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val enabled = prefs.getBoolean(KEY_ENABLED, true)
+        if (!enabled) {
+            Log.d(TAG, "Adhan disabled — ignoring alarm fire")
+            return
+        }
         val soundName = intent.getStringExtra("soundName") ?: "adhan_1"
         Log.d(TAG, "Adhan alarm fired: $soundName")
         val serviceIntent = Intent(context, AdhanPlayerService::class.java).apply {

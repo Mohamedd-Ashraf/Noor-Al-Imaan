@@ -1,4 +1,5 @@
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'settings_service.dart';
 
 /// Shows / updates / cancels a persistent progress notification during
 /// offline audio download.  Uses an ongoing (non-dismissable) notification
@@ -11,9 +12,12 @@ class AudioDownloadNotificationService {
   static const String _channelDesc = 'Shows progress for offline Quran audio downloads.';
 
   final FlutterLocalNotificationsPlugin _plugin;
+  final SettingsService _settings;
   bool _channelCreated = false;
 
-  AudioDownloadNotificationService(this._plugin);
+  AudioDownloadNotificationService(this._plugin, this._settings);
+
+  bool get _isArabic => _settings.getAppLanguage() == 'ar';
 
   Future<void> _ensureChannel() async {
     if (_channelCreated) return;
@@ -40,13 +44,12 @@ class AudioDownloadNotificationService {
     required int completed,
     required int total,
     required String reciterName,
-    bool isArabicUi = false,
   }) async {
     await _ensureChannel();
 
     final pct = total > 0 ? (completed * 100 ~/ total) : 0;
-    final title = isArabicUi ? 'تحميل الصوت القرآني' : 'Downloading Quran Audio';
-    final body = isArabicUi
+    final title = _isArabic ? 'تحميل الصوت القرآني' : 'Downloading Quran Audio';
+    final body = _isArabic
         ? '$reciterName — $pct% ($completed / $total ملف)'
         : '$reciterName — $pct% ($completed / $total files)';
 
@@ -80,12 +83,11 @@ class AudioDownloadNotificationService {
   Future<void> showResumeAvailable({
     required int remainingSurahs,
     required String reciterName,
-    bool isArabicUi = false,
   }) async {
     await _ensureChannel();
 
-    final title = isArabicUi ? 'تحميل غير مكتمل' : 'Incomplete Download';
-    final body = isArabicUi
+    final title = _isArabic ? 'تحميل غير مكتمل' : 'Incomplete Download';
+    final body = _isArabic
         ? '$reciterName — $remainingSurahs سورة متبقية، افتح التطبيق للاستكمال'
         : '$reciterName — $remainingSurahs surahs remaining, open app to resume';
 
@@ -113,12 +115,11 @@ class AudioDownloadNotificationService {
   Future<void> showCompleted({
     required String reciterName,
     required int totalFiles,
-    bool isArabicUi = false,
   }) async {
     await _ensureChannel();
 
-    final title = isArabicUi ? '✅ اكتمل التحميل' : '✅ Download Complete';
-    final body = isArabicUi
+    final title = _isArabic ? '✅ اكتمل التحميل' : '✅ Download Complete';
+    final body = _isArabic
         ? '$reciterName — $totalFiles ملف جاهز للاستماع بدون إنترنت'
         : '$reciterName — $totalFiles files ready for offline playback';
 

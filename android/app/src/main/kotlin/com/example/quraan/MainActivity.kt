@@ -20,11 +20,15 @@ class MainActivity : FlutterActivity() {
     /** MediaPlayer used ONLY for short in-settings previews. */
     private var previewPlayer: MediaPlayer? = null
 
+    /** Kept so we can invoke 'previewCompleted' back to Flutter. */
+    private var channel: MethodChannel? = null
+
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
 
-        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, adhanChannel)
-            .setMethodCallHandler { call, result ->
+        val ch = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, adhanChannel)
+        channel = ch
+        ch.setMethodCallHandler { call, result ->
                 when (call.method) {
 
                     // ── Short preview in the settings screen ───────────────
@@ -142,10 +146,13 @@ class MainActivity : FlutterActivity() {
             player.setOnCompletionListener {
                 it.release()
                 if (previewPlayer === it) previewPlayer = null
+                // Notify Flutter that the preview finished naturally
+                runOnUiThread { channel?.invokeMethod("previewCompleted", null) }
             }
             player.setOnErrorListener { mp, _, _ ->
                 mp.release()
                 if (previewPlayer === mp) previewPlayer = null
+                runOnUiThread { channel?.invokeMethod("previewCompleted", null) }
                 true
             }
             player.prepare()
