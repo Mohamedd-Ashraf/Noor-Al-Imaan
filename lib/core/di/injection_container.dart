@@ -14,6 +14,7 @@ import '../../features/quran/domain/usecases/get_surah.dart';
 import '../../features/quran/domain/usecases/get_ayah.dart';
 import '../../features/quran/domain/usecases/get_juz.dart';
 import '../../features/quran/presentation/bloc/surah/surah_bloc.dart';
+import '../services/quran_cache_warmup_service.dart';
 import '../../features/quran/presentation/bloc/ayah/ayah_bloc.dart';
 import '../../features/quran/presentation/bloc/tafsir/tafsir_cubit.dart';
 import '../audio/ayah_audio_cubit.dart';
@@ -29,6 +30,7 @@ import '../services/location_service.dart';
 import '../services/adhan_notification_service.dart';
 import '../services/prayer_times_cache_service.dart';
 import '../services/app_update_service.dart';
+import '../services/whats_new_service.dart';
 import '../audio/download_manager_cubit.dart';
 import '../../features/wird/data/wird_service.dart';
 import '../../features/wird/services/wird_notification_service.dart';
@@ -45,6 +47,7 @@ Future<void> init() async {
     () => SurahBloc(
       getAllSurahs: sl(),
       getSurah: sl(),
+      getInstantSurah: sl(),
     ),
   );
 
@@ -65,6 +68,7 @@ Future<void> init() async {
   // Use cases
   sl.registerLazySingleton(() => GetAllSurahs(sl()));
   sl.registerLazySingleton(() => GetSurah(sl()));
+  sl.registerLazySingleton(() => GetInstantSurah(sl()));
   sl.registerLazySingleton(() => GetAyah(sl()));
   sl.registerLazySingleton(() => GetJuz(sl()));
 
@@ -96,6 +100,14 @@ Future<void> init() async {
 
   //! Services
   sl.registerLazySingleton(() => SettingsService(sl()));
+  sl.registerLazySingleton(
+    () => QuranCacheWarmupService(
+      repository: sl(),
+      localDataSource: sl(),
+      settingsService: sl(),
+      networkInfo: sl(),
+    ),
+  );
   sl.registerLazySingleton(() => const LocationService());
   sl.registerLazySingleton(() => FlutterLocalNotificationsPlugin());
   sl.registerLazySingleton(() => PrayerTimesCacheService(sl()));
@@ -105,6 +117,7 @@ Future<void> init() async {
   sl.registerLazySingleton(() => AyahAudioService(sl(), sl(), sl()));
   sl.registerLazySingleton(() => AudioEditionService(sl(), sl(), sl()));
   sl.registerLazySingleton(() => AppUpdateService(sl(), sl()));
+  sl.registerLazySingleton(() => WhatsNewService(sl()));
   sl.registerLazySingleton(() => WirdService(sl()));
   sl.registerLazySingleton(() => WirdNotificationService(sl(), sl()));
   sl.registerFactory(() => WirdCubit(sl(), sl()));

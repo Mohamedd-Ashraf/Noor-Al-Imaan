@@ -177,27 +177,35 @@ class IslamicAudioPlayer extends StatelessWidget {
                             isPlaying: isPlaying,
                             isBuffering: isBuffering,
                             onPressed: () {
-                              if (isSurahMode && playingSurahNumber != null) {
-                                // Get number of ayahs from SurahBloc
-                                final surahState = context
-                                    .read<SurahBloc>()
-                                    .state;
-                                int? numberOfAyahs;
-                                if (surahState is SurahListLoaded) {
-                                  try {
-                                    final surah = surahState.surahs.firstWhere(
-                                      (s) => s.number == playingSurahNumber,
-                                    );
-                                    numberOfAyahs = surah.numberOfAyahs;
-                                  } catch (e) {
-                                    numberOfAyahs = null;
+                              if (isSurahMode) {
+                                // If already playing → pause directly.
+                                // If paused → resume directly.
+                                // Only restart from scratch if truly idle/stopped.
+                                if (isPlaying) {
+                                  cubit.pause();
+                                } else if (audioState.status ==
+                                    AyahAudioStatus.paused) {
+                                  cubit.resume();
+                                } else if (playingSurahNumber != null) {
+                                  // Idle: need to restart – fetch numberOfAyahs
+                                  final surahState =
+                                      context.read<SurahBloc>().state;
+                                  int? numberOfAyahs;
+                                  if (surahState is SurahListLoaded) {
+                                    try {
+                                      final surah =
+                                          surahState.surahs.firstWhere(
+                                        (s) => s.number == playingSurahNumber,
+                                      );
+                                      numberOfAyahs = surah.numberOfAyahs;
+                                    } catch (_) {}
                                   }
-                                }
-                                if (numberOfAyahs != null) {
-                                  cubit.togglePlaySurah(
-                                    surahNumber: playingSurahNumber,
-                                    numberOfAyahs: numberOfAyahs,
-                                  );
+                                  if (numberOfAyahs != null) {
+                                    cubit.togglePlaySurah(
+                                      surahNumber: playingSurahNumber,
+                                      numberOfAyahs: numberOfAyahs,
+                                    );
+                                  }
                                 }
                               } else {
                                 if (audioState.surahNumber != null &&
@@ -241,11 +249,14 @@ class IslamicAudioPlayer extends StatelessWidget {
                       const SizedBox(height: 10),
 
                       // Progress bar with Islamic design
+                      // Uses effectivePositionStream / effectiveDurationStream so
+                      // that when playing a full page or surah the progress and
+                      // time labels reflect the TOTAL playlist, not a single ayah.
                       StreamBuilder<Duration>(
-                        stream: cubit.positionStream,
+                        stream: cubit.effectivePositionStream,
                         builder: (context, posSnap) {
                           return StreamBuilder<Duration?>(
-                            stream: cubit.durationStream,
+                            stream: cubit.effectiveDurationStream,
                             builder: (context, durSnap) {
                               final pos = posSnap.data ?? Duration.zero;
                               final dur = durSnap.data ?? Duration.zero;

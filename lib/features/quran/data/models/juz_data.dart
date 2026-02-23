@@ -1,10 +1,16 @@
-/// Data model for Quran Juz (parts)
+﻿/// Data model for Quran Juz (parts)
 class JuzInfo {
   final int number;
   final String arabicName;
   final String englishName;
   final List<int> surahNumbers;
-  final String startInfo; // Example: "Surah 2, Ayah 142"
+  final String startInfo; // Example: "Al-Fatiha 1 - Al-Baqarah 141"
+
+  // Structured start/end boundary data
+  final int startSurahNumber;
+  final int startAyah;
+  final int endSurahNumber;
+  final int endAyah;
 
   const JuzInfo({
     required this.number,
@@ -12,6 +18,10 @@ class JuzInfo {
     required this.englishName,
     required this.surahNumbers,
     required this.startInfo,
+    required this.startSurahNumber,
+    required this.startAyah,
+    required this.endSurahNumber,
+    required this.endAyah,
   });
 }
 
@@ -23,6 +33,8 @@ const List<JuzInfo> allJuzData = [
     englishName: 'Juz 1',
     surahNumbers: [1, 2],
     startInfo: 'Al-Fatiha 1 - Al-Baqarah 141',
+    startSurahNumber: 1, startAyah: 1,
+    endSurahNumber: 2, endAyah: 141,
   ),
   JuzInfo(
     number: 2,
@@ -30,6 +42,8 @@ const List<JuzInfo> allJuzData = [
     englishName: 'Juz 2',
     surahNumbers: [2],
     startInfo: 'Al-Baqarah 142 - 252',
+    startSurahNumber: 2, startAyah: 142,
+    endSurahNumber: 2, endAyah: 252,
   ),
   JuzInfo(
     number: 3,
@@ -37,6 +51,8 @@ const List<JuzInfo> allJuzData = [
     englishName: 'Juz 3',
     surahNumbers: [2, 3],
     startInfo: 'Al-Baqarah 253 - Aal-Imran 92',
+    startSurahNumber: 2, startAyah: 253,
+    endSurahNumber: 3, endAyah: 92,
   ),
   JuzInfo(
     number: 4,
@@ -44,6 +60,8 @@ const List<JuzInfo> allJuzData = [
     englishName: 'Juz 4',
     surahNumbers: [3, 4],
     startInfo: 'Aal-Imran 93 - An-Nisa 23',
+    startSurahNumber: 3, startAyah: 93,
+    endSurahNumber: 4, endAyah: 23,
   ),
   JuzInfo(
     number: 5,
@@ -51,6 +69,8 @@ const List<JuzInfo> allJuzData = [
     englishName: 'Juz 5',
     surahNumbers: [4],
     startInfo: 'An-Nisa 24 - 147',
+    startSurahNumber: 4, startAyah: 24,
+    endSurahNumber: 4, endAyah: 147,
   ),
   JuzInfo(
     number: 6,
@@ -58,6 +78,8 @@ const List<JuzInfo> allJuzData = [
     englishName: 'Juz 6',
     surahNumbers: [4, 5],
     startInfo: 'An-Nisa 148 - Al-Maidah 81',
+    startSurahNumber: 4, startAyah: 148,
+    endSurahNumber: 5, endAyah: 81,
   ),
   JuzInfo(
     number: 7,
@@ -65,6 +87,8 @@ const List<JuzInfo> allJuzData = [
     englishName: 'Juz 7',
     surahNumbers: [5, 6],
     startInfo: 'Al-Maidah 82 - Al-Anam 110',
+    startSurahNumber: 5, startAyah: 82,
+    endSurahNumber: 6, endAyah: 110,
   ),
   JuzInfo(
     number: 8,
@@ -72,6 +96,8 @@ const List<JuzInfo> allJuzData = [
     englishName: 'Juz 8',
     surahNumbers: [6, 7],
     startInfo: 'Al-Anam 111 - Al-Araf 87',
+    startSurahNumber: 6, startAyah: 111,
+    endSurahNumber: 7, endAyah: 87,
   ),
   JuzInfo(
     number: 9,
@@ -79,6 +105,8 @@ const List<JuzInfo> allJuzData = [
     englishName: 'Juz 9',
     surahNumbers: [7, 8],
     startInfo: 'Al-Araf 88 - Al-Anfal 40',
+    startSurahNumber: 7, startAyah: 88,
+    endSurahNumber: 8, endAyah: 40,
   ),
   JuzInfo(
     number: 10,
@@ -86,6 +114,8 @@ const List<JuzInfo> allJuzData = [
     englishName: 'Juz 10',
     surahNumbers: [8, 9],
     startInfo: 'Al-Anfal 41 - At-Tawbah 92',
+    startSurahNumber: 8, startAyah: 41,
+    endSurahNumber: 9, endAyah: 92,
   ),
   JuzInfo(
     number: 11,
@@ -93,6 +123,8 @@ const List<JuzInfo> allJuzData = [
     englishName: 'Juz 11',
     surahNumbers: [9, 10, 11],
     startInfo: 'At-Tawbah 93 - Hud 5',
+    startSurahNumber: 9, startAyah: 93,
+    endSurahNumber: 11, endAyah: 5,
   ),
   JuzInfo(
     number: 12,
@@ -100,6 +132,8 @@ const List<JuzInfo> allJuzData = [
     englishName: 'Juz 12',
     surahNumbers: [11, 12],
     startInfo: 'Hud 6 - Yusuf 52',
+    startSurahNumber: 11, startAyah: 6,
+    endSurahNumber: 12, endAyah: 52,
   ),
   JuzInfo(
     number: 13,
@@ -107,6 +141,8 @@ const List<JuzInfo> allJuzData = [
     englishName: 'Juz 13',
     surahNumbers: [12, 13, 14, 15],
     startInfo: 'Yusuf 53 - Al-Hijr 1',
+    startSurahNumber: 12, startAyah: 53,
+    endSurahNumber: 15, endAyah: 1,
   ),
   JuzInfo(
     number: 14,
@@ -114,6 +150,8 @@ const List<JuzInfo> allJuzData = [
     englishName: 'Juz 14',
     surahNumbers: [15, 16],
     startInfo: 'Al-Hijr 2 - An-Nahl 128',
+    startSurahNumber: 15, startAyah: 2,
+    endSurahNumber: 16, endAyah: 128,
   ),
   JuzInfo(
     number: 15,
@@ -121,6 +159,8 @@ const List<JuzInfo> allJuzData = [
     englishName: 'Juz 15',
     surahNumbers: [17, 18],
     startInfo: 'Al-Isra 1 - Al-Kahf 74',
+    startSurahNumber: 17, startAyah: 1,
+    endSurahNumber: 18, endAyah: 74,
   ),
   JuzInfo(
     number: 16,
@@ -128,6 +168,8 @@ const List<JuzInfo> allJuzData = [
     englishName: 'Juz 16',
     surahNumbers: [18, 19, 20],
     startInfo: 'Al-Kahf 75 - Ta-Ha 135',
+    startSurahNumber: 18, startAyah: 75,
+    endSurahNumber: 20, endAyah: 135,
   ),
   JuzInfo(
     number: 17,
@@ -135,6 +177,8 @@ const List<JuzInfo> allJuzData = [
     englishName: 'Juz 17',
     surahNumbers: [21, 22],
     startInfo: 'Al-Anbiya 1 - Al-Hajj 78',
+    startSurahNumber: 21, startAyah: 1,
+    endSurahNumber: 22, endAyah: 78,
   ),
   JuzInfo(
     number: 18,
@@ -142,6 +186,8 @@ const List<JuzInfo> allJuzData = [
     englishName: 'Juz 18',
     surahNumbers: [23, 24, 25],
     startInfo: 'Al-Muminun 1 - Al-Furqan 20',
+    startSurahNumber: 23, startAyah: 1,
+    endSurahNumber: 25, endAyah: 20,
   ),
   JuzInfo(
     number: 19,
@@ -149,6 +195,8 @@ const List<JuzInfo> allJuzData = [
     englishName: 'Juz 19',
     surahNumbers: [25, 26, 27],
     startInfo: 'Al-Furqan 21 - An-Naml 55',
+    startSurahNumber: 25, startAyah: 21,
+    endSurahNumber: 27, endAyah: 55,
   ),
   JuzInfo(
     number: 20,
@@ -156,6 +204,8 @@ const List<JuzInfo> allJuzData = [
     englishName: 'Juz 20',
     surahNumbers: [27, 28, 29],
     startInfo: 'An-Naml 56 - Al-Ankabut 45',
+    startSurahNumber: 27, startAyah: 56,
+    endSurahNumber: 29, endAyah: 45,
   ),
   JuzInfo(
     number: 21,
@@ -163,6 +213,8 @@ const List<JuzInfo> allJuzData = [
     englishName: 'Juz 21',
     surahNumbers: [29, 30, 31, 32, 33],
     startInfo: 'Al-Ankabut 46 - Al-Ahzab 30',
+    startSurahNumber: 29, startAyah: 46,
+    endSurahNumber: 33, endAyah: 30,
   ),
   JuzInfo(
     number: 22,
@@ -170,6 +222,8 @@ const List<JuzInfo> allJuzData = [
     englishName: 'Juz 22',
     surahNumbers: [33, 34, 35, 36],
     startInfo: 'Al-Ahzab 31 - Ya-Sin 27',
+    startSurahNumber: 33, startAyah: 31,
+    endSurahNumber: 36, endAyah: 27,
   ),
   JuzInfo(
     number: 23,
@@ -177,6 +231,8 @@ const List<JuzInfo> allJuzData = [
     englishName: 'Juz 23',
     surahNumbers: [36, 37, 38, 39],
     startInfo: 'Ya-Sin 28 - Az-Zumar 31',
+    startSurahNumber: 36, startAyah: 28,
+    endSurahNumber: 39, endAyah: 31,
   ),
   JuzInfo(
     number: 24,
@@ -184,6 +240,8 @@ const List<JuzInfo> allJuzData = [
     englishName: 'Juz 24',
     surahNumbers: [39, 40, 41],
     startInfo: 'Az-Zumar 32 - Fussilat 46',
+    startSurahNumber: 39, startAyah: 32,
+    endSurahNumber: 41, endAyah: 46,
   ),
   JuzInfo(
     number: 25,
@@ -191,6 +249,8 @@ const List<JuzInfo> allJuzData = [
     englishName: 'Juz 25',
     surahNumbers: [41, 42, 43, 44, 45],
     startInfo: 'Fussilat 47 - Al-Jathiya 37',
+    startSurahNumber: 41, startAyah: 47,
+    endSurahNumber: 45, endAyah: 37,
   ),
   JuzInfo(
     number: 26,
@@ -198,6 +258,8 @@ const List<JuzInfo> allJuzData = [
     englishName: 'Juz 26',
     surahNumbers: [46, 47, 48, 49, 50, 51],
     startInfo: 'Al-Ahqaf 1 - Adh-Dhariyat 30',
+    startSurahNumber: 46, startAyah: 1,
+    endSurahNumber: 51, endAyah: 30,
   ),
   JuzInfo(
     number: 27,
@@ -205,6 +267,8 @@ const List<JuzInfo> allJuzData = [
     englishName: 'Juz 27',
     surahNumbers: [51, 52, 53, 54, 55, 56, 57],
     startInfo: 'Adh-Dhariyat 31 - Al-Hadid 29',
+    startSurahNumber: 51, startAyah: 31,
+    endSurahNumber: 57, endAyah: 29,
   ),
   JuzInfo(
     number: 28,
@@ -212,6 +276,8 @@ const List<JuzInfo> allJuzData = [
     englishName: 'Juz 28',
     surahNumbers: [58, 59, 60, 61, 62, 63, 64, 65, 66],
     startInfo: 'Al-Mujadila 1 - At-Tahrim 12',
+    startSurahNumber: 58, startAyah: 1,
+    endSurahNumber: 66, endAyah: 12,
   ),
   JuzInfo(
     number: 29,
@@ -219,50 +285,20 @@ const List<JuzInfo> allJuzData = [
     englishName: 'Juz Tabarak',
     surahNumbers: [67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77],
     startInfo: 'Al-Mulk 1 - Al-Mursalat 50',
+    startSurahNumber: 67, startAyah: 1,
+    endSurahNumber: 77, endAyah: 50,
   ),
   JuzInfo(
     number: 30,
     arabicName: 'عَمَّ',
     englishName: 'Juz Amma',
     surahNumbers: [
-      78,
-      79,
-      80,
-      81,
-      82,
-      83,
-      84,
-      85,
-      86,
-      87,
-      88,
-      89,
-      90,
-      91,
-      92,
-      93,
-      94,
-      95,
-      96,
-      97,
-      98,
-      99,
-      100,
-      101,
-      102,
-      103,
-      104,
-      105,
-      106,
-      107,
-      108,
-      109,
-      110,
-      111,
-      112,
-      113,
-      114,
+      78, 79, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90,
+      91, 92, 93, 94, 95, 96, 97, 98, 99, 100, 101, 102,
+      103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114,
     ],
     startInfo: 'An-Naba 1 - An-Nas 6',
+    startSurahNumber: 78, startAyah: 1,
+    endSurahNumber: 114, endAyah: 6,
   ),
 ];

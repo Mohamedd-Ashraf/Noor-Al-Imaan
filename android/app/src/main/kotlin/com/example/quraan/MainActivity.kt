@@ -2,6 +2,7 @@ package com.example.quraan
 
 import android.content.Intent
 import android.media.AudioAttributes
+import android.media.AudioManager
 import android.media.MediaPlayer
 import android.net.Uri
 import android.os.Build
@@ -83,6 +84,23 @@ class MainActivity : FlutterActivity() {
                             true // pre-M: no battery optimization concept
                         }
                         result.success(disabled)
+                    }
+
+                    // ── System alarm volume ────────────────────────────────
+                    "getAlarmVolume" -> {
+                        val am      = getSystemService(AUDIO_SERVICE) as AudioManager
+                        val current = am.getStreamVolume(AudioManager.STREAM_ALARM)
+                        val max     = am.getStreamMaxVolume(AudioManager.STREAM_ALARM)
+                        result.success(mapOf("current" to current, "max" to max))
+                    }
+
+                    "openSoundSettings" -> {
+                        try {
+                            startActivity(Intent(Settings.ACTION_SOUND_SETTINGS))
+                        } catch (e: Exception) {
+                            Log.w("MainActivity", "Cannot open sound settings: ${e.message}")
+                        }
+                        result.success(null)
                     }
 
                     else -> result.notImplemented()

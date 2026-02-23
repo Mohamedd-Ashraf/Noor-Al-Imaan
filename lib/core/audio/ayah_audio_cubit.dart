@@ -67,8 +67,24 @@ class AyahAudioCubit extends Cubit<AyahAudioState> {
 
   StreamSubscription<PlayerState>? _playerSub;
   StreamSubscription<int?>? _indexSub;
+  StreamSubscription<Duration?>? _durationCacheSub;
   bool _initialized = false;
 
+  // ── Playlist progress tracking ────────────────────────────────────────────
+  /// Total items in the playlist (ayahs + silence items interleaved).
+  int _playlistLength = 1;
+  /// Number of ayah items only (excludes silence gaps).
+  int _ayahCount = 1;
+  /// Index of the item currently being played.
+  int _currentItemIndex = 0;
+  /// Known duration for each completed / loaded playlist item.
+  final Map<int, Duration> _itemDurations = {};
+  /// Sum of durations of all items that have already *finished* playing.
+  Duration _accumulatedDuration = Duration.zero;
+  /// Silence gap injected between consecutive ayahs.
+  static const Duration _ayahGap = Duration(milliseconds: 400);
+  /// Tag used on SilenceAudioSource items so we can identify them.
+  static const int _kSilenceTag = -1;
   AyahAudioCubit(this._service, this._adhanService)
     : _player = AudioPlayer(),
       super(const AyahAudioState.idle()) {
@@ -101,6 +117,12 @@ class AyahAudioCubit extends Cubit<AyahAudioState> {
 
     if (isClosed) return;
     _initialized = true;
+
+    // Cache the duration of the current item whenever it becomes known.
+    _durationCacheSub = _player.durationStream.listen((dur) {
+      if (isClosed || dur == null) return;
+      _itemDurations[_currentItemIndex] = dur;
+    });
 
     _playerSub = _player.playerStateStream.listen(
       (ps) {
@@ -148,12 +170,30 @@ class AyahAudioCubit extends Cubit<AyahAudioState> {
     _indexSub = _player.currentIndexStream.listen((idx) {
       if (isClosed) return;
       if (idx == null) return;
+
+      // ── Accumulate duration of the item we just left ──────────────────────
+      if (idx > _currentItemIndex) {
+        // For silence items use the fixed gap; for ayah items use cached dur.
+        final prev = _currentItemIndex;
+        final sequence = _player.sequenceState;
+        final prevTag = (sequence != null && prev < sequence.sequence.length)
+            ? sequence.sequence[prev].tag
+            : null;
+        final dur = prevTag == _kSilenceTag
+            ? _ayahGap
+            : (_itemDurations[prev] ?? Duration.zero);
+        _accumulatedDuration += dur;
+      }
+      _currentItemIndex = idx;
+
       if (state.mode != AyahAudioMode.surah) return;
 
       // Get the ayah number from the audio source tag
       final sequence = _player.sequenceState;
       if (sequence != null && idx < sequence.sequence.length) {
         final tag = sequence.sequence[idx].tag;
+        // Silence items: keep current ayah highlighted, don't change state.
+        if (tag == _kSilenceTag) return;
         if (tag is int) {
           emit(state.copyWith(ayahNumber: tag));
           return;
@@ -169,6 +209,49 @@ class AyahAudioCubit extends Cubit<AyahAudioState> {
   Stream<Duration?> get durationStream => _player.durationStream;
   Stream<Duration> get bufferedPositionStream => _player.bufferedPositionStream;
 
+  // ── Playlist-aware streams ───────────────────────────────────────────────
+
+  /// Position relative to the START of the playlist.
+  /// For single-ayah mode this is identical to [positionStream].
+  /// For page/surah mode it accumulates the durations of completed items.
+  Stream<Duration> get effectivePositionStream =>
+      _player.positionStream.map((pos) => _accumulatedDuration + pos);
+
+  /// Total duration of the full playlist.
+  /// Becomes more accurate as each item's duration is loaded.
+  /// Falls back to a proportional estimate while items are still loading.
+  Stream<Duration?> get effectiveDurationStream =>
+      _player.durationStream.map((currentItemDur) {
+        if (_ayahCount <= 1) return currentItemDur;
+
+        // Fixed total silence duration is always known.
+        final silenceTotal = _ayahGap * (_ayahCount - 1);
+
+        // Collect known ayah durations (even indices 0, 2, 4, …).
+        final knownAyahDurs = <Duration>[];
+        for (var i = 0; i < _playlistLength; i += 2) {
+          final d = _itemDurations[i];
+          if (d != null) knownAyahDurs.add(d);
+        }
+
+        if (knownAyahDurs.isEmpty) return currentItemDur;
+
+        final knownAyahTotal =
+            knownAyahDurs.fold(Duration.zero, (sum, d) => sum + d);
+
+        if (knownAyahDurs.length >= _ayahCount) {
+          // All ayah durations known — return exact total.
+          return knownAyahTotal + silenceTotal;
+        }
+
+        // Proportional estimate for the remaining ayahs.
+        final avgMs = knownAyahTotal.inMilliseconds / knownAyahDurs.length;
+        return Duration(
+          milliseconds:
+              (avgMs * _ayahCount).round() + silenceTotal.inMilliseconds,
+        );
+      });
+
   Future<void> togglePlayAyah({
     required int surahNumber,
     required int ayahNumber,
@@ -183,6 +266,20 @@ class AyahAudioCubit extends Cubit<AyahAudioState> {
     await playAyah(surahNumber: surahNumber, ayahNumber: ayahNumber);
   }
 
+  void _resetPlaylistTracking(int ayahCount) {
+    _ayahCount = ayahCount;
+    // Total items: ayahs interleaved with silence gaps.
+    // N ayahs → N + (N−1) = 2N−1 items.  Single ayah → 1 item (no gap).
+    _playlistLength = ayahCount <= 1 ? 1 : 2 * ayahCount - 1;
+    _currentItemIndex = 0;
+    _accumulatedDuration = Duration.zero;
+    _itemDurations.clear();
+    // Pre-populate known durations for silence items (odd indices).
+    for (var i = 1; i < _playlistLength; i += 2) {
+      _itemDurations[i] = _ayahGap;
+    }
+  }
+
   Future<void> playAyah({
     required int surahNumber,
     required int ayahNumber,
@@ -193,6 +290,7 @@ class AyahAudioCubit extends Cubit<AyahAudioState> {
       // Best-effort: allow _init() to finish.
       await Future<void>.delayed(const Duration(milliseconds: 10));
     }
+    _resetPlaylistTracking(1);
     emit(
       AyahAudioState(
         status: AyahAudioStatus.buffering,
@@ -256,6 +354,7 @@ class AyahAudioCubit extends Cubit<AyahAudioState> {
     if (!_initialized) {
       await Future<void>.delayed(const Duration(milliseconds: 10));
     }
+    _resetPlaylistTracking(numberOfAyahs);
     emit(
       AyahAudioState(
         status: AyahAudioStatus.buffering,
@@ -279,6 +378,12 @@ class AyahAudioCubit extends Cubit<AyahAudioState> {
           children.add(AudioSource.file(s.localFilePath!, tag: ayahNumber));
         } else {
           children.add(AudioSource.uri(s.remoteUri!, tag: ayahNumber));
+        }
+        // Add silence gap after every ayah except the last.
+        if (i < sources.length - 1) {
+          children.add(
+            SilenceAudioSource(duration: _ayahGap, tag: _kSilenceTag),
+          );
         }
       }
 
@@ -315,6 +420,7 @@ class AyahAudioCubit extends Cubit<AyahAudioState> {
     if (!_initialized) {
       await Future<void>.delayed(const Duration(milliseconds: 10));
     }
+    _resetPlaylistTracking(endAyah - startAyah + 1);
     emit(
       AyahAudioState(
         status: AyahAudioStatus.buffering,
@@ -338,6 +444,12 @@ class AyahAudioCubit extends Cubit<AyahAudioState> {
           );
         } else {
           children.add(AudioSource.uri(source.remoteUri!, tag: ayahNumber));
+        }
+        // Add silence gap after every ayah except the last.
+        if (ayahNumber < endAyah) {
+          children.add(
+            SilenceAudioSource(duration: _ayahGap, tag: _kSilenceTag),
+          );
         }
       }
 
@@ -394,6 +506,7 @@ class AyahAudioCubit extends Cubit<AyahAudioState> {
   Future<void> close() async {
     await _playerSub?.cancel();
     await _indexSub?.cancel();
+    await _durationCacheSub?.cancel();
     try {
       await _player.stop();
     } catch (_) {}

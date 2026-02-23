@@ -28,11 +28,6 @@ class QuranLocalDataSourceImpl implements QuranLocalDataSource {
         : edition;
   }
 
-  bool _isCacheableEdition(String? edition) {
-    final normalized = _normalizeEdition(edition);
-    return normalized == ApiConstants.defaultEdition;
-  }
-
   String _surahKey(int surahNumber, {String? edition}) {
     final normalized = _normalizeEdition(edition);
     return '$_keySurahPrefix$surahNumber:$normalized';
@@ -64,20 +59,12 @@ class QuranLocalDataSourceImpl implements QuranLocalDataSource {
 
   @override
   Future<void> cacheSurah(SurahModel surah, {String? edition}) async {
-    if (!_isCacheableEdition(edition)) {
-      return;
-    }
-
     final payload = json.encode(surah.toJson());
     await prefs.setString(_surahKey(surah.number, edition: edition), payload);
   }
 
   @override
   Future<SurahModel> getCachedSurah(int surahNumber, {String? edition}) async {
-    if (!_isCacheableEdition(edition)) {
-      throw CacheException();
-    }
-
     final raw = prefs.getString(_surahKey(surahNumber, edition: edition));
     if (raw == null || raw.isEmpty) {
       throw CacheException();

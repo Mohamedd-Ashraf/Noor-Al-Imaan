@@ -14,6 +14,7 @@ import '../../../../core/widgets/app_update_dialog_premium.dart';
 import '../../../../core/audio/ayah_audio_cubit.dart';
 import '../../../wird/presentation/cubit/wird_cubit.dart';
 import '../../../wird/presentation/cubit/wird_state.dart';
+import 'mushaf_settings_screen.dart';
 import 'offline_audio_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -24,7 +25,7 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
-  double _arabicFontSizeDraft = 24.0;
+  double _arabicFontSizeDraft = 18.0;
   double _translationFontSizeDraft = 16.0;
   String _version = '';
   bool _checkingForUpdate = false;
@@ -270,12 +271,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ]),
                   Slider(
                     value: _arabicFontSizeDraft,
-                    min: 18,
-                    max: 36,
-                    divisions: 18,
+                    min: 14,
+                    max: 40,
+                    divisions: 26,
                     label: _arabicFontSizeDraft.round().toString(),
                     activeColor: AppColors.primary,
-                    onChanged: (v) => setState(() => _arabicFontSizeDraft = v),
+                    onChanged: (v) {
+                      setState(() => _arabicFontSizeDraft = v);
+                      context
+                          .read<AppSettingsCubit>()
+                          .previewArabicFontSize(v);
+                    },
                     onChangeEnd: (v) =>
                         context.read<AppSettingsCubit>().setArabicFontSize(v),
                   ),
@@ -305,205 +311,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
           _SectionHeader(
               isAr ? 'إعدادات القراءة' : 'Reading', Icons.menu_book_outlined),
 
-          // Mushaf View
-          _SettingsCard(
-            child: SwitchListTile(
-              secondary: const Icon(Icons.auto_stories_rounded,
-                  color: AppColors.primary),
-              title:
-                  _TileTitle(isAr ? 'عرض المصحف الشريف' : 'Mushaf View'),
-              subtitle: _TileSubtitle(isAr
-                  ? 'خط عثماني مع صفحات قابلة للتقليب'
-                  : 'Uthmani script with flippable pages'),
-              value: settings.useUthmaniScript,
-              activeColor: AppColors.primary,
-              onChanged: (v) =>
-                  context.read<AppSettingsCubit>().setUseUthmaniScript(v),
-            ),
-          ),
-
-          // ─── Quran Text Edition ──────────────────────────────────────
-          _SettingsCard(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _SettingLabel(
-                    icon: Icons.text_fields_rounded,
-                    label: isAr ? 'رواية عرض المصحف' : 'Quran Text Edition',
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    isAr
-                        ? 'اختر مستوى التشكيل وأسلوب رسم النص القرآني'
-                        : 'Choose the script style and diacritics level',
-                    style: const TextStyle(
-                        fontSize: 12, color: AppColors.textSecondary),
-                  ),
-                  const SizedBox(height: 12),
-                  DropdownButtonFormField<String>(
-                    value: settings.quranEdition,
-                    isExpanded: true,
-                    decoration: _inputDeco(isAr ? 'الرواية' : 'Edition'),
-                    selectedItemBuilder: (context) =>
-                        ApiConstants.quranEditions
-                            .map((e) => Text(
-                                  isAr ? e['nameAr']! : e['nameEn']!,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ))
-                            .toList(),
-                    items: ApiConstants.quranEditions.map((e) {
-                      return DropdownMenuItem<String>(
-                        value: e['id'],
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              isAr ? e['nameAr']! : e['nameEn']!,
-                              style: const TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                            Text(
-                              isAr ? e['descAr']! : e['descEn']!,
-                              style: const TextStyle(
-                                fontSize: 11,
-                                color: AppColors.textSecondary,
-                              ),
-                            ),
-                          ],
-                        ),
-                      );
-                    }).toList(),
-                    onChanged: (value) async {
-                      if (value == null) return;
-                      await context
-                          .read<AppSettingsCubit>()
-                          .setQuranEdition(value);
-                      if (!context.mounted) return;
-                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                        content: Text(isAr
-                            ? 'تم تحديث رواية عرض المصحف'
-                            : 'Quran edition updated'),
-                        duration: const Duration(seconds: 1),
-                      ));
-                    },
-                  ),
-                ],
-              ),
-            ),
-          ),
-
-          // ─── Quran Display Font ──────────────────────────────────────────
-          _SettingsCard(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _SettingLabel(
-                    icon: Icons.font_download_rounded,
-                    label: isAr ? 'خط عرض المصحف' : 'Quran Display Font',
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    isAr
-                        ? 'اختر الخط المستخدم لعرض الآيات'
-                        : 'Choose the font for Quran verses',
-                    style: const TextStyle(
-                        fontSize: 12, color: AppColors.textSecondary),
-                  ),
-                  const SizedBox(height: 12),
-                  // Font chips
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: ApiConstants.quranFonts
-                        .map((font) {
-                          final isSelected =
-                              settings.quranFont == font['id'];
-                          return GestureDetector(
-                            onTap: () => context
-                                .read<AppSettingsCubit>()
-                                .setQuranFont(font['id']!),
-                            child: AnimatedContainer(
-                              duration: const Duration(milliseconds: 200),
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 12, vertical: 8),
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(10),
-                                border: Border.all(
-                                  color: isSelected
-                                      ? AppColors.primary
-                                      : AppColors.divider,
-                                  width: isSelected ? 2 : 1,
-                                ),
-                                color: isSelected
-                                    ? AppColors.primary
-                                        .withValues(alpha: 0.08)
-                                    : scheme.surfaceContainerLowest,
-                              ),
-                              child: Column(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Text(
-                                    font['sample']!,
-                                    style:
-                                        ArabicTextStyleHelper.quranFontStyle(
-                                      fontKey: font['id']!,
-                                      fontSize: 20,
-                                      color: isSelected
-                                          ? AppColors.primary
-                                          : scheme.onSurface,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    isAr
-                                        ? font['nameAr']!
-                                        : font['nameEn']!,
-                                    style: TextStyle(
-                                      fontSize: 11,
-                                      fontWeight: isSelected
-                                          ? FontWeight.w700
-                                          : FontWeight.w400,
-                                      color: isSelected
-                                          ? AppColors.primary
-                                          : AppColors.textSecondary,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          );
-                        })
-                        .toList(),
-                  ),
-                  // Live preview
-                  const SizedBox(height: 14),
-                  _PreviewBox(
-                    color: scheme.surfaceContainerLowest,
-                    child: Text(
-                      'بِسْمِ ٱللَّهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ',
-                      textAlign: TextAlign.center,
-                      textDirection: TextDirection.rtl,
-                      style: ArabicTextStyleHelper.quranFontStyle(
-                        fontKey: settings.quranFont,
-                        fontSize: _arabicFontSizeDraft,
-                        color: scheme.onSurface,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
+          // ─── Mushaf Settings Entry Card ────
+          _MushafEntryCard(
+            isAr: isAr,
+            fontKey: settings.quranFont,
+            editionId: settings.quranEdition,
+            useUthmani: settings.useUthmaniScript,
+            onToggleMushaf: (v) =>
+                context.read<AppSettingsCubit>().setUseUthmaniScript(v),
+            onOpenSettings: () => Navigator.of(context).push(
+              MaterialPageRoute(
+                  builder: (_) => const MushafSettingsScreen()),
             ),
           ),
 
@@ -1158,6 +976,170 @@ class _PreviewBox extends StatelessWidget {
 }
 
 // ── Follow-up interval tile ────────────────────────────────────────────────
+
+// ───────────────────────────────────────────────────────────────────────────────
+// Mushaf Entry Card  (shown in the main settings page)
+// ───────────────────────────────────────────────────────────────────────────────
+
+/// A compact card on the main Settings page that:
+/// • Toggles the Mushaf (Uthmani) view on/off.
+/// • Shows the current font + edition as a subtitle chip.
+/// • Provides a one-tap route to the full [MushafSettingsScreen].
+class _MushafEntryCard extends StatelessWidget {
+  final bool isAr;
+  final String fontKey;
+  final String editionId;
+  final bool useUthmani;
+  final ValueChanged<bool> onToggleMushaf;
+  final VoidCallback onOpenSettings;
+
+  const _MushafEntryCard({
+    required this.isAr,
+    required this.fontKey,
+    required this.editionId,
+    required this.useUthmani,
+    required this.onToggleMushaf,
+    required this.onOpenSettings,
+  });
+
+  String _editionShortName() {
+    try {
+      return ApiConstants.quranEditions
+              .firstWhere((e) => e['id'] == editionId)[isAr ? 'nameAr' : 'nameEn'] ??
+          editionId;
+    } catch (_) {
+      return editionId;
+    }
+  }
+
+  String _fontShortName() {
+    try {
+      return ApiConstants.quranFonts
+              .firstWhere((f) => f['id'] == fontKey)[isAr ? 'nameAr' : 'nameEn'] ??
+          fontKey;
+    } catch (_) {
+      return fontKey;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      margin: const EdgeInsets.only(bottom: 10),
+      shape:
+          RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      clipBehavior: Clip.hardEdge,
+      child: Column(
+        children: [
+          // ── Mushaf toggle ─────────────────────────────────────
+          SwitchListTile(
+            secondary: const Icon(Icons.auto_stories_rounded,
+                color: AppColors.primary),
+            title: _TileTitle(
+                isAr ? 'عرض المصحف الشريف' : 'Mushaf View'),
+            subtitle: _TileSubtitle(isAr
+                ? 'خط عثماني مع صفحات قابلة للتقليب'
+                : 'Uthmani script with flippable pages'),
+            value: useUthmani,
+            activeColor: AppColors.primary,
+            onChanged: onToggleMushaf,
+          ),
+          const Divider(height: 1, indent: 56, endIndent: 16),
+          // ── Navigate to full Mushaf settings ──────────────────
+          InkWell(
+            onTap: onOpenSettings,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 10, 12, 10),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(7),
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [
+                          AppColors.gradientStart,
+                          AppColors.gradientEnd
+                        ],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      borderRadius: BorderRadius.circular(9),
+                    ),
+                    child: const Icon(Icons.tune_rounded,
+                        color: Colors.white, size: 18),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          isAr
+                              ? 'إعدادات المصحف الشريف'
+                              : 'Mushaf Display Settings',
+                          style: const TextStyle(
+                              fontWeight: FontWeight.w700, fontSize: 14),
+                        ),
+                        const SizedBox(height: 4),
+                        // current-selection chips
+                        Wrap(
+                          spacing: 6,
+                          children: [
+                            _Chip(_fontShortName(), Icons.font_download_rounded),
+                            _Chip(
+                                _editionShortName(), Icons.menu_book_rounded),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Icon(Icons.chevron_right_rounded,
+                      color: AppColors.primary, size: 22),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Tiny pill chip used to display current selection summary.
+class _Chip extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  const _Chip(this.label, this.icon);
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+      decoration: BoxDecoration(
+        color: AppColors.primary.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+            color: AppColors.primary.withValues(alpha: 0.2), width: 0.8),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 10, color: AppColors.primary),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: const TextStyle(
+                fontSize: 10,
+                color: AppColors.primary,
+                fontWeight: FontWeight.w600),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Follow-up interval tile ───────────────────────────────────────────────────────────
 
 class _FollowUpIntervalTile extends StatelessWidget {
   final bool isAr;

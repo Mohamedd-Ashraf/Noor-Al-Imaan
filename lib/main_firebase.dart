@@ -6,6 +6,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
 import 'core/di/injection_container_firebase.dart' as di;
 import 'core/services/adhan_notification_service.dart';
+import 'core/services/quran_cache_warmup_service.dart';
 import 'core/services/app_update_service_firebase.dart';
 import 'features/wird/services/wird_notification_service.dart';
 import 'core/widgets/app_update_dialog_premium.dart';
@@ -28,6 +29,10 @@ void main() async {
   
   // Initialize dependency injection
   await di.init();
+
+  // Start background Quran cache warm-up so all surahs are available offline
+  // and open instantly on subsequent visits.  Runs fully in background.
+  di.sl<QuranCacheWarmupService>().startInBackground();
 
   // Initialize update service
   final updateService = di.sl<AppUpdateServiceFirebase>();

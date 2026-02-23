@@ -2,6 +2,26 @@
 
 ---
 
+## [1.0.5] – 2026-02-24
+
+### عربي
+- **التفسير بالضغط المطوّل:** اضغط مطولاً على أي آية لفتح شاشة تفسيرها فوراً.
+- **ورد يومي مع تذكيرات:** حدد تلاوتك اليومية وتابع تقدمك لتختم القرآن الكريم بانتظام.
+- **خطوط وأحجام متعددة:** اختر خط المصحف المناسب وخصّص حجم الخط بسلاسة.
+- تحديث رقم الإصدار إلى **1.0.5**.
+
+### English
+- **Mushaf Page View:** Full Islamic design with geometric patterns and golden ornaments inspired by classic Mushafs.
+- **Tafsir on Long Press:** Long-press any verse to instantly open its detailed explanation.
+- **Daily Wird with Reminders:** Set your daily recitation target and track progress to complete the Quran regularly.
+- **Custom Fonts & Live Size Slider:** Choose your preferred Quran font and adjust text size in real-time via a live slider.
+- **Enhanced Audio Recitation:** Listen to individual ayahs or play the whole page with one tap.
+- **Bookmarks:** Save your favourite ayahs and pages and revisit them anytime.
+- **Font Size Reset:** Arabic font size is automatically reset to 18 on first launch after this update.
+- Version bumped to **1.0.5**.
+
+---
+
 ## [1.0.4] – 2026-02-22
 
 ### عربي

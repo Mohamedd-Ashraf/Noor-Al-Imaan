@@ -73,67 +73,113 @@ class QuranRepositoryImpl implements QuranRepository {
     int surahNumber, {
     String? edition,
   }) async {
-    // Prefer bundled Quran text for Uthmani edition only
-    // Simple edition requires online fetch
+    // ─── Fast path: bundled assets for the default Uthmani edition ──────────
+    // The bundled offline JSON is always clean (no API artefacts) and is
+    // available even on first install without internet.
     if (_isUthmaniEdition(edition)) {
       try {
         final bundled = await bundledDataSource.getBundledSurah(surahNumber);
         return Right(bundled);
       } on CacheException {
-        // Assets missing, fall through.
+        // Assets missing in dev build; continue below.
       }
     }
 
+    // ─── Cache-first for ALL editions ───────────────────────────────────────
+    // Always try the local cache before touching the network.
+    // This guarantees that the display is always consistent: once a surah is
+    // fetched and cached, the user sees the same clean text whether online or
+    // offline, instead of seeing raw API artefacts on every online open.
+    try {
+      final cached = await localDataSource.getCachedSurah(
+        surahNumber,
+        edition: edition,
+      );
+      return Right(cached);
+    } on CacheException {
+      // Cache miss – need to fetch from the network.
+    }
+
+    // ─── Network fetch (only when cache is empty) ────────────────────────────
     if (await networkInfo.isConnected) {
       try {
         final surah = await remoteDataSource.getSurah(
           surahNumber,
           edition: edition,
         );
-        // Only cache Uthmani edition
-        if (_isUthmaniEdition(edition)) {
-          await localDataSource.cacheSurah(surah, edition: edition);
-        }
+        // Persist to local cache so every future open (online OR offline)
+        // reads the already-normalised, artefact-free cached text.
+        await localDataSource.cacheSurah(surah, edition: edition);
         return Right(surah);
       } on ServerException {
-        // Fallback to bundled/cached Uthmani for both editions when API fails
+        // Network fetch failed; try bundled Uthmani as last resort.
         try {
           final bundled = await bundledDataSource.getBundledSurah(surahNumber);
           return Right(bundled);
         } on CacheException {
-          // Try local cache
-          try {
-            final cached = await localDataSource.getCachedSurah(
-              surahNumber,
-              edition: ApiConstants.defaultEdition,
-            );
-            return Right(cached);
-          } on CacheException {
-            return const Left(ServerFailure('Failed to fetch surah'));
-          }
+          return const Left(ServerFailure('Failed to fetch surah'));
         }
       }
     }
 
-    // Offline - always fallback to bundled Uthmani edition
+    // ─── Offline fallback ────────────────────────────────────────────────────
+    // Cache miss + no internet.  Gracefully degrade to the bundled Uthmani
+    // text so the user can still read the Quran.
     try {
       final bundled = await bundledDataSource.getBundledSurah(surahNumber);
       return Right(bundled);
     } on CacheException {
-      // Try local cache
+      return const Left(
+        CacheFailure(
+          'No internet connection and this Surah has not been cached yet. '
+          'Please open it once while online to enable offline reading.',
+        ),
+      );
+    }
+  }
+
+  // ─── Instant fetch (no network) ─────────────────────────────────────────
+  // Returns data as fast as possible for immediate UI display:
+  //   1. Bundled assets (Uthmani edition — always available, fastest)
+  //   2. Local cache (all editions — fast, already normalised)
+  //   3. Bundled Uthmani placeholder (for non-Uthmani editions with empty cache)
+  // Never touches the network — caller is responsible for following up with
+  // getSurah() to upgrade the content once the real data is available.
+  @override
+  Future<Either<Failure, Surah>> getInstantSurah(
+    int surahNumber, {
+    String? edition,
+  }) async {
+    // 1. Bundled for default Uthmani edition
+    if (_isUthmaniEdition(edition)) {
       try {
-        final cached = await localDataSource.getCachedSurah(
-          surahNumber,
-          edition: ApiConstants.defaultEdition,
-        );
-        return Right(cached);
+        final bundled = await bundledDataSource.getBundledSurah(surahNumber);
+        return Right(bundled);
       } on CacheException {
-        return const Left(
-          CacheFailure(
-            'No internet connection and this Surah is not cached yet. Please open it once while online for offline reading.',
-          ),
-        );
+        // Dev build missing assets — continue
       }
+    }
+
+    // 2. Cache hit for any edition
+    try {
+      final cached = await localDataSource.getCachedSurah(
+        surahNumber,
+        edition: edition,
+      );
+      return Right(cached);
+    } on CacheException {
+      // Cache miss for this edition
+    }
+
+    // 3. Bundled Uthmani as a placeholder even for non-Uthmani editions
+    //    so the user sees text immediately rather than a loading spinner.
+    try {
+      final bundled = await bundledDataSource.getBundledSurah(surahNumber);
+      return Right(bundled);
+    } on CacheException {
+      return const Left(
+        CacheFailure('No instant data available — assets missing'),
+      );
     }
   }
 

@@ -16,6 +16,23 @@ class GetSurah implements UseCase<Surah, GetSurahParams> {
   }
 }
 
+/// Instant (no-network) use case: bundled → cache → bundled placeholder.
+/// Used for the first emit in the two-phase BLoC flow so that content is
+/// visible immediately without a loading spinner.
+class GetInstantSurah implements UseCase<Surah, GetSurahParams> {
+  final QuranRepository repository;
+
+  GetInstantSurah(this.repository);
+
+  @override
+  Future<Either<Failure, Surah>> call(GetSurahParams params) async {
+    return await repository.getInstantSurah(
+      params.surahNumber,
+      edition: params.edition,
+    );
+  }
+}
+
 class GetSurahParams extends Equatable {
   final int surahNumber;
   final String? edition;

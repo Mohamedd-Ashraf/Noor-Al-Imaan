@@ -87,7 +87,21 @@ class AppSettingsState extends Equatable {
 class AppSettingsCubit extends Cubit<AppSettingsState> {
   final SettingsService _service;
 
-  AppSettingsCubit(this._service) : super(AppSettingsState.initial(_service));
+  AppSettingsCubit(this._service) : super(AppSettingsState.initial(_service)) {
+    // One-time migration for v1.0.5: reset ALL users to font size 18
+    // After this runs once the flag is set and it never runs again,
+    // so any subsequent user changes are preserved.
+    if (!_service.getFontSizeMigratedV18()) {
+      _service.setArabicFontSize(18.0);
+      emit(state.copyWith(arabicFontSize: 18.0));
+      _service.setFontSizeMigratedV18();
+    }
+  }
+
+  /// Instantly emits the new font size for live slider preview (no disk write).
+  void previewArabicFontSize(double value) {
+    emit(state.copyWith(arabicFontSize: value));
+  }
 
   Future<void> setArabicFontSize(double value) async {
     await _service.setArabicFontSize(value);

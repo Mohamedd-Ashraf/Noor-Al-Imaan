@@ -841,7 +841,7 @@ class _SurahDetailScreenState extends State<SurahDetailScreen> {
                                       );
                                     },
                                     child: Text(
-                                      ArabicTextStyleHelper.normalizeQuranText(ayah.text),
+                                      ayah.text,
                                       textAlign: TextAlign.right,
                                       textDirection: TextDirection.rtl,
                                       style: ArabicTextStyleHelper.quranFontStyle(

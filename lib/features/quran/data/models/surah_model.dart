@@ -53,17 +53,24 @@ class AyahModel extends Ayah {
     required super.sajda,
   });
 
-  /// Normalize Arabic text to handle API inconsistencies
+  /// Normalize Arabic text to handle API inconsistencies.
+  ///
+  /// The AlQuran.cloud API injects invisible Unicode control characters
+  /// (Hair Space \u200a, Word Joiner \u2060) and trailing newlines that can
+  /// cause inconsistent rendering compared to the bundled offline JSON files.
+  /// This method strips all of them so the text is always presentation-clean.
   static String _normalizeArabicText(String text) {
-    // Remove zero-width characters and normalize Unicode
+    // Remove invisible/control Unicode characters
     String normalized = text
+        .replaceAll('\u200A', '') // Hair Space  ← injected by quran-academy API
+        .replaceAll('\u2060', '') // Word Joiner ← injected by quran-academy API
         .replaceAll('\u200B', '') // Zero-width space
         .replaceAll('\u200C', '') // Zero-width non-joiner
         .replaceAll('\u200D', '') // Zero-width joiner
         .replaceAll('\u200E', '') // Left-to-right mark
         .replaceAll('\u200F', '') // Right-to-left mark
         .replaceAll('\uFEFF', ''); // Zero-width no-break space (BOM)
-    
+
     // Decode HTML entities if present
     normalized = normalized
         .replaceAll('&nbsp;', ' ')
@@ -72,12 +79,13 @@ class AyahModel extends Ayah {
         .replaceAll('&amp;', '&')
         .replaceAll('&quot;', '"')
         .replaceAll('&#39;', "'");
-    
-    // Remove any leading BOM or special markers
+
+    // Remove any leading BOM or special markers, then strip surrounding
+    // whitespace/newlines that the API appends to every ayah text.
     if (normalized.startsWith('\uFEFF')) {
       normalized = normalized.substring(1);
     }
-    
+
     return normalized.trim();
   }
 

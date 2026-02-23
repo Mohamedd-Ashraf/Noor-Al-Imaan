@@ -15,7 +15,23 @@ import '../../../../core/utils/arabic_text_style_helper.dart';
 import '../bloc/tafsir/tafsir_cubit.dart';
 import '../screens/tafsir_screen.dart';
 
+
+// custom physics with lowered fling threshold to make swipes easier
+class _EasySwipePagePhysics extends PageScrollPhysics {
+  const _EasySwipePagePhysics({ScrollPhysics? parent}) : super(parent: parent);
+
+  @override
+  _EasySwipePagePhysics applyTo(ScrollPhysics? ancestor) {
+    return _EasySwipePagePhysics(parent: buildParent(ancestor));
+  }
+
+  // reduce required velocity to trigger page change
+  @override
+  double get minFlingVelocity => 50.0;
+}
+
 class MushafPageView extends StatefulWidget {
+
   final Surah surah;
   final int? initialPage;
   final bool isArabicUi;
@@ -42,6 +58,27 @@ class _MushafPageViewState extends State<MushafPageView>
   late final BookmarkService _bookmarkService;
   int? _highlightedAyahNumber;
   bool _isAnimating = false;
+  int _currentPageIndex = 0;
+
+  void _jumpToPage(int newIndex) {
+    if (newIndex < 0 || newIndex >= _pages.length) return;
+    _pageController.jumpToPage(newIndex);
+    setState(() {
+      _currentPageIndex = newIndex;
+    });
+  }
+
+  void _animateToPageSwipe(int newIndex) {
+    if (newIndex < 0 || newIndex >= _pages.length) return;
+    _pageController.animateToPage(
+      newIndex,
+      duration: const Duration(milliseconds: 200),
+      curve: Curves.easeInOut,
+    );
+    setState(() {
+      _currentPageIndex = newIndex;
+    });
+  }
   final Map<int, GlobalKey> _richTextKeys = {};
   final Map<int, List<({int start, int end, int ayahNumber, String ayahFullText})>>
       _pageAyahOffsets = {};
@@ -142,14 +179,10 @@ class _MushafPageViewState extends State<MushafPageView>
     final maxDuration = 2500; // max 2.5 seconds
     final duration = (baseDuration * distance).clamp(300, maxDuration);
 
-    // Animate to the target page from beginning
-    await _pageController.animateToPage(
-      targetPageIndex,
-      duration: Duration(milliseconds: duration),
-      curve: Curves.easeInOutCubic,
-    );
+    // Jump straight to the page without any animation
+    _pageController.jumpToPage(targetPageIndex);
 
-    // Highlight the ayah briefly with animation
+    // Highlight the ayah immediately (no scrolling animation)
     setState(() {
       _highlightedAyahNumber = ayahNumber;
       _isAnimating = false;
@@ -202,14 +235,10 @@ class _MushafPageViewState extends State<MushafPageView>
     final maxDuration = 2500; // max 2.5 seconds
     final duration = (baseDuration * distance).clamp(300, maxDuration);
 
-    // Animate to the target page from beginning
-    await _pageController.animateToPage(
-      targetPageIndex,
-      duration: Duration(milliseconds: duration),
-      curve: Curves.easeInOutCubic,
-    );
+    // Jump straight to the page without animation
+    _pageController.jumpToPage(targetPageIndex);
 
-    // Highlight the first ayah briefly with animation
+    // Highlight the first ayah immediately
     if (firstAyahInPage != null) {
       setState(() {
         _highlightedAyahNumber = firstAyahInPage;
@@ -302,6 +331,40 @@ class _MushafPageViewState extends State<MushafPageView>
     );
   }
 
+  String _removeBasmalaIfNeeded(String text, int ayahNumber) {
+    // Remove Basmala from first ayah of every surah except Al-Fatiha (surah 1)
+    // and At-Tawbah (surah 9) which doesn't have Basmala
+    if (ayahNumber == 1 && widget.surahNumber != 1 && widget.surahNumber != 9) {
+      // Use regex to match any form of Basmala with different diacritics
+      final basmalaRegex = RegExp(
+        r'^[\s]*ب[ِۡ]?س[ْۡ]?م[ِ]?\s*ا?لل[َّ]?ه[ِ]?\s*ا?لر[َّ]?ح[ْۡ]?م[َٰ]?ن[ِ]?\s*ا?لر[َّ]?ح[ِ]?ي[ۡ]?م[ِ]?[\s]*',
+        unicode: true,
+      );
+
+      if (basmalaRegex.hasMatch(text)) {
+        final result = text.replaceFirst(basmalaRegex, '').trim();
+        print(
+          '🔍 Removed Basmala from Surah ${widget.surahNumber}, Ayah $ayahNumber',
+        );
+        print(
+          '   Before: ${text.substring(0, text.length > 50 ? 50 : text.length)}...',
+        );
+        print(
+          '   After: ${result.substring(0, result.length > 50 ? 50 : result.length)}...',
+        );
+        return result;
+      } else {
+        print(
+          '⚠️ No Basmala pattern matched for Surah ${widget.surahNumber}, Ayah $ayahNumber',
+        );
+        print(
+          '   Text: ${text.substring(0, text.length > 80 ? 80 : text.length)}...',
+        );
+      }
+    }
+    return text;
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_pages.isEmpty) {
@@ -318,48 +381,17 @@ class _MushafPageViewState extends State<MushafPageView>
         reverse: context
             .watch<AppSettingsCubit>()
             .state
-            .pageFlipRightToLeft, // User-configurable page flip direction
-        padEnds: false, // Better swipe sensitivity
+            .pageFlipRightToLeft,
         clipBehavior: Clip.none,
+        dragStartBehavior: DragStartBehavior.down,
         physics: _isAnimating
             ? const NeverScrollableScrollPhysics()
-            : const PageScrollPhysics(),
+            : const _EasySwipePagePhysics(),
+        onPageChanged: (idx) => _currentPageIndex = idx,
         itemBuilder: (context, index) {
-          return AnimatedBuilder(
-            animation: _pageController,
-            builder: (context, child) {
-              return _buildPageWithTransition(
-                child: _buildMushafPage(_pages[index]),
-                pageIndex: index,
-              );
-            },
-          );
+          return _buildMushafPage(_pages[index]);
         },
       ),
-    );
-  }
-
-  Widget _buildPageWithTransition({
-    required Widget child,
-    required int pageIndex,
-  }) {
-    // Get the current page position
-    double value = 1.0;
-    if (_pageController.hasClients) {
-      final currentPage = _pageController.page ?? 0;
-      value = (currentPage - pageIndex).abs();
-      value = (1 - value).clamp(0.0, 1.0);
-    }
-
-    // Calculate rotation based on page position - reduced for smoother effect
-    final rotationY = (1 - value) * 0.2; // More subtle rotation
-
-    return Transform(
-      alignment: Alignment.center,
-      transform: Matrix4.identity()
-        ..setEntry(3, 2, 0.002) // slightly increased perspective for smoothness
-        ..rotateY(rotationY * (pageIndex % 2 == 0 ? -1 : 1)),
-      child: Opacity(opacity: value.clamp(0.7, 1.0), child: child),
     );
   }
 
@@ -376,14 +408,14 @@ class _MushafPageViewState extends State<MushafPageView>
 
     final backgroundGradientColors = isDarkMode
         ? [
-            const Color(0xFF0D0D0D), // Much darker background
-            const Color(0xFF1A1A1A),
-            const Color(0xFF151515),
+            const Color(0xFF0E1A12), // Deep warm dark (ink-on-night)
+            const Color(0xFF131F16),
+            const Color(0xFF0E1A12),
           ]
         : [
-            const Color(0xFFFFFBF0),
-            const Color(0xFFFFF8E7),
-            const Color(0xFFFFF5DE),
+            const Color(0xFFFFF9ED), // Warm ivory parchment
+            const Color(0xFFFFF4D8), // Classic vellum
+            const Color(0xFFFFF0C8), // Aged amber
           ];
 
     return Container(
@@ -433,8 +465,8 @@ class _MushafPageViewState extends State<MushafPageView>
               // Content area
               SliverPadding(
                 padding: const EdgeInsets.symmetric(
-                  horizontal: 28,
-                  vertical: 20,
+                  horizontal: 20,
+                  vertical: 16,
                 ),
                 sliver: SliverList(
                   delegate: SliverChildListDelegate([
@@ -684,29 +716,24 @@ class _MushafPageViewState extends State<MushafPageView>
         children: [
           _buildSmallOrnament(),
           const SizedBox(width: 12),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(20),
-              gradient: LinearGradient(
-                colors: [
-                  AppColors.primary.withValues(alpha: 0.12),
-                  AppColors.primary.withValues(alpha: 0.06),
-                ],
+          Stack(
+            alignment: Alignment.center,
+            children: [
+              Image.asset(
+                'assets/logo/files/transparent/label.png',
+                height: 30,
               ),
-              border: Border.all(
-                color: AppColors.primary.withValues(alpha: 0.4),
-                width: 1.5,
+              Text(
+                _toArabicNumerals(pageNumber),
+                textAlign: TextAlign.center,
+                style: GoogleFonts.amiriQuran(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.primary,
+                  height: 2,
+                ),
               ),
-            ),
-            child: Text(
-              _toArabicNumerals(pageNumber),
-              style: GoogleFonts.amiriQuran(
-                fontSize: 16,
-                fontWeight: FontWeight.w700,
-                color: AppColors.primary,
-              ),
-            ),
+            ],
           ),
           const SizedBox(width: 12),
           _buildSmallOrnament(),
@@ -722,7 +749,7 @@ class _MushafPageViewState extends State<MushafPageView>
     // and build character-offset map so long-press can identify the ayah.
     final precomputedTexts = <int, String>{}; // ayahNumber → display text
     for (final ayah in ayahs) {
-      String text = ArabicTextStyleHelper.normalizeQuranText(ayah.text);
+      String text = ayah.text;
       if (ayah.numberInSurah == 1 &&
           widget.surahNumber != 1 &&
           widget.surahNumber != 9) {
@@ -763,6 +790,7 @@ class _MushafPageViewState extends State<MushafPageView>
         final arabicFontSize = settingsState.arabicFontSize;
         final isDarkMode = settingsState.darkMode;
         final diacriticsColorMode = settingsState.diacriticsColorMode;
+        final quranFont = settingsState.quranFont;
 
         // Debug: Print current settings
         print('🎨 BlocBuilder rebuilt!');
@@ -816,7 +844,7 @@ class _MushafPageViewState extends State<MushafPageView>
                       _highlightedAyahNumber == ayah.numberInSurah;
 
                   // Remove Basmala from first ayah if needed
-                  String ayahText = ArabicTextStyleHelper.normalizeQuranText(ayah.text);
+                  String ayahText = ayah.text;
 
                   if (ayah.numberInSurah == 1 &&
                       widget.surahNumber != 1 &&
@@ -829,20 +857,22 @@ class _MushafPageViewState extends State<MushafPageView>
                   }
 
                   // Base text style
-                  final baseTextStyle = GoogleFonts.amiriQuran(
+                  final baseTextStyle = ArabicTextStyleHelper.quranFontStyle(
+                    fontKey: quranFont,
                     fontSize: arabicFontSize,
                     height: 2.0,
                     color: baseTextColor,
                     fontWeight: isHighlighted
                         ? FontWeight.w700
                         : FontWeight.w500,
+                  ).copyWith(
                     letterSpacing: isHighlighted ? 0.3 : 0.2,
                     backgroundColor: isHighlighted
                         ? (isDarkMode
                               ? AppColors.secondary.withValues(
                                   alpha:
                                       0.4 + (0.3 * _highlightAnimation.value),
-                                ) // Brighter highlight for dark mode
+                                )
                               : AppColors.secondary.withValues(
                                   alpha:
                                       0.25 + (0.2 * _highlightAnimation.value),
@@ -988,69 +1018,29 @@ class _MushafPageViewState extends State<MushafPageView>
     return BlocBuilder<AppSettingsCubit, AppSettingsState>(
       builder: (context, settingsState) {
         final isDarkMode = settingsState.darkMode;
+        final textColor = isDarkMode ? AppColors.secondary : AppColors.primary;
+        // Smaller font so number fits inside the octagonal frame
+        final fontSize = number > 99 ? 8.0 : (number > 9 ? 10.0 : 12.0);
 
-        return Container(
-          width: 36,
-          height: 36,
-          child: Stack(
-            alignment: Alignment.center,
-            children: [
-              // Outer star pattern using CustomPaint
-              CustomPaint(
-                size: const Size(36, 36),
-                painter: AyahNumberPainter(
-                  color: isDarkMode
-                      ? AppColors.primary.withValues(alpha: 0.8)
-                      : AppColors.primary,
-                  number: number,
-                ),
+        return Stack(
+          alignment: Alignment.center,
+          children: [
+            Image.asset(
+              'assets/logo/files/transparent/frame.png',
+              width: 46,
+              height: 46,
+            ),
+            Text(
+              _toArabicNumerals(number),
+              textAlign: TextAlign.center,
+              style: GoogleFonts.amiriQuran(
+                fontSize: fontSize,
+                fontWeight: FontWeight.w800,
+                color: textColor,
+                height: 1,
               ),
-              // Main circle background - adaptive for dark/light mode
-              Container(
-                width: 28,
-                height: 28,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: isDarkMode
-                      ? const Color(0xFF2A2A2A) // Dark background for dark mode
-                      : Colors.white,
-                  border: Border.all(
-                    color: isDarkMode
-                        ? AppColors.primary.withValues(alpha: 0.8)
-                        : AppColors.primary.withValues(alpha: 0.6),
-                    width: 2,
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: isDarkMode
-                          ? AppColors.primary.withValues(alpha: 0.3)
-                          : AppColors.primary.withValues(alpha: 0.15),
-                      blurRadius: isDarkMode ? 6 : 4,
-                    ),
-                  ],
-                ),
-                child: Center(
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(0.0, 0.0, 0.0, 8.0),
-                    child: Text(
-                      _toArabicNumerals(number),
-                      style: GoogleFonts.amiriQuran(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                        color: isDarkMode
-                            ? const Color(
-                                0xFFE8E8E8,
-                              ) // Light text for dark mode
-                            : AppColors.primary,
-                        height: 1.2,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
+            ),
+          ],
         );
       },
     );
@@ -1344,12 +1334,12 @@ class BorderOrnamentPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = color.withValues(alpha: 0.15)
+      ..color = color.withValues(alpha: 0.25)
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 2.0;
+      ..strokeWidth = 2.5;
 
     // Draw ornamental border
-    final rect = Rect.fromLTWH(10, 10, size.width - 20, size.height - 20);
+    final rect = Rect.fromLTWH(8, 8, size.width - 16, size.height - 16);
     canvas.drawRect(rect, paint);
 
     // Draw corner ornaments
@@ -1401,7 +1391,7 @@ class AyahNumberPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = color.withValues(alpha: 0.2)
+      ..color = color.withValues(alpha: 0.35)
       ..style = PaintingStyle.fill;
 
     final center = Offset(size.width / 2, size.height / 2);

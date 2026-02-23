@@ -7,6 +7,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'firebase_options.dart';
 import 'core/di/injection_container.dart' as di;
 import 'core/services/adhan_notification_service.dart';
+import 'core/services/quran_cache_warmup_service.dart';
 import 'core/services/app_update_service.dart';
 import 'features/wird/services/wird_notification_service.dart';
 import 'core/widgets/app_update_dialog.dart';
@@ -29,6 +30,10 @@ void main() async {
   );
 
   await di.init();
+
+  // Start background Quran cache warm-up so all surahs are available offline
+  // and open instantly on subsequent visits.  Runs fully in background.
+  di.sl<QuranCacheWarmupService>().startInBackground();
 
   // Notifications are used for prayer reminders (adhan). Initialize early.
   final adhanService = di.sl<AdhanNotificationService>();

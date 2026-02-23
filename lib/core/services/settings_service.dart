@@ -28,6 +28,7 @@ class SettingsService {
   static const String _keyAdhanVolume = 'adhan_volume';
   static const String _keyQuranEdition = 'quran_edition';
   static const String _keyQuranFont = 'quran_font';
+  static const String _keyFontSizeMigratedV18 = 'font_size_migrated_v18';
 
   final SharedPreferences _prefs;
 
@@ -39,7 +40,15 @@ class SettingsService {
   }
 
   double getArabicFontSize() {
-    return _prefs.getDouble(_keyArabicFontSize) ?? 24.0;
+    return _prefs.getDouble(_keyArabicFontSize) ?? 18.0;
+  }
+
+  bool getFontSizeMigratedV18() {
+    return _prefs.getBool(_keyFontSizeMigratedV18) ?? false;
+  }
+
+  Future<bool> setFontSizeMigratedV18() async {
+    return await _prefs.setBool(_keyFontSizeMigratedV18, true);
   }
 
   // Translation Font Size

@@ -36,6 +36,10 @@ class _AdhanSettingsScreenState extends State<AdhanSettingsScreen>
   bool _methodAutoDetected = true;
   double _adhanVolume = 1.0;
 
+  // System alarm stream info (Android only)
+  int _systemAlarmCurrent = -1; // -1 = not yet fetched
+  int _systemAlarmMax = 15;
+
   bool _isPreviewPlaying = false;
   String? _previewingId;
 
@@ -55,6 +59,7 @@ class _AdhanSettingsScreenState extends State<AdhanSettingsScreen>
     _adhanService = di.sl<AdhanNotificationService>();
     _load();
     _checkBatteryStatus();
+    _fetchAlarmVolume();
     // Listen for native callback when preview audio finishes naturally
     _adhanChannel.setMethodCallHandler(_handleNativeCallback);
   }
@@ -83,7 +88,33 @@ class _AdhanSettingsScreenState extends State<AdhanSettingsScreen>
   @override
   void didChangeAppLifecycleState(AppLifecycleState s) {
     // Re-check when the user returns from battery settings.
-    if (s == AppLifecycleState.resumed) _checkBatteryStatus();
+    if (s == AppLifecycleState.resumed) {
+      _checkBatteryStatus();
+      _fetchAlarmVolume();
+    }
+  }
+
+  /// Queries the current system alarm stream volume from the native side.
+  Future<void> _fetchAlarmVolume() async {
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return;
+    try {
+      final res = await _adhanChannel
+          .invokeMapMethod<String, int>('getAlarmVolume');
+      if (res != null && mounted) {
+        setState(() {
+          _systemAlarmCurrent = res['current'] ?? -1;
+          _systemAlarmMax = res['max'] ?? 15;
+        });
+      }
+    } catch (_) {}
+  }
+
+  /// Opens the system Sound Settings page.
+  Future<void> _openSoundSettings() async {
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return;
+    try {
+      await _adhanChannel.invokeMethod('openSoundSettings');
+    } catch (_) {}
   }
 
   /// Queries native side to see if battery optimisation is already disabled.
@@ -337,6 +368,70 @@ class _AdhanSettingsScreenState extends State<AdhanSettingsScreen>
                         ? (v) => setState(() => _adhanVolume = v)
                         : null,
                   ),
+                  // ── System alarm volume indicator ─────────────
+                  if (_systemAlarmCurrent >= 0) ...[
+                    const Divider(height: 16),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(0, 0, 0, 8),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.phone_android_rounded,
+                            size: 16,
+                            color: AppColors.textSecondary,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: RichText(
+                              text: TextSpan(
+                                style: const TextStyle(
+                                    fontSize: 12,
+                                    color: AppColors.textSecondary),
+                                children: [
+                                  TextSpan(
+                                    text: isAr
+                                        ? 'صوت المنبهات في النظام: '
+                                        : 'System alarm volume: ',
+                                  ),
+                                  TextSpan(
+                                    text:
+                                        '$_systemAlarmCurrent / $_systemAlarmMax',
+                                    style: const TextStyle(
+                                        fontWeight: FontWeight.w700,
+                                        color: AppColors.primary),
+                                  ),
+                                  TextSpan(
+                                    text: isAr
+                                        ? ' — صوت الأذان جزء منه'
+                                        : ' — adhan volume is relative to this',
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          GestureDetector(
+                            onTap: _openSoundSettings,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 10, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: AppColors.primary.withValues(alpha: 0.12),
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: Text(
+                                isAr ? 'تعديل' : 'Adjust',
+                                style: const TextStyle(
+                                    fontSize: 12,
+                                    color: AppColors.primary,
+                                    fontWeight: FontWeight.w600),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),

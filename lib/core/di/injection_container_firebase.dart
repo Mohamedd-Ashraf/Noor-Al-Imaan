@@ -15,6 +15,7 @@ import '../../features/quran/domain/usecases/get_surah.dart';
 import '../../features/quran/domain/usecases/get_ayah.dart';
 import '../../features/quran/domain/usecases/get_juz.dart';
 import '../../features/quran/presentation/bloc/surah/surah_bloc.dart';
+import '../services/quran_cache_warmup_service.dart';
 import '../../features/quran/presentation/bloc/ayah/ayah_bloc.dart';
 import '../audio/ayah_audio_cubit.dart';
 import '../network/network_info.dart';
@@ -43,6 +44,7 @@ Future<void> init() async {
     () => SurahBloc(
       getAllSurahs: sl(),
       getSurah: sl(),
+      getInstantSurah: sl(),
     ),
   );
 
@@ -59,6 +61,7 @@ Future<void> init() async {
   // Use cases
   sl.registerLazySingleton(() => GetAllSurahs(sl()));
   sl.registerLazySingleton(() => GetSurah(sl()));
+  sl.registerLazySingleton(() => GetInstantSurah(sl()));
   sl.registerLazySingleton(() => GetAyah(sl()));
   sl.registerLazySingleton(() => GetJuz(sl()));
 
@@ -90,6 +93,14 @@ Future<void> init() async {
 
   //! Services
   sl.registerLazySingleton(() => SettingsService(sl()));
+  sl.registerLazySingleton(
+    () => QuranCacheWarmupService(
+      repository: sl(),
+      localDataSource: sl(),
+      settingsService: sl(),
+      networkInfo: sl(),
+    ),
+  );
   sl.registerLazySingleton(() => const LocationService());
   sl.registerLazySingleton(() => FlutterLocalNotificationsPlugin());
   sl.registerLazySingleton(() => PrayerTimesCacheService(sl()));

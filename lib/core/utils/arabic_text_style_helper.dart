@@ -9,29 +9,6 @@ class ArabicTextStyleHelper {
   /// Includes: Fatha, Damma, Kasra, Sukun, Shadda, Tanween, etc.
   static final RegExp _diacriticsRegex = RegExp(r'[\u064B-\u065F\u0670]');
 
-  /// Invisible / zero-width characters that break Arabic letter joining in Flutter.
-  ///
-  /// These characters appear in some AlQuran.cloud API editions (especially
-  /// around Superscript Alef U+0670) and cause connected letters like "أَمۡوَٰلُهُمۡ"
-  /// to render as visually separated glyphs.
-  ///
-  /// Stripped characters:
-  ///   U+200A  HAIR SPACE
-  ///   U+2009  THIN SPACE
-  ///   U+200B  ZERO WIDTH SPACE
-  ///   U+200C  ZERO WIDTH NON-JOINER  ← the most common offender
-  ///   U+200D  ZERO WIDTH JOINER
-  ///   U+2060  WORD JOINER
-  ///   U+FEFF  ZERO WIDTH NO-BREAK SPACE (BOM)
-  static final RegExp _invisibleCharsRegex =
-      RegExp(r'[\u200A\u2009\u200B\u200C\u200D\u2060\uFEFF]');
-
-  /// Remove invisible/zero-width characters that break Arabic letter joining
-  /// without touching any diacritics or Quranic marks.
-  static String normalizeQuranText(String text) {
-    return text.replaceAll(_invisibleCharsRegex, '');
-  }
-
   /// Split Arabic text into TextSpans with different colors for diacritics
   ///
   /// [text] - The Arabic text to split
@@ -42,14 +19,12 @@ class ArabicTextStyleHelper {
     required TextStyle baseStyle,
     required TextStyle diacriticsStyle,
   }) {
-    // Strip invisible characters that break Arabic letter joining
-    final cleanText = normalizeQuranText(text);
     final List<TextSpan> spans = [];
     final StringBuffer baseBuffer = StringBuffer();
     final StringBuffer diacriticsBuffer = StringBuffer();
 
-    for (int i = 0; i < cleanText.length; i++) {
-      final char = cleanText[i];
+    for (int i = 0; i < text.length; i++) {
+      final char = text[i];
 
       if (_diacriticsRegex.hasMatch(char)) {
         // This is a diacritic
@@ -63,7 +38,7 @@ class ArabicTextStyleHelper {
         diacriticsBuffer.write(char);
 
         // Look ahead - if next char is not a diacritic, flush the buffer
-        if (i == cleanText.length - 1 || !_diacriticsRegex.hasMatch(cleanText[i + 1])) {
+        if (i == text.length - 1 || !_diacriticsRegex.hasMatch(text[i + 1])) {
           spans.add(
             TextSpan(text: diacriticsBuffer.toString(), style: diacriticsStyle),
           );
@@ -116,13 +91,10 @@ class ArabicTextStyleHelper {
     print('   diacriticsColor: $diacriticsColor');
     print('   baseStyle.color: ${baseStyle.color}');
 
-    // Always strip invisible characters that break Arabic letter joining
-    final cleanText = normalizeQuranText(text);
-
     if (!useDifferentColorForDiacritics || diacriticsColor == null) {
       // Use same color for everything
       print('   ➡️ Using SAME color for everything');
-      return TextSpan(text: cleanText, style: baseStyle, recognizer: recognizer);
+      return TextSpan(text: text, style: baseStyle, recognizer: recognizer);
     }
 
     // Use different color for diacritics
@@ -132,7 +104,7 @@ class ArabicTextStyleHelper {
     );
 
     final spans = buildColoredTextSpans(
-      text: cleanText,
+      text: text,
       baseStyle: baseStyle,
       diacriticsStyle: diacriticsStyle,
     );
