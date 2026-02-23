@@ -12,6 +12,8 @@ class AppSettingsState extends Equatable {
   final bool useUthmaniScript;
   final bool pageFlipRightToLeft;
   final String diacriticsColorMode; // 'same' or 'different'
+  final String quranEdition; // API edition identifier e.g. 'quran-uthmani'
+  final String quranFont;   // font key e.g. 'amiri_quran'
 
   const AppSettingsState({
     required this.arabicFontSize,
@@ -22,6 +24,8 @@ class AppSettingsState extends Equatable {
     required this.useUthmaniScript,
     required this.pageFlipRightToLeft,
     required this.diacriticsColorMode,
+    required this.quranEdition,
+    required this.quranFont,
   });
 
   factory AppSettingsState.initial(SettingsService service) {
@@ -34,6 +38,8 @@ class AppSettingsState extends Equatable {
       useUthmaniScript: service.getUseUthmaniScript(),
       pageFlipRightToLeft: service.getPageFlipRightToLeft(),
       diacriticsColorMode: service.getDiacriticsColorMode(),
+      quranEdition: service.getQuranEdition(),
+      quranFont: service.getQuranFont(),
     );
   }
 
@@ -46,6 +52,8 @@ class AppSettingsState extends Equatable {
     bool? useUthmaniScript,
     bool? pageFlipRightToLeft,
     String? diacriticsColorMode,
+    String? quranEdition,
+    String? quranFont,
   }) {
     return AppSettingsState(
       arabicFontSize: arabicFontSize ?? this.arabicFontSize,
@@ -56,6 +64,8 @@ class AppSettingsState extends Equatable {
       useUthmaniScript: useUthmaniScript ?? this.useUthmaniScript,
       pageFlipRightToLeft: pageFlipRightToLeft ?? this.pageFlipRightToLeft,
       diacriticsColorMode: diacriticsColorMode ?? this.diacriticsColorMode,
+      quranEdition: quranEdition ?? this.quranEdition,
+      quranFont: quranFont ?? this.quranFont,
     );
   }
 
@@ -69,6 +79,8 @@ class AppSettingsState extends Equatable {
     useUthmaniScript,
     pageFlipRightToLeft,
     diacriticsColorMode,
+    quranEdition,
+    quranFont,
   ];
 }
 
@@ -118,5 +130,15 @@ class AppSettingsCubit extends Cubit<AppSettingsState> {
     print('⚙️ Emitting new state with diacriticsColorMode: $mode');
     emit(state.copyWith(diacriticsColorMode: mode));
     print('⚙️ State emitted. Current state: ${state.diacriticsColorMode}');
+  }
+
+  Future<void> setQuranEdition(String edition) async {
+    await _service.setQuranEdition(edition);
+    emit(state.copyWith(quranEdition: edition));
+  }
+
+  Future<void> setQuranFont(String font) async {
+    await _service.setQuranFont(font);
+    emit(state.copyWith(quranFont: font));
   }
 }

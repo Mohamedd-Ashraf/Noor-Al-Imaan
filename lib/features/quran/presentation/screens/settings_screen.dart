@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import '../../../../core/constants/app_colors.dart';
+import '../../../../core/constants/api_constants.dart';
+import '../../../../core/utils/arabic_text_style_helper.dart';
+import 'feedback_screen.dart';
 import '../../../../core/settings/app_settings_cubit.dart';
 import '../../../../core/di/injection_container.dart' as di;
 import '../../../../core/services/offline_audio_service.dart';
@@ -281,9 +284,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     child: Text(
                       'بِسْمِ ٱللَّهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ',
                       textAlign: TextAlign.center,
-                      style: TextStyle(
+                      textDirection: TextDirection.rtl,
+                      style: ArabicTextStyleHelper.quranFontStyle(
+                        fontKey: settings.quranFont,
                         fontSize: _arabicFontSizeDraft,
-                        fontWeight: FontWeight.w500,
                         color: scheme.onSurface,
                       ),
                     ),
@@ -315,6 +319,191 @@ class _SettingsScreenState extends State<SettingsScreen> {
               activeColor: AppColors.primary,
               onChanged: (v) =>
                   context.read<AppSettingsCubit>().setUseUthmaniScript(v),
+            ),
+          ),
+
+          // ─── Quran Text Edition ──────────────────────────────────────
+          _SettingsCard(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _SettingLabel(
+                    icon: Icons.text_fields_rounded,
+                    label: isAr ? 'رواية عرض المصحف' : 'Quran Text Edition',
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    isAr
+                        ? 'اختر مستوى التشكيل وأسلوب رسم النص القرآني'
+                        : 'Choose the script style and diacritics level',
+                    style: const TextStyle(
+                        fontSize: 12, color: AppColors.textSecondary),
+                  ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<String>(
+                    value: settings.quranEdition,
+                    isExpanded: true,
+                    decoration: _inputDeco(isAr ? 'الرواية' : 'Edition'),
+                    selectedItemBuilder: (context) =>
+                        ApiConstants.quranEditions
+                            .map((e) => Text(
+                                  isAr ? e['nameAr']! : e['nameEn']!,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ))
+                            .toList(),
+                    items: ApiConstants.quranEditions.map((e) {
+                      return DropdownMenuItem<String>(
+                        value: e['id'],
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              isAr ? e['nameAr']! : e['nameEn']!,
+                              style: const TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            Text(
+                              isAr ? e['descAr']! : e['descEn']!,
+                              style: const TextStyle(
+                                fontSize: 11,
+                                color: AppColors.textSecondary,
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    }).toList(),
+                    onChanged: (value) async {
+                      if (value == null) return;
+                      await context
+                          .read<AppSettingsCubit>()
+                          .setQuranEdition(value);
+                      if (!context.mounted) return;
+                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                        content: Text(isAr
+                            ? 'تم تحديث رواية عرض المصحف'
+                            : 'Quran edition updated'),
+                        duration: const Duration(seconds: 1),
+                      ));
+                    },
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          // ─── Quran Display Font ──────────────────────────────────────────
+          _SettingsCard(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _SettingLabel(
+                    icon: Icons.font_download_rounded,
+                    label: isAr ? 'خط عرض المصحف' : 'Quran Display Font',
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    isAr
+                        ? 'اختر الخط المستخدم لعرض الآيات'
+                        : 'Choose the font for Quran verses',
+                    style: const TextStyle(
+                        fontSize: 12, color: AppColors.textSecondary),
+                  ),
+                  const SizedBox(height: 12),
+                  // Font chips
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: ApiConstants.quranFonts
+                        .map((font) {
+                          final isSelected =
+                              settings.quranFont == font['id'];
+                          return GestureDetector(
+                            onTap: () => context
+                                .read<AppSettingsCubit>()
+                                .setQuranFont(font['id']!),
+                            child: AnimatedContainer(
+                              duration: const Duration(milliseconds: 200),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 12, vertical: 8),
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(
+                                  color: isSelected
+                                      ? AppColors.primary
+                                      : AppColors.divider,
+                                  width: isSelected ? 2 : 1,
+                                ),
+                                color: isSelected
+                                    ? AppColors.primary
+                                        .withValues(alpha: 0.08)
+                                    : scheme.surfaceContainerLowest,
+                              ),
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    font['sample']!,
+                                    style:
+                                        ArabicTextStyleHelper.quranFontStyle(
+                                      fontKey: font['id']!,
+                                      fontSize: 20,
+                                      color: isSelected
+                                          ? AppColors.primary
+                                          : scheme.onSurface,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    isAr
+                                        ? font['nameAr']!
+                                        : font['nameEn']!,
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: isSelected
+                                          ? FontWeight.w700
+                                          : FontWeight.w400,
+                                      color: isSelected
+                                          ? AppColors.primary
+                                          : AppColors.textSecondary,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        })
+                        .toList(),
+                  ),
+                  // Live preview
+                  const SizedBox(height: 14),
+                  _PreviewBox(
+                    color: scheme.surfaceContainerLowest,
+                    child: Text(
+                      'بِسْمِ ٱللَّهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ',
+                      textAlign: TextAlign.center,
+                      textDirection: TextDirection.rtl,
+                      style: ArabicTextStyleHelper.quranFontStyle(
+                        fontKey: settings.quranFont,
+                        fontSize: _arabicFontSizeDraft,
+                        color: scheme.onSurface,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
 
@@ -699,6 +888,37 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 trailing: const Icon(Icons.chevron_right_rounded,
                     color: AppColors.primary),
                 onTap: _showDataSourceDialog,
+              ),
+              const Divider(height: 1, indent: 56),
+              ListTile(
+                leading: const Icon(Icons.feedback_outlined,
+                    color: AppColors.secondary),
+                title: _TileTitle(
+                    isAr ? 'اقتراحات ومشاركات' : 'Feedback & Suggestions'),
+                subtitle: _TileSubtitle(isAr
+                    ? 'ساعدنا في تحسين التطبيق — نسخة بيتا'
+                    : 'Help us improve the app — Beta'),
+                trailing: Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: AppColors.secondary.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: const Text(
+                    'BETA',
+                    style: TextStyle(
+                      color: AppColors.secondary,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 1.0,
+                    ),
+                  ),
+                ),
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute(
+                      builder: (_) => const FeedbackScreen()),
+                ),
               ),
             ]),
           ),

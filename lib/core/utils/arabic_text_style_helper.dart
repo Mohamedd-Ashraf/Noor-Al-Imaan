@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 /// Helper class to split Arabic text into text spans with different colors
 /// for base text and diacritics (tashkeel)
@@ -7,6 +8,29 @@ class ArabicTextStyleHelper {
   /// Arabic diacritics Unicode range
   /// Includes: Fatha, Damma, Kasra, Sukun, Shadda, Tanween, etc.
   static final RegExp _diacriticsRegex = RegExp(r'[\u064B-\u065F\u0670]');
+
+  /// Invisible / zero-width characters that break Arabic letter joining in Flutter.
+  ///
+  /// These characters appear in some AlQuran.cloud API editions (especially
+  /// around Superscript Alef U+0670) and cause connected letters like "أَمۡوَٰلُهُمۡ"
+  /// to render as visually separated glyphs.
+  ///
+  /// Stripped characters:
+  ///   U+200A  HAIR SPACE
+  ///   U+2009  THIN SPACE
+  ///   U+200B  ZERO WIDTH SPACE
+  ///   U+200C  ZERO WIDTH NON-JOINER  ← the most common offender
+  ///   U+200D  ZERO WIDTH JOINER
+  ///   U+2060  WORD JOINER
+  ///   U+FEFF  ZERO WIDTH NO-BREAK SPACE (BOM)
+  static final RegExp _invisibleCharsRegex =
+      RegExp(r'[\u200A\u2009\u200B\u200C\u200D\u2060\uFEFF]');
+
+  /// Remove invisible/zero-width characters that break Arabic letter joining
+  /// without touching any diacritics or Quranic marks.
+  static String normalizeQuranText(String text) {
+    return text.replaceAll(_invisibleCharsRegex, '');
+  }
 
   /// Split Arabic text into TextSpans with different colors for diacritics
   ///
@@ -18,12 +42,14 @@ class ArabicTextStyleHelper {
     required TextStyle baseStyle,
     required TextStyle diacriticsStyle,
   }) {
+    // Strip invisible characters that break Arabic letter joining
+    final cleanText = normalizeQuranText(text);
     final List<TextSpan> spans = [];
     final StringBuffer baseBuffer = StringBuffer();
     final StringBuffer diacriticsBuffer = StringBuffer();
 
-    for (int i = 0; i < text.length; i++) {
-      final char = text[i];
+    for (int i = 0; i < cleanText.length; i++) {
+      final char = cleanText[i];
 
       if (_diacriticsRegex.hasMatch(char)) {
         // This is a diacritic
@@ -37,7 +63,7 @@ class ArabicTextStyleHelper {
         diacriticsBuffer.write(char);
 
         // Look ahead - if next char is not a diacritic, flush the buffer
-        if (i == text.length - 1 || !_diacriticsRegex.hasMatch(text[i + 1])) {
+        if (i == cleanText.length - 1 || !_diacriticsRegex.hasMatch(cleanText[i + 1])) {
           spans.add(
             TextSpan(text: diacriticsBuffer.toString(), style: diacriticsStyle),
           );
@@ -90,10 +116,13 @@ class ArabicTextStyleHelper {
     print('   diacriticsColor: $diacriticsColor');
     print('   baseStyle.color: ${baseStyle.color}');
 
+    // Always strip invisible characters that break Arabic letter joining
+    final cleanText = normalizeQuranText(text);
+
     if (!useDifferentColorForDiacritics || diacriticsColor == null) {
       // Use same color for everything
       print('   ➡️ Using SAME color for everything');
-      return TextSpan(text: text, style: baseStyle, recognizer: recognizer);
+      return TextSpan(text: cleanText, style: baseStyle, recognizer: recognizer);
     }
 
     // Use different color for diacritics
@@ -103,7 +132,7 @@ class ArabicTextStyleHelper {
     );
 
     final spans = buildColoredTextSpans(
-      text: text,
+      text: cleanText,
       baseStyle: baseStyle,
       diacriticsStyle: diacriticsStyle,
     );
@@ -121,5 +150,72 @@ class ArabicTextStyleHelper {
     }
 
     return TextSpan(children: spans);
+  }
+
+  /// Returns a [TextStyle] for the given Quran font key.
+  /// Falls back to Amiri Quran if the key is unrecognised.
+  ///
+  /// Supported keys: 'amiri_quran', 'amiri', 'scheherazade', 'noto_naskh',
+  ///   'lateef', 'markazi', 'noto_kufi', 'reem_kufi', 'tajawal', 'cairo'
+  static TextStyle quranFontStyle({
+    required String fontKey,
+    double? fontSize,
+    FontWeight? fontWeight,
+    Color? color,
+    double? height,
+  }) {
+    final size   = fontSize   ?? 24.0;
+    final weight = fontWeight ?? FontWeight.w400;
+
+    TextStyle base;
+    switch (fontKey) {
+      case 'scheherazade':
+        base = GoogleFonts.scheherazadeNew(
+            fontSize: size, fontWeight: weight, height: height);
+      case 'amiri':
+        base = GoogleFonts.amiri(
+            fontSize: size, fontWeight: weight, height: height);
+      case 'noto_naskh':
+        base = GoogleFonts.notoNaskhArabic(
+            fontSize: size, fontWeight: weight, height: height);
+      case 'lateef':
+        base = GoogleFonts.lateef(
+            fontSize: size, fontWeight: weight, height: height);
+      case 'markazi':
+        base = GoogleFonts.markaziText(
+            fontSize: size, fontWeight: weight, height: height);
+      case 'noto_kufi':
+        base = GoogleFonts.notoKufiArabic(
+            fontSize: size, fontWeight: weight, height: height);
+      case 'reem_kufi':
+        base = GoogleFonts.reemKufi(
+            fontSize: size, fontWeight: weight, height: height);
+      case 'tajawal':
+        base = GoogleFonts.tajawal(
+            fontSize: size, fontWeight: weight, height: height);
+      case 'cairo':
+        // Cairo lacks full Quranic glyph coverage.
+        // Add Scheherazade New + Amiri Quran as fallbacks so special
+        // diacritics and Uthmani characters render correctly.
+        final cairoStyle = GoogleFonts.cairo(
+            fontSize: size, fontWeight: weight, height: height);
+        final fallback = <String>[];
+        final sch = GoogleFonts.scheherazadeNew().fontFamily;
+        final aq  = GoogleFonts.amiriQuran().fontFamily;
+        if (sch != null) fallback.add(sch);
+        if (aq  != null) fallback.add(aq);
+        base = cairoStyle.copyWith(
+          fontFamilyFallback: [
+            ...fallback,
+            ...?cairoStyle.fontFamilyFallback,
+          ],
+        );
+      case 'amiri_quran':
+      default:
+        base = GoogleFonts.amiriQuran(
+            fontSize: size, fontWeight: weight, height: height);
+    }
+
+    return color != null ? base.copyWith(color: color) : base;
   }
 }

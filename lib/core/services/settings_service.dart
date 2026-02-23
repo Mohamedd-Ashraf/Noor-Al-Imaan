@@ -25,6 +25,9 @@ class SettingsService {
   static const String _keyPrayerAsrMethod = 'prayer_asr_method';
   static const String _keySelectedAdhanSound = 'selected_adhan_sound';
   static const String _keyPrayerMethodAutoDetected = 'prayer_method_auto_detected';
+  static const String _keyAdhanVolume = 'adhan_volume';
+  static const String _keyQuranEdition = 'quran_edition';
+  static const String _keyQuranFont = 'quran_font';
 
   final SharedPreferences _prefs;
 
@@ -217,5 +220,37 @@ class SettingsService {
 
   bool getPrayerMethodAutoDetected() {
     return _prefs.getBool(_keyPrayerMethodAutoDetected) ?? true;
+  }
+
+  // Adhan Volume (0.0 – 1.0, relative to system alarm stream)
+  Future<bool> setAdhanVolume(double volume) async {
+    return await _prefs.setDouble(_keyAdhanVolume, volume);
+  }
+
+  double getAdhanVolume() {
+    return _prefs.getDouble(_keyAdhanVolume) ?? 1.0;
+  }
+
+  // ─── Quran Display Edition ────────────────────────────────────────────────
+  /// The API edition identifier used when fetching Quran text.
+  /// e.g. 'quran-uthmani', 'quran-simple', 'quran-kids' …
+  Future<bool> setQuranEdition(String edition) async {
+    return await _prefs.setString(_keyQuranEdition, edition);
+  }
+
+  String getQuranEdition() {
+    return _prefs.getString(_keyQuranEdition) ?? 'quran-uthmani-quran-academy';
+  }
+
+  // ─── Quran Display Font ───────────────────────────────────────────────────
+  /// Font family key used to render Quran Arabic text.
+  /// One of: 'amiri_quran', 'amiri', 'scheherazade', 'noto_naskh',
+  ///   'lateef', 'markazi', 'noto_kufi', 'reem_kufi', 'tajawal', 'cairo'
+  Future<bool> setQuranFont(String font) async {
+    return await _prefs.setString(_keyQuranFont, font);
+  }
+
+  String getQuranFont() {
+    return _prefs.getString(_keyQuranFont) ?? 'scheherazade';
   }
 }

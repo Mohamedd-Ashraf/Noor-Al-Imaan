@@ -86,6 +86,7 @@ dependencies:
   # Firebase
   firebase_core: ^3.8.1
   firebase_remote_config: ^5.1.4
+  cloud_firestore: ^5.6.0
 
   # Background downloads
   flutter_downloader: ^1.11.10
@@ -131,6 +132,7 @@ flutter:
     - assets/update-config.json
     - assets/logo/files/
     - assets/logo/files/transparent/
+    - "assets/logo/button icons/"
     # - assets/sound/ # Commented out to reduce size as it seems unused and contains images?
 
   # An image asset can refer to one or more resolution-specific "variants", see

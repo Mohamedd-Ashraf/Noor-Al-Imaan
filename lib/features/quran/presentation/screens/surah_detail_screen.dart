@@ -15,6 +15,7 @@ import '../../../../core/services/bookmark_service.dart';
 import '../../../../core/di/injection_container.dart' as di;
 import '../../../../core/settings/app_settings_cubit.dart';
 import '../../../../core/audio/ayah_audio_cubit.dart';
+import '../../../../core/utils/arabic_text_style_helper.dart';
 import 'tafsir_screen.dart';
 
 class SurahDetailScreen extends StatefulWidget {
@@ -49,16 +50,16 @@ class _SurahDetailScreenState extends State<SurahDetailScreen> {
   String? _translationError;
 
   bool? _previousUthmaniSetting;
+  String? _previousEditionSetting;
 
   @override
   void initState() {
     super.initState();
     _bookmarkService = di.sl<BookmarkService>();
 
-    final useUthmani = context.read<AppSettingsCubit>().state.useUthmaniScript;
-    final edition = useUthmani
-        ? ApiConstants.defaultEdition
-        : ApiConstants.simpleEdition;
+    // Use the user-selected edition from settings instead of a binary toggle.
+    final settings = context.read<AppSettingsCubit>().state;
+    final edition = settings.quranEdition;
 
     context.read<SurahBloc>().add(
       GetSurahDetailEvent(widget.surahNumber, edition: edition),
@@ -137,19 +138,29 @@ class _SurahDetailScreenState extends State<SurahDetailScreen> {
       (cubit) => cubit.state.useUthmaniScript,
     );
 
-    // Reload surah when script type changes
-    if (_previousUthmaniSetting != null &&
-        _previousUthmaniSetting != useUthmaniScript) {
-      final edition = useUthmaniScript
-          ? ApiConstants.defaultEdition
-          : ApiConstants.simpleEdition;
+    final quranEdition = context.select<AppSettingsCubit, String>(
+      (cubit) => cubit.state.quranEdition,
+    );
+
+    final quranFont = context.select<AppSettingsCubit, String>(
+      (cubit) => cubit.state.quranFont,
+    );
+
+    // Reload surah when edition or script type changes.
+    final editionChanged = _previousEditionSetting != null &&
+        _previousEditionSetting != quranEdition;
+    final viewModeChanged = _previousUthmaniSetting != null &&
+        _previousUthmaniSetting != useUthmaniScript;
+
+    if (editionChanged || viewModeChanged) {
       Future.microtask(() {
         context.read<SurahBloc>().add(
-          GetSurahDetailEvent(widget.surahNumber, edition: edition),
+          GetSurahDetailEvent(widget.surahNumber, edition: quranEdition),
         );
       });
     }
     _previousUthmaniSetting = useUthmaniScript;
+    _previousEditionSetting = quranEdition;
 
     if (showTranslation) {
       _maybeLoadTranslation();
@@ -409,25 +420,119 @@ class _SurahDetailScreenState extends State<SurahDetailScreen> {
                     // Bismillah (except for Surah 9)
                     if (widget.surahNumber != 1 && widget.surahNumber != 9)
                       SliverToBoxAdapter(
-                        child: Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.all(16),
-                          color: context
-                                  .watch<AppSettingsCubit>()
-                                  .state
-                                  .darkMode
-                              ? AppColors.darkSurface
-                              : AppColors.surface,
-                          child: Text(
-                            'بِسْمِ ٱللَّهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ',
-                            textAlign: TextAlign.center,
-                            style: GoogleFonts.amiriQuran(
-                              fontSize: 28,
-                              color: AppColors.arabicText,
-                              fontWeight: FontWeight.w700,
-                              height: 1.8,
-                            ),
-                          ),
+                        child: Builder(
+                          builder: (ctx) {
+                            final isDark = ctx
+                                .watch<AppSettingsCubit>()
+                                .state
+                                .darkMode;
+                            return Container(
+                              width: double.infinity,
+                              margin: const EdgeInsets.fromLTRB(
+                                  16, 8, 16, 0),
+                              padding: const EdgeInsets.symmetric(
+                                  vertical: 22, horizontal: 20),
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  begin: Alignment.centerRight,
+                                  end: Alignment.centerLeft,
+                                  colors: isDark
+                                      ? [
+                                          AppColors.primary.withValues(
+                                              alpha: 0.18),
+                                          AppColors.primary.withValues(
+                                              alpha: 0.08),
+                                          AppColors.primary.withValues(
+                                              alpha: 0.18),
+                                        ]
+                                      : [
+                                          AppColors.primary.withValues(
+                                              alpha: 0.04),
+                                          AppColors.primary.withValues(
+                                              alpha: 0.09),
+                                          AppColors.primary.withValues(
+                                              alpha: 0.04),
+                                        ],
+                                ),
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(
+                                  color: AppColors.secondary.withValues(
+                                      alpha: isDark ? 0.5 : 0.4),
+                                  width: 1.5,
+                                ),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: AppColors.primary.withValues(
+                                        alpha: isDark ? 0.2 : 0.06),
+                                    blurRadius: 10,
+                                    offset: const Offset(0, 3),
+                                  ),
+                                ],
+                              ),
+                              child: Column(
+                                children: [
+                                  Row(
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.center,
+                                    children: [
+                                      _buildBismillahOrnamentLine(),
+                                      Padding(
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 10),
+                                        child: Icon(
+                                          Icons.star,
+                                          size: 11,
+                                          color: AppColors.secondary
+                                              .withValues(alpha: 0.7),
+                                        ),
+                                      ),
+                                      _buildBismillahOrnamentLine(),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 12),
+                                  Text(
+                                    'بِسْمِ ٱللَّهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ',
+                                    textAlign: TextAlign.center,
+                                    style: GoogleFonts.amiriQuran(
+                                      fontSize: 30,
+                                      color: isDark
+                                          ? AppColors.secondary
+                                          : AppColors.primary,
+                                      fontWeight: FontWeight.w700,
+                                      height: 1.8,
+                                      shadows: [
+                                        Shadow(
+                                          color: AppColors.primary.withValues(
+                                              alpha: isDark ? 0.35 : 0.12),
+                                          blurRadius: 6,
+                                          offset: const Offset(0, 1),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  const SizedBox(height: 12),
+                                  Row(
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.center,
+                                    children: [
+                                      _buildBismillahOrnamentLine(),
+                                      Padding(
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 10),
+                                        child: Icon(
+                                          Icons.star,
+                                          size: 11,
+                                          color: AppColors.secondary
+                                              .withValues(alpha: 0.7),
+                                        ),
+                                      ),
+                                      _buildBismillahOrnamentLine(),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
                         ),
                       ),
                     // Ayahs List
@@ -451,10 +556,17 @@ class _SurahDetailScreenState extends State<SurahDetailScreen> {
                               isCurrentAudio &&
                               audioState.status == AyahAudioStatus.buffering;
 
+                          final isDarkMode =
+                              context.watch<AppSettingsCubit>().state.darkMode;
                           final card = Card(
                             margin: const EdgeInsets.only(bottom: 16),
+                            clipBehavior: Clip.antiAlias,
+                            elevation: isCurrentAudio ? 5 : (isDarkMode ? 2 : 3),
+                            shadowColor: AppColors.primary.withValues(
+                              alpha: isDarkMode ? 0.25 : 0.12,
+                            ),
                             shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
+                              borderRadius: BorderRadius.circular(16),
                               side: isCurrentAudio
                                   ? BorderSide(
                                       color: isPlaying
@@ -464,10 +576,33 @@ class _SurahDetailScreenState extends State<SurahDetailScreen> {
                                             ),
                                       width: 2,
                                     )
-                                  : BorderSide.none,
+                                  : BorderSide(
+                                      color: isDarkMode
+                                          ? AppColors.primary.withValues(
+                                              alpha: 0.18,
+                                            )
+                                          : AppColors.cardBorder,
+                                      width: 1.0,
+                                    ),
                             ),
-                            child: Padding(
-                              padding: const EdgeInsets.all(16),
+                            child: Container(
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  begin: Alignment.topRight,
+                                  end: Alignment.bottomLeft,
+                                  colors: isDarkMode
+                                      ? [
+                                          const Color(0xFF1C2E24),
+                                          const Color(0xFF141E18),
+                                        ]
+                                      : [
+                                          const Color(0xFFF8FEFC),
+                                          const Color(0xFFEEF9F2),
+                                        ],
+                                ),
+                              ),
+                              child: Padding(
+                                padding: const EdgeInsets.all(16),
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.end,
                                 children: [
@@ -476,30 +611,100 @@ class _SurahDetailScreenState extends State<SurahDetailScreen> {
                                     mainAxisAlignment:
                                         MainAxisAlignment.spaceBetween,
                                     children: [
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 12,
-                                          vertical: 6,
-                                        ),
-                                        decoration: BoxDecoration(
-                                          color: AppColors.primary.withValues(
-                                            alpha: 0.1,
-                                          ),
-                                          borderRadius: BorderRadius.circular(
-                                            20,
-                                          ),
-                                        ),
-                                        child: Text(
-                                          isArabicUi
-                                              ? 'الآية ${ayah.numberInSurah}'
-                                              : 'Ayah ${ayah.numberInSurah}',
-                                          style: Theme.of(context)
-                                              .textTheme
-                                              .bodySmall
-                                              ?.copyWith(
-                                                color: AppColors.primary,
-                                                fontWeight: FontWeight.bold,
+                                      SizedBox(
+                                        width: 46,
+                                        height: 46,
+                                        child: Stack(
+                                          alignment: Alignment.center,
+                                          children: [
+                                            // Outer golden ring
+                                            Container(
+                                              width: 46,
+                                              height: 46,
+                                              decoration: BoxDecoration(
+                                                shape: BoxShape.circle,
+                                                border: Border.all(
+                                                  color: AppColors.secondary
+                                                      .withValues(
+                                                    alpha: isDarkMode
+                                                        ? 0.6
+                                                        : 0.5,
+                                                  ),
+                                                  width: 1.0,
+                                                ),
                                               ),
+                                            ),
+                                            // Inner circle with Arabic numeral
+                                            Container(
+                                              width: 36,
+                                              height: 36,
+                                              decoration: BoxDecoration(
+                                                shape: BoxShape.circle,
+                                                gradient: RadialGradient(
+                                                  colors: [
+                                                    AppColors.primary
+                                                        .withValues(
+                                                      alpha: isDarkMode
+                                                          ? 0.3
+                                                          : 0.12,
+                                                    ),
+                                                    AppColors.primary
+                                                        .withValues(
+                                                      alpha: isDarkMode
+                                                          ? 0.08
+                                                          : 0.03,
+                                                    ),
+                                                  ],
+                                                ),
+                                                border: Border.all(
+                                                  color: AppColors.primary
+                                                      .withValues(
+                                                    alpha: isDarkMode
+                                                        ? 0.7
+                                                        : 0.5,
+                                                  ),
+                                                  width: 1.5,
+                                                ),
+                                                boxShadow: [
+                                                  BoxShadow(
+                                                    color: AppColors.primary
+                                                        .withValues(
+                                                      alpha: isDarkMode
+                                                          ? 0.22
+                                                          : 0.1,
+                                                    ),
+                                                    blurRadius: 6,
+                                                    spreadRadius: 0,
+                                                  ),
+                                                ],
+                                              ),
+                                              child: Center(
+                                                child: Text(
+                                                  _toArabicNumerals(
+                                                    ayah.numberInSurah,
+                                                  ),
+                                                  style:
+                                                      GoogleFonts.amiriQuran(
+                                                    fontSize:
+                                                        ayah.numberInSurah >
+                                                                99
+                                                            ? 11
+                                                            : (ayah.numberInSurah >
+                                                                    9
+                                                                ? 13
+                                                                : 15),
+                                                    fontWeight:
+                                                        FontWeight.w800,
+                                                    color: isDarkMode
+                                                        ? AppColors.secondary
+                                                        : AppColors.primary,
+                                                    height: 1.0,
+                                                  ),
+                                                  textAlign: TextAlign.center,
+                                                ),
+                                              ),
+                                            ),
+                                          ],
                                         ),
                                       ),
                                       Row(
@@ -636,20 +841,20 @@ class _SurahDetailScreenState extends State<SurahDetailScreen> {
                                       );
                                     },
                                     child: Text(
-                                      ayah.text,
+                                      ArabicTextStyleHelper.normalizeQuranText(ayah.text),
                                       textAlign: TextAlign.right,
                                       textDirection: TextDirection.rtl,
-                                      style: GoogleFonts.amiriQuran(
-                                        // adapt to dark mode: use light gray in dark theme
+                                      style: ArabicTextStyleHelper.quranFontStyle(
+                                        fontKey: quranFont,
+                                        fontSize: arabicFontSize,
+                                        fontWeight: FontWeight.w500,
+                                        height: 2,
                                         color: context
                                                 .watch<AppSettingsCubit>()
                                                 .state
                                                 .darkMode
                                             ? const Color(0xFFE8E8E8)
                                             : AppColors.arabicText,
-                                        fontWeight: FontWeight.w500,
-                                        height: 2,
-                                        fontSize: arabicFontSize,
                                       ),
                                     ),
                                   ),
@@ -728,7 +933,8 @@ class _SurahDetailScreenState extends State<SurahDetailScreen> {
                                 ],
                               ),
                             ),
-                          );
+                          ),
+                        );
 
                           final isTarget =
                               (widget.initialAyahNumber != null &&
@@ -852,6 +1058,32 @@ class _SurahDetailScreenState extends State<SurahDetailScreen> {
                   child: const Icon(Icons.arrow_upward),
                 )
               : null,
+        ),
+      ),
+    );
+  }
+
+  /// Converts a Latin integer to Arabic-Indic numeral string (٠١٢٣…٩)
+  String _toArabicNumerals(int number) {
+    const arabicDigits = ['٠', '١', '٢', '٣', '٤', '٥', '٦', '٧', '٨', '٩'];
+    return number.toString().split('').map((digit) {
+      final index = int.tryParse(digit);
+      return index != null ? arabicDigits[index] : digit;
+    }).join();
+  }
+
+  /// Decorative horizontal gradient line for the Bismillah ornament
+  Widget _buildBismillahOrnamentLine() {
+    return Container(
+      width: 60,
+      height: 1.5,
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            AppColors.secondary.withValues(alpha: 0.0),
+            AppColors.secondary.withValues(alpha: 0.75),
+            AppColors.secondary.withValues(alpha: 0.0),
+          ],
         ),
       ),
     );

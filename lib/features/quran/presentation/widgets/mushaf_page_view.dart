@@ -302,40 +302,6 @@ class _MushafPageViewState extends State<MushafPageView>
     );
   }
 
-  String _removeBasmalaIfNeeded(String text, int ayahNumber) {
-    // Remove Basmala from first ayah of every surah except Al-Fatiha (surah 1)
-    // and At-Tawbah (surah 9) which doesn't have Basmala
-    if (ayahNumber == 1 && widget.surahNumber != 1 && widget.surahNumber != 9) {
-      // Use regex to match any form of Basmala with different diacritics
-      final basmalaRegex = RegExp(
-        r'^[\s]*ب[ِۡ]?س[ْۡ]?م[ِ]?\s*ا?لل[َّ]?ه[ِ]?\s*ا?لر[َّ]?ح[ْۡ]?م[َٰ]?ن[ِ]?\s*ا?لر[َّ]?ح[ِ]?ي[ۡ]?م[ِ]?[\s]*',
-        unicode: true,
-      );
-
-      if (basmalaRegex.hasMatch(text)) {
-        final result = text.replaceFirst(basmalaRegex, '').trim();
-        print(
-          '🔍 Removed Basmala from Surah ${widget.surahNumber}, Ayah $ayahNumber',
-        );
-        print(
-          '   Before: ${text.substring(0, text.length > 50 ? 50 : text.length)}...',
-        );
-        print(
-          '   After: ${result.substring(0, result.length > 50 ? 50 : result.length)}...',
-        );
-        return result;
-      } else {
-        print(
-          '⚠️ No Basmala pattern matched for Surah ${widget.surahNumber}, Ayah $ayahNumber',
-        );
-        print(
-          '   Text: ${text.substring(0, text.length > 80 ? 80 : text.length)}...',
-        );
-      }
-    }
-    return text;
-  }
-
   @override
   Widget build(BuildContext context) {
     if (_pages.isEmpty) {
@@ -756,7 +722,7 @@ class _MushafPageViewState extends State<MushafPageView>
     // and build character-offset map so long-press can identify the ayah.
     final precomputedTexts = <int, String>{}; // ayahNumber → display text
     for (final ayah in ayahs) {
-      String text = ayah.text;
+      String text = ArabicTextStyleHelper.normalizeQuranText(ayah.text);
       if (ayah.numberInSurah == 1 &&
           widget.surahNumber != 1 &&
           widget.surahNumber != 9) {
@@ -850,7 +816,7 @@ class _MushafPageViewState extends State<MushafPageView>
                       _highlightedAyahNumber == ayah.numberInSurah;
 
                   // Remove Basmala from first ayah if needed
-                  String ayahText = ayah.text;
+                  String ayahText = ArabicTextStyleHelper.normalizeQuranText(ayah.text);
 
                   if (ayah.numberInSurah == 1 &&
                       widget.surahNumber != 1 &&

@@ -34,7 +34,9 @@ class MainActivity : FlutterActivity() {
                     // ── Short preview in the settings screen ───────────────
                     "playAdhan" -> {
                         val soundName = call.argument<String>("soundName") ?: "adhan_1"
-                        result.success(playPreviewNative(soundName))
+                        val volume    = (call.argument<Double>("volume") ?: 1.0).toFloat()
+                            .coerceIn(0.0f, 1.0f)
+                        result.success(playPreviewNative(soundName, volume))
                     }
 
                     // ── Full adhan — always via foreground service ──────────
@@ -124,7 +126,7 @@ class MainActivity : FlutterActivity() {
 
     // ── Short preview ─────────────────────────────────────────────────────────
 
-    private fun playPreviewNative(soundName: String): Boolean {
+    private fun playPreviewNative(soundName: String, volume: Float = 1.0f): Boolean {
         return try {
             stopPreviewNative()
             val resId = resources.getIdentifier(soundName, "raw", packageName)
@@ -156,6 +158,7 @@ class MainActivity : FlutterActivity() {
                 true
             }
             player.prepare()
+            player.setVolume(volume, volume)
             player.start()
             previewPlayer = player
             Log.d("MainActivity", "Preview started: $soundName")

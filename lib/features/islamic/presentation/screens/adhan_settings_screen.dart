@@ -34,6 +34,7 @@ class _AdhanSettingsScreenState extends State<AdhanSettingsScreen>
   bool _notificationsEnabled = true;
   bool _includeFajr = true;
   bool _methodAutoDetected = true;
+  double _adhanVolume = 1.0;
 
   bool _isPreviewPlaying = false;
   String? _previewingId;
@@ -75,6 +76,7 @@ class _AdhanSettingsScreenState extends State<AdhanSettingsScreen>
       _notificationsEnabled = _settings.getAdhanNotificationsEnabled();
       _includeFajr = _settings.getAdhanIncludeFajr();
       _methodAutoDetected = _settings.getPrayerMethodAutoDetected();
+      _adhanVolume = _settings.getAdhanVolume();
     });
   }
 
@@ -119,7 +121,7 @@ class _AdhanSettingsScreenState extends State<AdhanSettingsScreen>
 
     try {
       if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
-        await _adhanChannel.invokeMethod('playAdhan', {'soundName': soundId});
+        await _adhanChannel.invokeMethod('playAdhan', {'soundName': soundId, 'volume': _adhanVolume});
         // UI resets via _handleNativeCallback('previewCompleted') when audio ends naturally.
         // No hardcoded timer — the stop button stays visible until the sound actually finishes.
       }
@@ -154,6 +156,7 @@ class _AdhanSettingsScreenState extends State<AdhanSettingsScreen>
     await _settings.setPrayerCalculationMethod(_selectedMethodId);
     await _settings.setPrayerAsrMethod(_selectedAsrMethod);
     await _settings.setAdhanIncludeFajr(_includeFajr);
+    await _settings.setAdhanVolume(_adhanVolume);
     await _settings.setPrayerMethodAutoDetected(_methodAutoDetected);
 
     if (_notificationsEnabled) {
@@ -264,6 +267,78 @@ class _AdhanSettingsScreenState extends State<AdhanSettingsScreen>
               onChanged: _notificationsEnabled
                   ? (v) => setState(() => _includeFajr = v)
                   : null,
+            ),
+          ),
+
+          // ── Volume Slider ───────────────────────────────────────
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(
+                        _adhanVolume == 0
+                            ? Icons.volume_off_rounded
+                            : _adhanVolume < 0.5
+                                ? Icons.volume_down_rounded
+                                : Icons.volume_up_rounded,
+                        color: _notificationsEnabled
+                            ? AppColors.primary
+                            : Colors.grey,
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              isAr ? 'مستوى صوت الأذان' : 'Adhan Volume',
+                              style: const TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w500),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              isAr
+                                  ? 'مستوى نسبي — جزء من صوت المنبهات في النظام'
+                                  : 'Relative level — part of the system alarm stream',
+                              style: const TextStyle(
+                                  fontSize: 12,
+                                  color: AppColors.textSecondary),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        '${(_adhanVolume * 100).round()}%',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: _notificationsEnabled
+                              ? AppColors.primary
+                              : Colors.grey,
+                        ),
+                      ),
+                    ],
+                  ),
+                  Slider(
+                    value: _adhanVolume,
+                    min: 0.0,
+                    max: 1.0,
+                    divisions: 10,
+                    activeColor: _notificationsEnabled
+                        ? AppColors.primary
+                        : Colors.grey,
+                    onChanged: _notificationsEnabled
+                        ? (v) => setState(() => _adhanVolume = v)
+                        : null,
+                  ),
+                ],
+              ),
             ),
           ),
 

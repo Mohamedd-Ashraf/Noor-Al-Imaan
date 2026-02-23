@@ -8,6 +8,7 @@ import 'adhan_settings_screen.dart';
 import 'duaa_screen.dart';
 import 'prayer_times_screen.dart';
 import 'qiblah_screen.dart';
+import '../../../quran/presentation/screens/feedback_screen.dart';
 
 class MoreScreen extends StatelessWidget {
   const MoreScreen({super.key});
@@ -94,18 +95,6 @@ class MoreScreen extends StatelessWidget {
             },
           ),
           _NavCard(
-            title: isArabicUi ? 'القبلة' : 'Qiblah',
-            subtitle: isArabicUi
-                ? 'اتجاه القبلة من موقعك'
-                : 'Qiblah bearing from your location',
-            icon: Icons.explore,
-            onTap: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const QiblahScreen()),
-              );
-            },
-          ),
-          _NavCard(
             title: isArabicUi ? 'الأدعية' : 'Duaa',
             subtitle: isArabicUi
                 ? 'أدعية وأذكار إسلامية'
@@ -114,6 +103,32 @@ class MoreScreen extends StatelessWidget {
             onTap: () {
               Navigator.of(context).push(
                 MaterialPageRoute(builder: (_) => const DuaaScreen()),
+              );
+            },
+          ),
+          _NavCard(
+            title: isArabicUi ? 'اقتراحات ومشاركات' : 'Feedback & Suggestions',
+            subtitle: isArabicUi
+                ? 'رأيك يُحسِّن التطبيق — نسخة بيتا'
+                : 'Your input improves the app — Beta',
+            icon: Icons.feedback_outlined,
+            badge: 'BETA',
+            onTap: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const FeedbackScreen()),
+              );
+            },
+          ),
+          _NavCard(
+            title: isArabicUi ? 'القبلة' : 'Qiblah',
+            subtitle: isArabicUi
+                ? 'قيد التطوير — قريبا'
+                : 'Coming soon — in development',
+            icon: Icons.explore,
+            badge: isArabicUi ? 'قريباً' : 'SOON',
+            onTap: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const QiblahScreen()),
               );
             },
           ),
@@ -128,12 +143,14 @@ class _NavCard extends StatelessWidget {
   final String subtitle;
   final IconData icon;
   final VoidCallback onTap;
+  final String? badge;
 
   const _NavCard({
     required this.title,
     required this.subtitle,
     required this.icon,
     required this.onTap,
+    this.badge,
   });
 
   @override
@@ -141,6 +158,7 @@ class _NavCard extends StatelessWidget {
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       child: InkWell(
+        borderRadius: BorderRadius.circular(12),
         onTap: onTap,
         child: Padding(
           padding: const EdgeInsets.all(16),
@@ -160,12 +178,39 @@ class _NavCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      title,
-                      style: Theme.of(context)
-                          .textTheme
-                          .titleMedium
-                          ?.copyWith(fontWeight: FontWeight.w700),
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            title,
+                            style: Theme.of(context)
+                                .textTheme
+                                .titleMedium
+                                ?.copyWith(fontWeight: FontWeight.w700),
+                          ),
+                        ),
+                        if (badge != null) ...[
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 7, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: AppColors.secondary
+                                  .withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(5),
+                            ),
+                            child: Text(
+                              badge!,
+                              style: const TextStyle(
+                                color: AppColors.secondary,
+                                fontSize: 9,
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: 0.8,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
                     const SizedBox(height: 4),
                     Text(

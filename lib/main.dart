@@ -1,8 +1,10 @@
 import 'dart:async';
 
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+import 'firebase_options.dart';
 import 'core/di/injection_container.dart' as di;
 import 'core/services/adhan_notification_service.dart';
 import 'core/services/app_update_service.dart';
@@ -20,6 +22,12 @@ import 'features/adhkar/presentation/cubit/adhkar_progress_cubit.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Initialize Firebase (required for remote config, Firestore, etc.)
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
+
   await di.init();
 
   // Notifications are used for prayer reminders (adhan). Initialize early.
