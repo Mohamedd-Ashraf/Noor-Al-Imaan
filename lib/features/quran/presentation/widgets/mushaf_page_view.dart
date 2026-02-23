@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter/gestures.dart';
@@ -10,6 +12,8 @@ import '../../../../core/settings/app_settings_cubit.dart';
 import '../../../../core/services/bookmark_service.dart';
 import '../../../../core/di/injection_container.dart' as di;
 import '../../../../core/utils/arabic_text_style_helper.dart';
+import '../bloc/tafsir/tafsir_cubit.dart';
+import '../screens/tafsir_screen.dart';
 
 class MushafPageView extends StatefulWidget {
   final Surah surah;
@@ -38,6 +42,9 @@ class _MushafPageViewState extends State<MushafPageView>
   late final BookmarkService _bookmarkService;
   int? _highlightedAyahNumber;
   bool _isAnimating = false;
+  final Map<int, GlobalKey> _richTextKeys = {};
+  final Map<int, List<({int start, int end, int ayahNumber, String ayahFullText})>>
+      _pageAyahOffsets = {};
   late AnimationController _highlightAnimationController;
   late Animation<double> _highlightAnimation;
   final Map<int, ScrollController> _pageScrollControllers = {};
@@ -469,7 +476,7 @@ class _MushafPageViewState extends State<MushafPageView>
                       _buildBasmalah(),
                       const SizedBox(height: 28),
                     ],
-                    _buildContinuousText(page.ayahs),
+                    _buildContinuousText(page.ayahs, page.pageNumber),
                   ]),
                 ),
               ),
@@ -742,8 +749,46 @@ class _MushafPageViewState extends State<MushafPageView>
     );
   }
 
-  Widget _buildContinuousText(List<Ayah> ayahs) {
+  Widget _buildContinuousText(List<Ayah> ayahs, int pageNumber) {
     if (ayahs.isEmpty) return const SizedBox();
+
+    // Precompute ayah display texts (basmala removal is static)
+    // and build character-offset map so long-press can identify the ayah.
+    final precomputedTexts = <int, String>{}; // ayahNumber → display text
+    for (final ayah in ayahs) {
+      String text = ayah.text;
+      if (ayah.numberInSurah == 1 &&
+          widget.surahNumber != 1 &&
+          widget.surahNumber != 9) {
+        final words = text.split(' ');
+        if (words.length >= 5 && words[0] == 'بِسْمِ') {
+          text = words.sublist(4).join(' ').trim();
+        }
+      }
+      precomputedTexts[ayah.numberInSurah] = text;
+    }
+
+    // Build (start, end, ayahNumber, ayahFullText) offset list.
+    // Each ayah occupies: displayText.length chars + 1 WidgetSpan + 1 space.
+    int cumOffset = 0;
+    final offsetMap =
+        <({int start, int end, int ayahNumber, String ayahFullText})>[];
+    for (final ayah in ayahs) {
+      final displayText = precomputedTexts[ayah.numberInSurah]!;
+      final start = cumOffset;
+      cumOffset += displayText.length + 2; // +1 WidgetSpan, +1 space
+      offsetMap.add((
+        start: start,
+        end: cumOffset,
+        ayahNumber: ayah.numberInSurah,
+        ayahFullText: ayah.text,
+      ));
+    }
+    _pageAyahOffsets[pageNumber] = offsetMap;
+
+    // Get or create a stable GlobalKey for this page's RichText.
+    final richTextKey =
+        _richTextKeys.putIfAbsent(pageNumber, () => GlobalKey());
 
     // First BlocBuilder: Listen to AppSettingsCubit for settings changes
     return BlocBuilder<AppSettingsCubit, AppSettingsState>(
@@ -914,10 +959,56 @@ class _MushafPageViewState extends State<MushafPageView>
                   textSpans.add(const TextSpan(text: ' '));
                 }
 
-                return RichText(
-                  textAlign: TextAlign.justify,
-                  textDirection: TextDirection.rtl,
-                  text: TextSpan(children: textSpans),
+                return GestureDetector(
+                  onLongPressStart: (LongPressStartDetails details) {
+                    final ro =
+                        richTextKey.currentContext?.findRenderObject();
+                    if (ro is! RenderParagraph) return;
+                    final textPosition =
+                        ro.getPositionForOffset(details.localPosition);
+                    final offset = textPosition.offset;
+                    final pageOffsets = _pageAyahOffsets[pageNumber];
+                    if (pageOffsets == null) return;
+                    int? targetAyahNumber;
+                    String? targetAyahFullText;
+                    for (final entry in pageOffsets) {
+                      if (offset >= entry.start && offset < entry.end) {
+                        targetAyahNumber = entry.ayahNumber;
+                        targetAyahFullText = entry.ayahFullText;
+                        break;
+                      }
+                    }
+                    // Fallback to first ayah on page if position not found.
+                    if (targetAyahNumber == null && pageOffsets.isNotEmpty) {
+                      targetAyahNumber = pageOffsets.first.ayahNumber;
+                      targetAyahFullText = pageOffsets.first.ayahFullText;
+                    }
+                    if (targetAyahNumber != null &&
+                        targetAyahFullText != null &&
+                        context.mounted) {
+                      HapticFeedback.mediumImpact();
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => BlocProvider(
+                            create: (_) => di.sl<TafsirCubit>(),
+                            child: TafsirScreen(
+                              surahNumber: widget.surahNumber,
+                              ayahNumber: targetAyahNumber!,
+                              surahName: widget.surah.name,
+                              surahEnglishName: widget.surah.englishName,
+                              arabicAyahText: targetAyahFullText!,
+                            ),
+                          ),
+                        ),
+                      );
+                    }
+                  },
+                  child: RichText(
+                    key: richTextKey,
+                    textAlign: TextAlign.justify,
+                    textDirection: TextDirection.rtl,
+                    text: TextSpan(children: textSpans),
+                  ),
                 );
               },
             );

@@ -86,7 +86,7 @@ class OfflineAudioService {
   final http.Client _client;
 
   static const int _totalQuranFiles = 6236;
-  static const int _minValidAudioBytes = 8 * 1024;
+  static const int _minValidAudioBytes = 1 * 1024; // 1 KB – short surahs can be < 8 KB
 
   // Authoritative ayah count per surah (index 0 = Surah 1 = Al-Fatiha).
   // Sum = 6236 – used to determine whether a surah is *fully* downloaded.

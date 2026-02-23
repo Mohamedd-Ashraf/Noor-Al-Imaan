@@ -9,6 +9,8 @@ import '../../../../core/services/audio_edition_service.dart';
 import '../../../../core/services/app_update_service_firebase.dart';
 import '../../../../core/widgets/app_update_dialog_premium.dart';
 import '../../../../core/audio/ayah_audio_cubit.dart';
+import '../../../wird/presentation/cubit/wird_cubit.dart';
+import '../../../wird/presentation/cubit/wird_state.dart';
 import 'offline_audio_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -572,7 +574,81 @@ class _SettingsScreenState extends State<SettingsScreen> {
           const SizedBox(height: 6),
 
           // ─────────────────────────────────────────────────────
-          // 4. حول التطبيق
+          // 4. الورد اليومي
+          // ─────────────────────────────────────────────────────
+          _SectionHeader(
+              isAr ? 'الورد اليومي' : 'Daily Wird',
+              Icons.auto_stories_outlined),
+
+          _SettingsCard(
+            child: BlocBuilder<WirdCubit, WirdState>(
+              builder: (context, wirdState) {
+                final notifEnabled = wirdState is WirdPlanLoaded
+                    ? wirdState.notificationsEnabled
+                    : wirdState is WirdNoPlan
+                        ? wirdState.notificationsEnabled
+                        : true;
+                return Column(
+                  children: [
+                    SwitchListTile(
+                      secondary: const Icon(
+                          Icons.notifications_active_outlined,
+                          color: AppColors.primary),
+                      title: _TileTitle(
+                          isAr ? 'تذكيرات الورد اليومي' : 'Wird Reminders'),
+                      subtitle: _TileSubtitle(isAr
+                          ? 'إشعار يومي + تذكيرات متابعة إن لم تسجّل وردك'
+                          : 'Daily notification + follow-up reminders until marked'),
+                      value: notifEnabled,
+                      activeThumbColor: AppColors.primary,
+                      onChanged: (v) =>
+                          context.read<WirdCubit>().setNotificationsEnabled(v),
+                    ),
+                    const Divider(height: 1, indent: 56),
+                    ListTile(
+                      leading: const Icon(
+                          Icons.notifications_outlined,
+                          color: AppColors.primary),
+                      title: _TileTitle(
+                          isAr ? 'اختبار الإشعار' : 'Test Notification'),
+                      subtitle: _TileSubtitle(isAr
+                          ? 'أرسل إشعارًا تجريبيًا الآن'
+                          : 'Send a test notification now'),
+                      trailing: const Icon(
+                          Icons.chevron_right_rounded,
+                          color: AppColors.textSecondary),
+                      onTap: () {
+                        context.read<WirdCubit>().testNotification();
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              isAr ? 'تم إرسال الإشعار التجريبي' : 'Test notification sent',
+                            ),
+                            duration: const Duration(seconds: 2),
+                            backgroundColor: AppColors.primary,
+                          ),
+                        );
+                      },
+                    ),
+                    const Divider(height: 1, indent: 56),
+                    _FollowUpIntervalTile(
+                      isAr: isAr,
+                      intervalHours: wirdState is WirdPlanLoaded
+                          ? wirdState.followUpIntervalHours
+                          : wirdState is WirdNoPlan
+                              ? wirdState.followUpIntervalHours
+                              : 4,
+                    ),
+                  ],
+                );
+              },
+            ),
+          ),
+
+          const SizedBox(height: 6),
+
+          // ─────────────────────────────────────────────────────
+          // 5. حول التطبيق
           // ─────────────────────────────────────────────────────
           _SectionHeader(
               isAr ? 'حول التطبيق' : 'About', Icons.info_outline),
@@ -857,6 +933,55 @@ class _PreviewBox extends StatelessWidget {
         borderRadius: BorderRadius.circular(8),
       ),
       child: child,
+    );
+  }
+}
+
+// ── Follow-up interval tile ────────────────────────────────────────────────
+
+class _FollowUpIntervalTile extends StatelessWidget {
+  final bool isAr;
+  final int intervalHours;
+  const _FollowUpIntervalTile({
+    required this.isAr,
+    required this.intervalHours,
+  });
+
+  static const _options = [0, 1, 2, 3, 4, 6, 8];
+
+  String _label(int h) {
+    if (h == 0) return isAr ? 'أبدا' : 'Never';
+    if (isAr) return h == 1 ? 'كل ساعة' : 'كل $h ساعات';
+    return h == 1 ? 'Every hour' : 'Every $h hours';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      leading: const Icon(Icons.timer_outlined, color: AppColors.primary),
+      title: _TileTitle(isAr ? 'فترة إعادة التذكير' : 'Follow-up Interval'),
+      subtitle: _TileSubtitle(intervalHours == 0
+          ? (isAr ? 'لا توجد تذكيرات متابعة' : 'No follow-up reminders')
+          : _label(intervalHours)),
+      trailing: DropdownButton<int>(
+        value: _options.contains(intervalHours) ? intervalHours : 4,
+        underline: const SizedBox(),
+        borderRadius: BorderRadius.circular(12),
+        items: _options
+            .map((h) => DropdownMenuItem(
+                  value: h,
+                  child: Text(
+                    _label(h),
+                    style: const TextStyle(fontSize: 13),
+                  ),
+                ))
+            .toList(),
+        onChanged: (v) {
+          if (v != null) {
+            context.read<WirdCubit>().setFollowUpIntervalHours(v);
+          }
+        },
+      ),
     );
   }
 }

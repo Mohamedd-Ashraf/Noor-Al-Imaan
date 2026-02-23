@@ -6,4 +6,4 @@
   in release builds because they appear "unreferenced".
 -->
 <resources xmlns:tools="http://schemas.android.com/tools"
-    tools:keep="@raw/adhan,@raw/adhan_1,@raw/adhan_2,@raw/adhan_3,@raw/adhan_4,@raw/adhan_5,@raw/adhan_6,@raw/adhan_7,@raw/adhan_8,@raw/adhan_9,@raw/adhan_10" />
+    tools:keep="@raw/adhan,@raw/adhan_1,@raw/adhan_2,@raw/adhan_3,@raw/adhan_4,@raw/adhan_5,@raw/adhan_6,@raw/adhan_7,@raw/adhan_8,@raw/adhan_9,@raw/adhan_10,@raw/wird_reminder" />

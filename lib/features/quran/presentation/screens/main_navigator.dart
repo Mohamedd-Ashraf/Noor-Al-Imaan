@@ -5,6 +5,7 @@ import '../../../../core/settings/app_settings_cubit.dart';
 import 'home_screen.dart';
 import 'bookmarks_screen.dart';
 import 'settings_screen.dart';
+import '../../../wird/presentation/screens/wird_screen.dart';
 import '../../../islamic/presentation/screens/more_screen.dart';
 
 class MainNavigator extends StatefulWidget {
@@ -36,6 +37,7 @@ class _MainNavigatorState extends State<MainNavigator> {
           _homeKey.currentState?.reload();
         },
       ),
+      const WirdScreen(),
       const MoreScreen(),
       const SettingsScreen(),
     ];
@@ -88,6 +90,11 @@ class _MainNavigatorState extends State<MainNavigator> {
               icon: const Icon(Icons.bookmark_border),
               activeIcon: const Icon(Icons.bookmark),
               label: isArabicUi ? 'الإشارات' : 'Bookmarks',
+            ),
+            BottomNavigationBarItem(
+              icon: const Icon(Icons.auto_stories_outlined),
+              activeIcon: const Icon(Icons.auto_stories),
+              label: isArabicUi ? 'الورد' : 'Wird',
             ),
             BottomNavigationBarItem(
               icon: const Icon(Icons.grid_view_outlined),

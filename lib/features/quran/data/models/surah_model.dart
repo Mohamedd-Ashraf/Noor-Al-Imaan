@@ -84,7 +84,7 @@ class AyahModel extends Ayah {
   factory AyahModel.fromJson(Map<String, dynamic> json) {
     return AyahModel(
       number: json['number'] as int,
-      text: _normalizeArabicText(json['text'] as String),
+      text: _normalizeArabicText((json['text'] as String?) ?? ''),
       numberInSurah: json['numberInSurah'] as int,
       juz: json['juz'] as int,
       manzil: json['manzil'] as int,

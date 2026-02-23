@@ -15,6 +15,7 @@ import '../../features/quran/domain/usecases/get_ayah.dart';
 import '../../features/quran/domain/usecases/get_juz.dart';
 import '../../features/quran/presentation/bloc/surah/surah_bloc.dart';
 import '../../features/quran/presentation/bloc/ayah/ayah_bloc.dart';
+import '../../features/quran/presentation/bloc/tafsir/tafsir_cubit.dart';
 import '../audio/ayah_audio_cubit.dart';
 import '../network/network_info.dart';
 import '../services/settings_service.dart';
@@ -29,6 +30,9 @@ import '../services/adhan_notification_service.dart';
 import '../services/prayer_times_cache_service.dart';
 import '../services/app_update_service.dart';
 import '../audio/download_manager_cubit.dart';
+import '../../features/wird/data/wird_service.dart';
+import '../../features/wird/services/wird_notification_service.dart';
+import '../../features/wird/presentation/cubit/wird_cubit.dart';
 
 final sl = GetIt.instance;
 
@@ -50,6 +54,10 @@ Future<void> init() async {
 
   sl.registerFactory(
     () => AyahAudioCubit(sl(), sl()),
+  );
+
+  sl.registerFactory(
+    () => TafsirCubit(sl()),
   );
 
   // Use cases
@@ -95,6 +103,9 @@ Future<void> init() async {
   sl.registerLazySingleton(() => AyahAudioService(sl(), sl(), sl()));
   sl.registerLazySingleton(() => AudioEditionService(sl(), sl(), sl()));
   sl.registerLazySingleton(() => AppUpdateService(sl(), sl()));
+  sl.registerLazySingleton(() => WirdService(sl()));
+  sl.registerLazySingleton(() => WirdNotificationService(sl(), sl()));
+  sl.registerFactory(() => WirdCubit(sl(), sl()));
   sl.registerLazySingleton(() => AudioDownloadStateService(sl()));
   sl.registerLazySingleton(
     () => AudioDownloadNotificationService(sl(), sl()),

@@ -69,7 +69,20 @@ class QuranRemoteDataSourceImpl implements QuranRemoteDataSource {
 
       if (response.statusCode == 200) {
         final jsonResponse = json.decode(response.body);
-        return AyahModel.fromJson(jsonResponse['data']);
+        final data = jsonResponse['data'] as Map<String, dynamic>;
+
+        // The API falls back to quran-simple when no content exists for the
+        // requested edition (e.g. ar.wahidi for ayahs with no sabab al-nuzul).
+        // Detect this by comparing the returned edition identifier.
+        final returnedEdition =
+            (data['edition'] as Map<String, dynamic>?)?['identifier'] as String?;
+        if (returnedEdition != null && returnedEdition != editionParam) {
+          // No real content for this ayah in the requested edition — return
+          // an AyahModel with empty text so the UI shows the "no content" state.
+          return AyahModel.fromJson({...data, 'text': ''});
+        }
+
+        return AyahModel.fromJson(data);
       } else {
         throw ServerException();
       }

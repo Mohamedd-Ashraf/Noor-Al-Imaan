@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../bloc/surah/surah_bloc.dart';
 import '../bloc/surah/surah_event.dart';
 import '../bloc/surah/surah_state.dart';
+import '../bloc/tafsir/tafsir_cubit.dart';
 import '../widgets/mushaf_page_view.dart';
 import '../widgets/islamic_audio_player.dart';
 import '../../domain/usecases/get_surah.dart';
@@ -13,6 +15,7 @@ import '../../../../core/services/bookmark_service.dart';
 import '../../../../core/di/injection_container.dart' as di;
 import '../../../../core/settings/app_settings_cubit.dart';
 import '../../../../core/audio/ayah_audio_cubit.dart';
+import 'tafsir_screen.dart';
 
 class SurahDetailScreen extends StatefulWidget {
   final int surahNumber;
@@ -283,19 +286,19 @@ class _SurahDetailScreenState extends State<SurahDetailScreen> {
                               Container(
                                 decoration: BoxDecoration(
                                   gradient: LinearGradient(
-                                    begin: Alignment.topLeft,
-                                    end: Alignment.bottomRight,
+                                    begin: Alignment.topCenter,
+                                    end: Alignment.bottomCenter,
                                     colors: context
                                             .watch<AppSettingsCubit>()
                                             .state
                                             .darkMode
                                         ? [
+                                            const Color(0xFF071F13),
                                             AppColors.primaryDark,
-                                            AppColors.primary,
                                           ]
                                         : [
-                                            AppColors.primary,
-                                            AppColors.secondary,
+                                            AppColors.primaryDark,
+                                            const Color(0xFF1A7A50),
                                           ],
                                   ),
                                 ),
@@ -603,7 +606,7 @@ class _SurahDetailScreenState extends State<SurahDetailScreen> {
                                     ],
                                   ),
                                   const SizedBox(height: 16),
-                                  // Arabic Text (tap to play)
+                                  // Arabic Text (tap to play, long-press for tafsir)
                                   InkWell(
                                     onTap: () {
                                       context
@@ -612,6 +615,25 @@ class _SurahDetailScreenState extends State<SurahDetailScreen> {
                                             surahNumber: widget.surahNumber,
                                             ayahNumber: ayah.numberInSurah,
                                           );
+                                    },
+                                    onLongPress: () {
+                                      HapticFeedback.mediumImpact();
+                                      Navigator.of(context).push(
+                                        MaterialPageRoute(
+                                          builder: (_) => BlocProvider(
+                                            create: (_) =>
+                                                di.sl<TafsirCubit>(),
+                                            child: TafsirScreen(
+                                              surahNumber: widget.surahNumber,
+                                              ayahNumber: ayah.numberInSurah,
+                                              surahName: surah.name,
+                                              surahEnglishName:
+                                                  surah.englishName,
+                                              arabicAyahText: ayah.text,
+                                            ),
+                                          ),
+                                        ),
+                                      );
                                     },
                                     child: Text(
                                       ayah.text,
@@ -721,10 +743,32 @@ class _SurahDetailScreenState extends State<SurahDetailScreen> {
                                         widget.initialPageNumber!,
                                       ));
 
+                          // Long-press to open Tafsir screen
+                          final longPressableCard = GestureDetector(
+                            onLongPress: () {
+                              HapticFeedback.mediumImpact();
+                              Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (_) => BlocProvider(
+                                    create: (_) => di.sl<TafsirCubit>(),
+                                    child: TafsirScreen(
+                                      surahNumber: widget.surahNumber,
+                                      ayahNumber: ayah.numberInSurah,
+                                      surahName: surah.name,
+                                      surahEnglishName: surah.englishName,
+                                      arabicAyahText: ayah.text,
+                                    ),
+                                  ),
+                                ),
+                              );
+                            },
+                            child: card,
+                          );
+
                           // Always wrap every ayah with a key for scrolling
                           final wrappedCard = KeyedSubtree(
                             key: _getAyahKey(ayah.numberInSurah),
-                            child: card,
+                            child: longPressableCard,
                           );
 
                           // If this is the target ayah, add visual decoration
