@@ -34,6 +34,8 @@ class WirdCubit extends Cubit<WirdState> {
         reminderMinute: rt?['minute'],
         notificationsEnabled: notifEnabled,
         followUpIntervalHours: followUpInterval,
+        lastReadSurah: _wirdService.lastReadSurah,
+        lastReadAyah: _wirdService.lastReadAyah,
       ));
     }
   }
@@ -80,10 +82,11 @@ class WirdCubit extends Cubit<WirdState> {
       }
     } else {
       await _wirdService.markDayComplete(day);
-      // If completing today, cancel follow-up reminders.
+      // If completing today, cancel follow-up reminders + clear reading bookmark.
       final todayDay = currentState.plan.currentDay;
       if (day == todayDay) {
         await _notifService.cancelFollowUps();
+        await _wirdService.clearLastRead();
       }
     }
     load();
@@ -140,4 +143,16 @@ class WirdCubit extends Cubit<WirdState> {
     }
     load();
   }
-}
+  // ── Reading bookmark (last-read position) ─────────────────────────────────
+
+  /// Saves the user’s current reading position (called when they tap “حدّث موضعي”).
+  Future<void> saveLastRead(int surah, int ayah) async {
+    await _wirdService.saveLastRead(surah, ayah);
+    load();
+  }
+
+  /// Clears the reading bookmark (also called automatically when day is marked complete).
+  Future<void> clearLastRead() async {
+    await _wirdService.clearLastRead();
+    load();
+  }}

@@ -54,6 +54,8 @@ class WirdService {
   static const String _keyReminderMinute = 'wird_reminder_minute';
   static const String _keyNotificationsEnabled = 'wird_notifications_enabled';
   static const String _keyFollowUpIntervalHours = 'wird_followup_interval_hours';
+  static const String _keyLastReadSurah = 'wird_last_read_surah';
+  static const String _keyLastReadAyah = 'wird_last_read_ayah';
 
   final SharedPreferences _prefs;
 
@@ -148,6 +150,8 @@ class WirdService {
     await _prefs.remove(_keyStartDate);
     await _prefs.remove(_keyTargetDays);
     await _prefs.remove(_keyCompletedDays);
+    await _prefs.remove(_keyLastReadSurah);
+    await _prefs.remove(_keyLastReadAyah);
     // Intentionally keep reminder time — user may want to re-use it.
   }
 
@@ -193,6 +197,27 @@ class WirdService {
 
   Future<void> setFollowUpIntervalHours(int hours) async {
     await _prefs.setInt(_keyFollowUpIntervalHours, hours);
+  }
+
+  // ── Last-read position (daily progress bookmark) ───────────────────────────
+
+  /// Surah number (1–114) where the user last stopped reading today.
+  /// Returns null if no bookmark has been saved for the current day.
+  int? get lastReadSurah => _prefs.getInt(_keyLastReadSurah);
+
+  /// Ayah number where the user last stopped reading today.
+  int? get lastReadAyah => _prefs.getInt(_keyLastReadAyah);
+
+  /// Saves a reading bookmark.
+  Future<void> saveLastRead(int surah, int ayah) async {
+    await _prefs.setInt(_keyLastReadSurah, surah);
+    await _prefs.setInt(_keyLastReadAyah, ayah);
+  }
+
+  /// Clears the current reading bookmark (call when day is marked complete).
+  Future<void> clearLastRead() async {
+    await _prefs.remove(_keyLastReadSurah);
+    await _prefs.remove(_keyLastReadAyah);
   }
 
   // ── Juz distribution helpers ─────────────────────────────────────────────

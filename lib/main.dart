@@ -16,6 +16,7 @@ import 'core/widgets/onboarding_gate.dart';
 import 'features/quran/presentation/bloc/surah/surah_bloc.dart';
 import 'features/quran/presentation/bloc/ayah/ayah_bloc.dart';
 import 'features/wird/presentation/cubit/wird_cubit.dart';
+import 'features/adhkar/presentation/cubit/adhkar_progress_cubit.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -89,6 +90,9 @@ class MyApp extends StatelessWidget {
         ),
         BlocProvider(
           create: (_) => di.sl<WirdCubit>()..load(),
+        ),
+        BlocProvider(
+          create: (_) => di.sl<AdhkarProgressCubit>()..load(),
         ),
       ],
       child: BlocBuilder<AppSettingsCubit, AppSettingsState>(

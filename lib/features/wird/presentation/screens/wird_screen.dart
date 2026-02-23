@@ -11,6 +11,7 @@ import '../../../quran/presentation/screens/surah_detail_screen.dart';
 import '../cubit/wird_cubit.dart';
 import '../cubit/wird_state.dart';
 import '../../data/wird_service.dart';
+import '../../data/quran_boundaries.dart';
 
 // ── Surah Arabic-name fallback map (number → Arabic name) ─────────────────
 const Map<int, String> _surahArabicNames = {
@@ -136,6 +137,8 @@ class _WirdScreenState extends State<WirdScreen> with WidgetsBindingObserver {
                 isAr: isAr,
                 reminderHour: state.reminderHour,
                 reminderMinute: state.reminderMinute,
+                lastReadSurah: state.lastReadSurah,
+                lastReadAyah: state.lastReadAyah,
               );
             }
             return const SizedBox.shrink();
@@ -1031,20 +1034,24 @@ class _ActivePlanView extends StatelessWidget {
   final bool isAr;
   final int? reminderHour;
   final int? reminderMinute;
+  final int? lastReadSurah;
+  final int? lastReadAyah;
 
   const _ActivePlanView({
     required this.plan,
     required this.isAr,
     this.reminderHour,
     this.reminderMinute,
+    this.lastReadSurah,
+    this.lastReadAyah,
   });
 
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final today = plan.currentDay;
-    final juzList = WirdService.getJuzForDay(today, plan.targetDays);
     final todayComplete = plan.isDayComplete(today);
+    final range = getReadingRangeForDay(today, plan.targetDays);
 
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
@@ -1062,10 +1069,12 @@ class _ActivePlanView extends StatelessWidget {
           _TodayCard(
             plan: plan,
             today: today,
-            juzList: juzList,
+            range: range,
             isComplete: todayComplete,
             isAr: isAr,
             isDark: isDark,
+            lastReadSurah: lastReadSurah,
+            lastReadAyah: lastReadAyah,
           ),
           const SizedBox(height: 18),
 
@@ -1562,24 +1571,68 @@ class _ProgressHeader extends StatelessWidget {
 class _TodayCard extends StatelessWidget {
   final WirdPlan plan;
   final int today;
-  final List<int> juzList;
+  final ReadingRange range;
   final bool isComplete;
   final bool isAr;
   final bool isDark;
+  final int? lastReadSurah;
+  final int? lastReadAyah;
 
   const _TodayCard({
     required this.plan,
     required this.today,
-    required this.juzList,
+    required this.range,
     required this.isComplete,
     required this.isAr,
     required this.isDark,
+    this.lastReadSurah,
+    this.lastReadAyah,
   });
+
+  bool get _hasBookmark => lastReadSurah != null && lastReadAyah != null;
+
+  // ── Surah name helper (prefers SurahBloc, falls back to hard-coded map) ───
+
+  String _surahName(BuildContext context, int surahNum) {
+    final surahState = context.read<SurahBloc>().state;
+    if (surahState is SurahListLoaded) {
+      final match =
+          surahState.surahs.where((s) => s.number == surahNum).toList();
+      if (match.isNotEmpty) {
+        return isAr ? match.first.name : match.first.englishName;
+      }
+    }
+    if (isAr) return _surahArabicNames[surahNum] ?? 'سورة $surahNum';
+    return allJuzData
+            .expand((j) => j.surahNumbers)
+            .contains(surahNum)
+        ? 'Surah $surahNum'
+        : 'Surah $surahNum';
+  }
 
   @override
   Widget build(BuildContext context) {
-    final juzInfo =
+    // ── Identify today's juz (for the big header text) ───────────────────
+    final juzList = WirdService.getJuzForDay(today, plan.targetDays);
+    final firstJuzInfo =
         juzList.isNotEmpty ? allJuzData[juzList.first - 1] : null;
+
+    // ── Reading range labels ─────────────────────────────────────────────
+    final startName = _surahName(context, range.start.surah);
+    final endName   = _surahName(context, range.end.surah);
+
+    final String rangeLineAr;
+    final String rangeLineEn;
+    if (range.isSingleSurah) {
+      rangeLineAr =
+          '$startName  ${_arabicNumerals(range.start.ayah)} – ${_arabicNumerals(range.end.ayah)}';
+      rangeLineEn = '$startName  ${range.start.ayah}–${range.end.ayah}';
+    } else {
+      rangeLineAr =
+          'من $startName ${_arabicNumerals(range.start.ayah)} إلى $endName ${_arabicNumerals(range.end.ayah)}';
+      rangeLineEn =
+          'From $startName ${range.start.ayah} to $endName ${range.end.ayah}';
+    }
 
     return Container(
       decoration: BoxDecoration(
@@ -1606,7 +1659,7 @@ class _TodayCard extends StatelessWidget {
           crossAxisAlignment:
               isAr ? CrossAxisAlignment.end : CrossAxisAlignment.start,
           children: [
-            // Header row
+            // ── Header row ──────────────────────────────────────────────
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -1617,8 +1670,7 @@ class _TodayCard extends StatelessWidget {
                     color: AppColors.primary.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(20),
                     border: Border.all(
-                        color:
-                            AppColors.primary.withValues(alpha: 0.3)),
+                        color: AppColors.primary.withValues(alpha: 0.3)),
                   ),
                   child: Text(
                     isAr
@@ -1662,53 +1714,138 @@ class _TodayCard extends StatelessWidget {
             ),
             const SizedBox(height: 16),
 
-            // Juz name (big Arabic)
-            if (juzInfo != null)
+            // ── Juz title (big Arabic name) ─────────────────────────────
+            if (firstJuzInfo != null)
               Center(
                 child: Column(
                   children: [
                     Text(
-                      WirdService.getDayDescription(
-                          today, plan.targetDays,
+                      WirdService.getDayDescription(today, plan.targetDays,
                           isArabic: true),
                       style: GoogleFonts.amiriQuran(
-                        fontSize: 28,
+                        fontSize: 26,
                         color: AppColors.primary,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      juzInfo.arabicName,
+                      firstJuzInfo.arabicName,
                       textAlign: TextAlign.center,
                       style: GoogleFonts.amiriQuran(
-                        fontSize: 18,
+                        fontSize: 17,
                         color: AppColors.secondary,
                         height: 1.8,
                       ),
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      juzInfo.startInfo,
-                      textAlign: TextAlign.center,
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: AppColors.textSecondary,
-                          ),
+                  ],
+                ),
+              ),
+            const SizedBox(height: 14),
+
+            // ── Exact reading range card ─────────────────────────────────
+            Container(
+              width: double.infinity,
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              decoration: BoxDecoration(
+                color: AppColors.primary.withValues(alpha: 0.06),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                    color: AppColors.primary.withValues(alpha: 0.18)),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  const Icon(Icons.menu_book_rounded,
+                      color: AppColors.primary, size: 18),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          isAr ? 'نطاق القراءة اليوم' : "Today's reading",
+                          style:
+                              Theme.of(context).textTheme.labelSmall?.copyWith(
+                                    color: AppColors.textSecondary,
+                                    fontWeight: FontWeight.w600,
+                                    letterSpacing: 0.3,
+                                  ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          isAr ? rangeLineAr : rangeLineEn,
+                          textAlign:
+                              isAr ? TextAlign.right : TextAlign.left,
+                          style: Theme.of(context)
+                              .textTheme
+                              .bodyMedium
+                              ?.copyWith(
+                                color: AppColors.primary,
+                                fontWeight: FontWeight.bold,
+                                height: 1.5,
+                              ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            // ── Reading bookmark ─────────────────────────────────────────
+            if (_hasBookmark) ...[
+              const SizedBox(height: 10),
+              Container(
+                width: double.infinity,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                decoration: BoxDecoration(
+                  color: AppColors.secondary.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                      color: AppColors.secondary.withValues(alpha: 0.25)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.bookmark_rounded,
+                        color: AppColors.secondary, size: 18),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        isAr
+                            ? 'وصلت إلى: ${_surahArabicNames[lastReadSurah] ?? "سورة $lastReadSurah"} آية ${_arabicNumerals(lastReadAyah!)}'
+                            : 'Stopped at: ${_surahArabicNames[lastReadSurah] ?? "Surah $lastReadSurah"} $lastReadAyah',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: AppColors.accent,
+                              fontWeight: FontWeight.w600,
+                            ),
+                      ),
+                    ),
+                    GestureDetector(
+                      onTap: () =>
+                          context.read<WirdCubit>().clearLastRead(),
+                      child: const Padding(
+                        padding: EdgeInsets.all(4),
+                        child: Icon(Icons.close_rounded,
+                            color: AppColors.textSecondary, size: 16),
+                      ),
                     ),
                   ],
                 ),
               ),
-            const SizedBox(height: 18),
+            ],
 
-            // Action buttons
+            const SizedBox(height: 16),
+
+            // ── Action buttons ───────────────────────────────────────────
             Row(
               children: [
-                // Read button
+                // Read button — navigates to bookmark pos or day start
                 Expanded(
                   child: ElevatedButton.icon(
-                    onPressed: juzList.isNotEmpty
-                        ? () => _navigateToRead(context, juzList.first)
-                        : null,
+                    onPressed: () => _navigateToRead(context),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.primary,
                       foregroundColor: Colors.white,
@@ -1717,20 +1854,48 @@ class _TodayCard extends StatelessWidget {
                           borderRadius: BorderRadius.circular(12)),
                     ),
                     icon: Icon(
-                      isAr
-                          ? Icons.arrow_back_ios_rounded
-                          : Icons.arrow_forward_ios_rounded,
-                      size: 16,
+                      _hasBookmark
+                          ? Icons.play_arrow_rounded
+                          : (isAr
+                              ? Icons.arrow_back_ios_rounded
+                              : Icons.arrow_forward_ios_rounded),
+                      size: 18,
                     ),
                     label: Text(
-                      isAr ? 'ابدأ القراءة' : 'Start Reading',
+                      _hasBookmark
+                          ? (isAr ? 'تابع القراءة' : 'Continue Reading')
+                          : (isAr ? 'ابدأ القراءة' : 'Start Reading'),
                       style: const TextStyle(
                           fontWeight: FontWeight.bold, fontSize: 14),
                     ),
                   ),
                 ),
-                const SizedBox(width: 10),
-                // Toggle complete
+                const SizedBox(width: 8),
+
+                // Update bookmark button
+                if (!isComplete)
+                  ElevatedButton(
+                    onPressed: () => _showBookmarkDialog(context),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.secondary
+                          .withValues(alpha: 0.12),
+                      foregroundColor: AppColors.secondary,
+                      elevation: 0,
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 13),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        side: BorderSide(
+                          color:
+                              AppColors.secondary.withValues(alpha: 0.35),
+                        ),
+                      ),
+                    ),
+                    child: const Icon(Icons.bookmark_add_rounded, size: 20),
+                  ),
+                if (!isComplete) const SizedBox(width: 8),
+
+                // Mark complete toggle
                 ElevatedButton(
                   onPressed: () =>
                       context.read<WirdCubit>().toggleDayComplete(today),
@@ -1767,31 +1932,144 @@ class _TodayCard extends StatelessWidget {
     );
   }
 
-  void _navigateToRead(BuildContext context, int juzNumber) {
-    if (juzNumber < 1 || juzNumber > 30) return;
+  // ── Navigate to reading screen ──────────────────────────────────────────
 
-    final juzInfo = allJuzData[juzNumber - 1];
-    final firstSurahNum = juzInfo.surahNumbers.first;
+  void _navigateToRead(BuildContext context) {
+    // If user has a bookmark, resume from there; otherwise start from range start.
+    final int targetSurah = _hasBookmark ? lastReadSurah! : range.start.surah;
+    final int targetAyah  = _hasBookmark ? lastReadAyah!  : range.start.ayah;
 
-    // Try to get the Arabic name from the SurahBloc state
-    String surahName = _surahArabicNames[firstSurahNum] ?? 'سورة';
-    final surahState = context.read<SurahBloc>().state;
-    if (surahState is SurahListLoaded) {
-      final match = surahState.surahs
-          .where((s) => s.number == firstSurahNum)
-          .toList();
-      if (match.isNotEmpty) {
-        surahName = isAr ? match.first.name : match.first.englishName;
-      }
-    }
+    final surahName = _surahName(context, targetSurah);
 
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (_) => SurahDetailScreen(
-          surahNumber: firstSurahNum,
+          surahNumber: targetSurah,
           surahName: surahName,
+          initialAyahNumber: targetAyah,
         ),
+      ),
+    );
+  }
+
+  // ── Bookmark / progress dialog ──────────────────────────────────────────
+
+  void _showBookmarkDialog(BuildContext context) {
+    // Determine default selection: bookmark if set, else range start.
+    int selectedSurah = _hasBookmark ? lastReadSurah! : range.start.surah;
+    int enteredAyah   = _hasBookmark ? lastReadAyah!  : range.start.ayah;
+    final cubit = context.read<WirdCubit>();
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) {
+          final maxAyah = kSurahAyahCounts[selectedSurah - 1];
+          // Clamp entered ayah whenever surah changes.
+          if (enteredAyah > maxAyah) enteredAyah = maxAyah;
+          final ayahCtrl = TextEditingController(
+              text: enteredAyah.toString());
+
+          return AlertDialog(
+            title: Text(isAr ? 'حدّث موضعك في القراءة' : 'Update Reading Position'),
+            content: SingleChildScrollView(
+              child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: isAr
+                  ? CrossAxisAlignment.end
+                  : CrossAxisAlignment.start,
+              children: [
+                Text(
+                  isAr ? 'السورة:' : 'Surah:',
+                  style: const TextStyle(
+                      fontWeight: FontWeight.bold, fontSize: 13),
+                ),
+                const SizedBox(height: 6),
+                DropdownButtonFormField<int>(
+                  initialValue: selectedSurah,
+                  isExpanded: true,
+                  decoration: InputDecoration(
+                    border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10)),
+                    contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 8),
+                  ),
+                  items: List.generate(114, (i) {
+                    final n = i + 1;
+                    return DropdownMenuItem(
+                      value: n,
+                      child: Text(
+                        isAr
+                            ? '${_arabicNumerals(n)}. ${_surahArabicNames[n] ?? n.toString()}'
+                            : '$n. Surah $n',
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    );
+                  }),
+                  onChanged: (v) {
+                    if (v != null) {
+                      setDialogState(() {
+                        selectedSurah = v;
+                        enteredAyah = 1;
+                      });
+                    }
+                  },
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  isAr
+                      ? 'رقم الآية (١ – ${_arabicNumerals(maxAyah)}):'
+                      : 'Ayah number (1–$maxAyah):',
+                  style: const TextStyle(
+                      fontWeight: FontWeight.bold, fontSize: 13),
+                ),
+                const SizedBox(height: 6),
+                TextFormField(
+                  controller: ayahCtrl,
+                  keyboardType: TextInputType.number,
+                  textAlign: TextAlign.center,
+                  decoration: InputDecoration(
+                    border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10)),
+                    contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 8),
+                    hintText: '1 – $maxAyah',
+                  ),
+                  onChanged: (v) {
+                    final n = int.tryParse(v);
+                    if (n != null && n >= 1 && n <= maxAyah) {
+                      enteredAyah = n;
+                    }
+                  },
+                ),
+              ],
+            ),
+          ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: Text(isAr ? 'إلغاء' : 'Cancel'),
+              ),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: Colors.white),
+                onPressed: () {
+                  final n = int.tryParse(ayahCtrl.text);
+                  final ayah = (n != null &&
+                          n >= 1 &&
+                          n <= maxAyah)
+                      ? n
+                      : enteredAyah;
+                  cubit.saveLastRead(selectedSurah, ayah);
+                  Navigator.pop(ctx);
+                },
+                child: Text(isAr ? 'حفظ' : 'Save'),
+              ),
+            ],
+          );
+        },
       ),
     );
   }

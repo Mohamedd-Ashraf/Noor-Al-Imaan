@@ -33,6 +33,8 @@ import '../audio/download_manager_cubit.dart';
 import '../../features/wird/data/wird_service.dart';
 import '../../features/wird/services/wird_notification_service.dart';
 import '../../features/wird/presentation/cubit/wird_cubit.dart';
+import '../../features/adhkar/data/adhkar_progress_service.dart';
+import '../../features/adhkar/presentation/cubit/adhkar_progress_cubit.dart';
 
 final sl = GetIt.instance;
 
@@ -106,6 +108,8 @@ Future<void> init() async {
   sl.registerLazySingleton(() => WirdService(sl()));
   sl.registerLazySingleton(() => WirdNotificationService(sl(), sl()));
   sl.registerFactory(() => WirdCubit(sl(), sl()));
+  sl.registerLazySingleton(() => AdhkarProgressService(sl()));
+  sl.registerFactory(() => AdhkarProgressCubit(sl()));
   sl.registerLazySingleton(() => AudioDownloadStateService(sl()));
   sl.registerLazySingleton(
     () => AudioDownloadNotificationService(sl(), sl()),

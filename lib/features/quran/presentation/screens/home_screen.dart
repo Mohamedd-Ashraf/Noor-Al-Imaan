@@ -14,7 +14,7 @@ import '../../../../core/audio/ayah_audio_cubit.dart';
 import '../../../../core/widgets/islamic_logo.dart';
 import '../../../islamic/presentation/screens/adhan_settings_screen.dart';
 import '../../../islamic/presentation/screens/prayer_times_screen.dart';
-import '../../../islamic/presentation/screens/qiblah_screen.dart';
+import '../../../adhkar/presentation/screens/adhkar_categories_screen.dart';
 import '../../../islamic/presentation/widgets/next_prayer_countdown.dart';
 import 'surah_detail_screen.dart';
 import 'offline_audio_screen.dart';
@@ -579,12 +579,12 @@ class _CategoriesSection extends StatelessWidget {
                 },
               ),
               _CategoryTile(
-                label: isArabicUi ? 'القبلة' : 'Qiblah',
-                icon: Icons.explore_rounded,
+                label: isArabicUi ? 'الأذكار والأدعية' : 'Adhkar',
+                icon: Icons.auto_awesome_rounded,
                 onTap: () {
-                  Navigator.of(
-                    context,
-                  ).push(MaterialPageRoute(builder: (_) => const QiblahScreen()));
+                  Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const AdhkarCategoriesScreen()),
+                  );
                 },
               ),
               _CategoryTile(
@@ -788,16 +788,19 @@ class _CategoryTile extends StatelessWidget {
                 ),
                 const SizedBox(height: 10),
                 Flexible(
-                  child: Text(
-                  label,
-                  textAlign: TextAlign.center,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(
-                    context,
-                  ).textTheme.bodySmall?.copyWith(
-                      fontWeight: FontWeight.w700,
-                      fontSize: 12,
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      label,
+                      textAlign: TextAlign.center,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(
+                        context,
+                      ).textTheme.bodySmall?.copyWith(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 12,
+                        ),
                     ),
                   ),
                 ),

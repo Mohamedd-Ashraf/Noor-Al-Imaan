@@ -40,15 +40,26 @@ class WirdPlanLoaded extends WirdState {
   /// Hours between follow-up reminders.
   final int followUpIntervalHours;
 
+  /// Last reading bookmark: surah number (1–114). Null if not set.
+  final int? lastReadSurah;
+
+  /// Last reading bookmark: ayah number. Null if not set.
+  final int? lastReadAyah;
+
   const WirdPlanLoaded(
     this.plan, {
     this.reminderHour,
     this.reminderMinute,
     this.notificationsEnabled = true,
     this.followUpIntervalHours = 4,
+    this.lastReadSurah,
+    this.lastReadAyah,
   });
 
   bool get hasReminder => reminderHour != null && reminderMinute != null;
+
+  /// True when the user has a saved reading bookmark.
+  bool get hasLastRead => lastReadSurah != null && lastReadAyah != null;
 
   @override
   List<Object?> get props => [
@@ -60,5 +71,7 @@ class WirdPlanLoaded extends WirdState {
         reminderMinute,
         notificationsEnabled,
         followUpIntervalHours,
+        lastReadSurah,
+        lastReadAyah,
       ];
 }
