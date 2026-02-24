@@ -97,6 +97,7 @@ class _MushafSettingsScreenState extends State<MushafSettingsScreen>
                       gradient: LinearGradient(
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
+                        //t
                         colors: [
                           AppColors.gradientStart,
                           AppColors.gradientMid,
