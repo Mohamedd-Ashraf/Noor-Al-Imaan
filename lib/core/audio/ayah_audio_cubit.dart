@@ -18,6 +18,10 @@ class AyahAudioState extends Equatable {
   final int? surahNumber;
   final int? ayahNumber;
   final String? errorMessage;
+  /// 0-based index in the surah queue (0 when not in queue mode).
+  final int queueIndex;
+  /// Total number of surahs in the queue (0 = not in queue mode).
+  final int queueTotal;
 
   const AyahAudioState({
     required this.status,
@@ -25,11 +29,14 @@ class AyahAudioState extends Equatable {
     this.surahNumber,
     this.ayahNumber,
     this.errorMessage,
+    this.queueIndex = 0,
+    this.queueTotal = 0,
   });
 
   const AyahAudioState.idle() : this(status: AyahAudioStatus.idle);
 
   bool get hasTarget => surahNumber != null && ayahNumber != null;
+  bool get isQueueMode => queueTotal > 1;
 
   bool isCurrent(int s, int a) => surahNumber == s && ayahNumber == a;
 
@@ -40,6 +47,8 @@ class AyahAudioState extends Equatable {
     surahNumber,
     ayahNumber,
     errorMessage,
+    queueIndex,
+    queueTotal,
   ];
 
   AyahAudioState copyWith({
@@ -49,6 +58,8 @@ class AyahAudioState extends Equatable {
     int? ayahNumber,
     String? errorMessage,
     bool clearError = false,
+    int? queueIndex,
+    int? queueTotal,
   }) {
     return AyahAudioState(
       status: status ?? this.status,
@@ -56,6 +67,8 @@ class AyahAudioState extends Equatable {
       surahNumber: surahNumber ?? this.surahNumber,
       ayahNumber: ayahNumber ?? this.ayahNumber,
       errorMessage: clearError ? null : (errorMessage ?? this.errorMessage),
+      queueIndex: queueIndex ?? this.queueIndex,
+      queueTotal: queueTotal ?? this.queueTotal,
     );
   }
 }
@@ -69,6 +82,11 @@ class AyahAudioCubit extends Cubit<AyahAudioState> {
   StreamSubscription<int?>? _indexSub;
   StreamSubscription<Duration?>? _durationCacheSub;
   bool _initialized = false;
+
+  // ── Surah queue ───────────────────────────────────────────────────────────
+  /// Items waiting to be played.  Each item is a surah + ayah-count pair.
+  List<({int surahNumber, int numberOfAyahs})> _surahQueue = [];
+  int _surahQueueIndex = 0;
 
   // ── Playlist progress tracking ────────────────────────────────────────────
   /// Total items in the playlist (ayahs + silence items interleaved).
@@ -137,8 +155,7 @@ class AyahAudioCubit extends Cubit<AyahAudioState> {
       }
 
       if (processing == ProcessingState.completed) {
-        // Auto-hide player by resetting to idle after completion
-        emit(const AyahAudioState.idle());
+        _onPlaylistCompleted();
         return;
       }
 
@@ -252,6 +269,46 @@ class AyahAudioCubit extends Cubit<AyahAudioState> {
         );
       });
 
+  // ── Queue helpers ─────────────────────────────────────────────────────────
+
+  /// Called when the current audio source finishes.
+  /// If a surah queue is active, starts the next surah; otherwise goes idle.
+  void _onPlaylistCompleted() {
+    if (_surahQueue.isNotEmpty &&
+        _surahQueueIndex < _surahQueue.length - 1) {
+      final next = _surahQueueIndex + 1;
+      _surahQueueIndex = next;
+      // Schedule async work in the next microtask so the listener can return.
+      Future(() => _playSurahQueueItem(next));
+      return;
+    }
+    // Queue exhausted or no queue — go idle.
+    _surahQueue = [];
+    _surahQueueIndex = 0;
+    emit(const AyahAudioState.idle());
+  }
+
+  Future<void> _playSurahQueueItem(int index) async {
+    if (index < 0 || index >= _surahQueue.length) return;
+    final item = _surahQueue[index];
+    await _playSurahInternal(
+      surahNumber: item.surahNumber,
+      numberOfAyahs: item.numberOfAyahs,
+      queueIndex: index,
+      queueTotal: _surahQueue.length,
+    );
+  }
+
+  /// Play a list of surahs one after another (queue / playlist mode).
+  Future<void> playQueue(
+    List<({int surahNumber, int numberOfAyahs})> surahs,
+  ) async {
+    if (surahs.isEmpty) return;
+    _surahQueue = List.of(surahs);
+    _surahQueueIndex = 0;
+    await _playSurahQueueItem(0);
+  }
+
   Future<void> togglePlayAyah({
     required int surahNumber,
     required int ayahNumber,
@@ -284,6 +341,9 @@ class AyahAudioCubit extends Cubit<AyahAudioState> {
     required int surahNumber,
     required int ayahNumber,
   }) async {
+    // Clear any active queue when playing a single ayah.
+    _surahQueue = [];
+    _surahQueueIndex = 0;
     // Stop Adhan (await so native stop completes before audio starts).
     await _adhanService.stopCurrentAdhan();
     if (!_initialized) {
@@ -341,13 +401,33 @@ class AyahAudioCubit extends Cubit<AyahAudioState> {
       }
       return;
     }
-
+    // Clear queue when toggling a single surah.
+    _surahQueue = [];
+    _surahQueueIndex = 0;
     await playSurah(surahNumber: surahNumber, numberOfAyahs: numberOfAyahs);
   }
 
   Future<void> playSurah({
     required int surahNumber,
     required int numberOfAyahs,
+  }) async {
+    // Clear any existing queue when playing a standalone surah.
+    _surahQueue = [];
+    _surahQueueIndex = 0;
+    await _playSurahInternal(
+      surahNumber: surahNumber,
+      numberOfAyahs: numberOfAyahs,
+      queueIndex: 0,
+      queueTotal: 0,
+    );
+  }
+
+  /// Core surah-playback logic shared by [playSurah] and [_playSurahQueueItem].
+  Future<void> _playSurahInternal({
+    required int surahNumber,
+    required int numberOfAyahs,
+    int queueIndex = 0,
+    int queueTotal = 0,
   }) async {
     // Stop Adhan (await so native stop completes before audio starts).
     await _adhanService.stopCurrentAdhan();
@@ -361,6 +441,8 @@ class AyahAudioCubit extends Cubit<AyahAudioState> {
         mode: AyahAudioMode.surah,
         surahNumber: surahNumber,
         ayahNumber: 1,
+        queueIndex: queueIndex,
+        queueTotal: queueTotal,
       ),
     );
 
@@ -403,6 +485,8 @@ class AyahAudioCubit extends Cubit<AyahAudioState> {
           mode: AyahAudioMode.surah,
           surahNumber: surahNumber,
           ayahNumber: 1,
+          queueIndex: queueIndex,
+          queueTotal: queueTotal,
           errorMessage: e.toString().replaceFirst('Exception: ', ''),
         ),
       );
@@ -498,6 +582,8 @@ class AyahAudioCubit extends Cubit<AyahAudioState> {
   }
 
   Future<void> stop() async {
+    _surahQueue = [];
+    _surahQueueIndex = 0;
     await _player.stop();
     emit(const AyahAudioState.idle());
   }

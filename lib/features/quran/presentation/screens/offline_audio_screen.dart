@@ -29,9 +29,6 @@ class _OfflineAudioScreenState extends State<OfflineAudioScreen>
   Set<int> _downloadedSurahs = {};
   Map<String, dynamic>? _stats;
   bool _loadingStats = false;
-  String _langFilter = 'all';
-  bool _langFilterInit = false;
-
   /// For the quality-confirm dialog (shown once per edition selection).
   String? _confirmedEdition;
 
@@ -166,6 +163,19 @@ class _OfflineAudioScreenState extends State<OfflineAudioScreen>
           appBar: AppBar(
             title: Text(ar ? 'الصوت دون إنترنت' : 'Offline Audio'),
             centerTitle: true,
+            flexibleSpace: Container(
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    AppColors.gradientStart,
+                    AppColors.gradientMid,
+                    AppColors.gradientEnd,
+                  ],
+                ),
+              ),
+            ),
             actions: [
               if (!isRunning)
                 IconButton(
@@ -230,18 +240,35 @@ class _OfflineAudioScreenState extends State<OfflineAudioScreen>
                   if (dlState is DownloadCompleted)
                     _CompletedCard(state: dlState, isArabicUi: ar),
 
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 4),
 
-                  // ── Surah grid ───────────────────────────────────────────
-                  _SurahGrid(
-                    downloadedSurahs: _downloadedSurahs,
-                    activeSurahs: dlState is DownloadInProgress
-                        ? {(dlState).progress.currentSurah}
-                        : const {},
+                  // ── Reciter selector ─────────────────────────────────────
+                  _ReciterCard(
+                    editionsFuture: _editionsFuture,
+                    audioService: _audioService,
+                    isRunning: isRunning,
                     isArabicUi: ar,
+                    onEditionChanged: (v) async {
+                      await _audioService.setEdition(v);
+                      if (!mounted) return;
+                      try { context.read<AyahAudioCubit>().stop(); } catch (_) {}
+                      setState(() => _confirmedEdition = null);
+                      await _refreshStats();
+                    },
                   ),
 
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 14),
+
+                  // ── Action buttons ───────────────────────────────────────
+                  _ActionButtons(
+                    isRunning: isRunning,
+                    isArabicUi: ar,
+                    onDownloadAll: _startAll,
+                    onSelectiveDownload: _startSelective,
+                    onCancel: () => context.read<DownloadManagerCubit>().cancel(),
+                  ),
+
+                  const SizedBox(height: 20),
 
                   // ── Stats card ───────────────────────────────────────────
                   if (_stats != null)
@@ -253,47 +280,15 @@ class _OfflineAudioScreenState extends State<OfflineAudioScreen>
                           : null,
                     ),
 
-                  const SizedBox(height: 16),
-
-                  // ── Reciter selector ─────────────────────────────────────
-                  _ReciterCard(
-                    editionsFuture: _editionsFuture,
-                    audioService: _audioService,
-                    isRunning: isRunning,
-                    langFilter: _langFilter,
-                    langFilterInit: _langFilterInit,
-                    isArabicUi: ar,
-                    onLangChanged: (v) => setState(() {
-                      _langFilter = v;
-                      _langFilterInit = true;
-                      _confirmedEdition = null;
-                    }),
-                    onEditionChanged: (v) async {
-                      await _audioService.setEdition(v);
-                      if (!mounted) return;
-                      try { context.read<AyahAudioCubit>().stop(); } catch (_) {}
-                      setState(() => _confirmedEdition = null);
-                      await _refreshStats();
-                    },
-                    onLangInit: (lang) {
-                      if (!_langFilterInit) {
-                        setState(() {
-                          _langFilter = lang;
-                          _langFilterInit = true;
-                        });
-                      }
-                    },
-                  ),
-
                   const SizedBox(height: 20),
 
-                  // ── Action buttons ───────────────────────────────────────
-                  _ActionButtons(
-                    isRunning: isRunning,
+                  // ── Surah grid ───────────────────────────────────────────
+                  _SurahGrid(
+                    downloadedSurahs: _downloadedSurahs,
+                    activeSurahs: dlState is DownloadInProgress
+                        ? {(dlState).progress.currentSurah}
+                        : const {},
                     isArabicUi: ar,
-                    onDownloadAll: _startAll,
-                    onSelectiveDownload: _startSelective,
-                    onCancel: () => context.read<DownloadManagerCubit>().cancel(),
                   ),
                 ],
               ),
@@ -346,28 +341,40 @@ class _ResumeBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
     final ar = isArabicUi;
     const amber = Color(0xFFE65100);
-    const amberBg = Color(0xFFFFF3E0);
+    const amberLight = Color(0xFFFFF3E0);
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
-        color: Theme.of(context).brightness == Brightness.dark
-            ? const Color(0xFF3E2723).withValues(alpha: 0.6)
-            : amberBg,
+        color: amberLight,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: amber.withValues(alpha: 0.6), width: 1.5),
+        border: Border.all(color: amber.withValues(alpha: 0.4), width: 1.5),
+        boxShadow: [
+          BoxShadow(
+            color: amber.withValues(alpha: 0.08),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
+      clipBehavior: Clip.hardEdge,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header strip
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                colors: [Color(0xFFE65100), Color(0xFFFF6D00)],
+              ),
+            ),
+            child: Row(
               children: [
                 const Icon(Icons.cloud_download_outlined,
-                    color: amber, size: 22),
+                    color: Colors.white, size: 18),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
@@ -376,57 +383,106 @@ class _ResumeBanner extends StatelessWidget {
                         : 'Incomplete Download – Ready to Resume',
                     style: const TextStyle(
                       fontWeight: FontWeight.bold,
-                      fontSize: 14,
-                      color: amber,
+                      fontSize: 13,
+                      color: Colors.white,
                     ),
                   ),
                 ),
-                IconButton(
-                  icon: const Icon(Icons.close, size: 16, color: amber),
-                  onPressed: onDismiss,
-                  tooltip: ar ? 'لاحقاً' : 'Later',
-                  visualDensity: VisualDensity.compact,
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(),
+                InkWell(
+                  onTap: onDismiss,
+                  borderRadius: BorderRadius.circular(20),
+                  child: const Padding(
+                    padding: EdgeInsets.all(4),
+                    child: Icon(Icons.close_rounded,
+                        size: 16, color: Colors.white70),
+                  ),
                 ),
               ],
             ),
-            const SizedBox(height: 6),
-            Text(
-              ar
-                  ? '${state.completed} من ${state.totalSurahs} سورة مكتملة — ${state.remaining} سورة متبقية'
-                  : '${state.completed} of ${state.totalSurahs} surahs done — ${state.remaining} remaining',
-              style: TextStyle(
-                  fontSize: 13, color: scheme.onSurfaceVariant),
-            ),
-            const SizedBox(height: 8),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(4),
-              child: LinearProgressIndicator(
-                value: (state.percent / 100).clamp(0.0, 1.0),
-                minHeight: 7,
-                backgroundColor: const Color(0xFFFFCC80),
-                valueColor: const AlwaysStoppedAnimation<Color>(amber),
-              ),
-            ),
-            const SizedBox(height: 12),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton.icon(
-                onPressed: onResume,
-                icon: const Icon(Icons.play_arrow_rounded),
-                label: Text(ar ? 'استكمال التحميل' : 'Resume Download'),
-                style: FilledButton.styleFrom(
-                  backgroundColor: amber,
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
+          ),
+          // Content
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Text(
+                      '${state.completed}',
+                      style: const TextStyle(
+                        fontSize: 28,
+                        fontWeight: FontWeight.w800,
+                        color: amber,
+                      ),
+                    ),
+                    Text(
+                      ' / ${state.totalSurahs}',
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500,
+                        color: amber,
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      ar ? 'سورة مكتملة' : 'surahs done',
+                      style: const TextStyle(
+                          fontSize: 13, color: Color(0xFF5D4037)),
+                    ),
+                    const Spacer(),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: amber.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        ar
+                            ? '${state.remaining} متبقية'
+                            : '${state.remaining} left',
+                        style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: amber),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(6),
+                  child: LinearProgressIndicator(
+                    value: (state.percent / 100).clamp(0.0, 1.0),
+                    minHeight: 8,
+                    backgroundColor: const Color(0xFFFFCC80),
+                    valueColor:
+                        const AlwaysStoppedAnimation<Color>(amber),
                   ),
                 ),
-              ),
+                const SizedBox(height: 14),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.icon(
+                    onPressed: onResume,
+                    icon: const Icon(Icons.play_arrow_rounded),
+                    label: Text(ar
+                        ? 'استكمال التحميل'
+                        : 'Resume Download'),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: amber,
+                      padding:
+                          const EdgeInsets.symmetric(vertical: 13),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12)),
+                    ),
+                  ),
+                ),
+              ],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -625,21 +681,25 @@ class _BusyCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
-      padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 16),
+      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
       decoration: BoxDecoration(
-        color: scheme.surfaceContainerHigh,
+        color: AppColors.primary.withValues(alpha: 0.06),
         borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+            color: AppColors.primary.withValues(alpha: 0.2)),
       ),
       child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
         const SizedBox(
             width: 18,
             height: 18,
-            child: CircularProgressIndicator(strokeWidth: 2)),
+            child: CircularProgressIndicator(
+                strokeWidth: 2, color: AppColors.primary)),
         const SizedBox(width: 12),
-        Text(label, style: TextStyle(color: scheme.onSurfaceVariant)),
+        Text(label,
+            style: const TextStyle(
+                color: AppColors.primary, fontWeight: FontWeight.w600)),
       ]),
     );
   }
@@ -658,54 +718,110 @@ class _ErrorCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ar = isArabicUi;
+    final isNetwork = state.isNetworkError;
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
-      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppColors.error.withValues(alpha: 0.07),
-        borderRadius: BorderRadius.circular(14),
+        color: AppColors.error.withValues(alpha: 0.05),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(
-            color: AppColors.error.withValues(alpha: 0.5), width: 1.5),
+            color: AppColors.error.withValues(alpha: 0.35), width: 1.5),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.error.withValues(alpha: 0.06),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
+          ),
+        ],
       ),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(children: [
-          Icon(
-            state.isNetworkError
-                ? Icons.wifi_off_rounded
-                : Icons.error_outline_rounded,
-            color: AppColors.error,
+      clipBehavior: Clip.hardEdge,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header strip
+          Container(
+            width: double.infinity,
+            padding:
+                const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            color: AppColors.error.withValues(alpha: 0.9),
+            child: Row(children: [
+              Icon(
+                isNetwork
+                    ? Icons.wifi_off_rounded
+                    : Icons.error_outline_rounded,
+                color: Colors.white,
+                size: 18,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                isNetwork
+                    ? (ar
+                        ? 'انقطع الاتصال بالإنترنت'
+                        : 'Internet connection lost')
+                    : (ar
+                        ? 'تعذّر إكمال التحميل'
+                        : 'Download interrupted'),
+                style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                    fontSize: 13),
+              ),
+            ]),
           ),
-          const SizedBox(width: 8),
-          Text(
-            state.isNetworkError
-                ? (ar ? 'انقطع الاتصال بالإنترنت' : 'Internet connection lost')
-                : (ar ? 'تعذّر إكمال التحميل' : 'Download interrupted'),
-            style: const TextStyle(
-                fontWeight: FontWeight.bold, color: AppColors.error),
+          // Content
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Progress saved info
+                Row(children: [
+                  _StatPill(
+                    icon: Icons.check_circle_outline_rounded,
+                    value: '${state.completedSurahs.length}',
+                    label: ar ? 'مكتملة' : 'done',
+                    color: AppColors.success,
+                  ),
+                  const SizedBox(width: 10),
+                  _StatPill(
+                    icon: Icons.pending_outlined,
+                    value: '${state.pendingSurahs.length}',
+                    label: ar ? 'متبقية' : 'left',
+                    color: AppColors.error,
+                  ),
+                ]),
+                const SizedBox(height: 10),
+                Text(
+                  isNetwork
+                      ? (ar
+                          ? 'تحقق من الاتصال ثم اضغط "أعِد المحاولة".'
+                          : 'Check your connection then tap "Retry".')
+                      : (ar
+                          ? 'اضغط "أعِد المحاولة" للاستمرار.'
+                          : 'Tap "Retry" to continue.'),
+                  style: const TextStyle(fontSize: 13, color: Colors.black54),
+                ),
+                const SizedBox(height: 14),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.icon(
+                    onPressed: onRetry,
+                    icon: const Icon(Icons.replay_rounded),
+                    label: Text(ar ? 'أعِد المحاولة' : 'Retry'),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: AppColors.error,
+                      padding:
+                          const EdgeInsets.symmetric(vertical: 13),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12)),
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
-        ]),
-        const SizedBox(height: 6),
-        Text(
-          state.isNetworkError
-              ? (ar
-                  ? 'انقطع الإنترنت أثناء التحميل.\nتم حفظ تقدمك – ${state.completedSurahs.length} سورة مكتملة، ${state.pendingSurahs.length} متبقية.\nتحقق من الاتصال ثم اضغط "أعِد المحاولة".'
-                  : 'The internet was cut during download.\nProgress saved – ${state.completedSurahs.length} surahs done, ${state.pendingSurahs.length} remaining.\nCheck your connection then tap "Retry".')
-              : (ar
-                  ? 'تم حفظ تقدمك – ${state.completedSurahs.length} سورة مكتملة، ${state.pendingSurahs.length} متبقية.\nاضغط "أعِد المحاولة" للاستمرار.'
-                  : 'Progress saved – ${state.completedSurahs.length} surahs done, ${state.pendingSurahs.length} remaining.\nTap "Retry" to continue.'),
-          style: const TextStyle(fontSize: 13),
-        ),
-        const SizedBox(height: 12),
-        SizedBox(
-          width: double.infinity,
-          child: FilledButton.icon(
-            onPressed: onRetry,
-            icon: const Icon(Icons.replay_rounded),
-            label: Text(ar ? 'أعِد المحاولة' : 'Retry'),
-            style: FilledButton.styleFrom(backgroundColor: AppColors.error),
-          ),
-        ),
-      ]),
+        ],
+      ),
     );
   }
 }
@@ -720,39 +836,92 @@ class _CompletedCard extends StatelessWidget {
     final ar = isArabicUi;
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
-      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: AppColors.success.withValues(alpha: 0.09),
-        borderRadius: BorderRadius.circular(14),
+        color: const Color(0xFFE8F5E9),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(
-            color: AppColors.success.withValues(alpha: 0.55), width: 1.5),
+            color: AppColors.success.withValues(alpha: 0.4), width: 1.5),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.success.withValues(alpha: 0.08),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
+          ),
+        ],
       ),
-      child: Row(children: [
-        const Icon(Icons.check_circle_outline_rounded,
-            color: AppColors.success, size: 28),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
+      clipBehavior: Clip.hardEdge,
+      child: Column(
+        children: [
+          // Green header strip
+          Container(
+            width: double.infinity,
+            padding:
+                const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                colors: [Color(0xFF2E7D32), Color(0xFF43A047)],
+              ),
+            ),
+            child: Row(children: [
+              const Icon(Icons.check_circle_rounded,
+                  color: Colors.white, size: 18),
+              const SizedBox(width: 8),
               Text(
-                ar ? '✓ اكتمل التحميل' : '✓ Download Complete',
+                ar ? 'اكتمل التحميل بنجاح 🎉' : 'Download Complete 🎉',
                 style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.success,
-                  fontSize: 15,
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 13),
+              ),
+            ]),
+          ),
+          // Content
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(children: [
+              Container(
+                width: 52,
+                height: 52,
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFF2E7D32), Color(0xFF66BB6A)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: const Icon(Icons.headphones_rounded,
+                    color: Colors.white, size: 26),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      ar
+                          ? '${state.totalFiles} ملف جاهز'
+                          : '${state.totalFiles} files ready',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w800,
+                        fontSize: 16,
+                        color: Color(0xFF1B5E20),
+                      ),
+                    ),
+                    Text(
+                      ar
+                          ? 'يمكنك الاستماع الآن بدون إنترنت'
+                          : 'Listen now without internet',
+                      style: const TextStyle(
+                          fontSize: 12, color: Color(0xFF388E3C)),
+                    ),
+                  ],
                 ),
               ),
-              Text(
-                ar
-                    ? '${state.totalFiles} ملف جاهز للاستماع بدون إنترنت'
-                    : '${state.totalFiles} files ready for offline playback',
-                style: const TextStyle(fontSize: 12),
-              ),
-            ],
+            ]),
           ),
-        ),
-      ]),
+        ],
+      ),
     );
   }
 }
@@ -773,100 +942,153 @@ class _SurahGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
     final ar = isArabicUi;
     final done = downloadedSurahs.length;
+    final pct = (done / 114 * 100).toStringAsFixed(0);
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(children: [
-          Icon(Icons.grid_view_rounded, size: 18, color: scheme.primary),
-          const SizedBox(width: 8),
-          Text(
-            ar ? 'السور المحمّلة ($done / 114)' : 'Surahs Downloaded ($done / 114)',
-            style: TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 15,
-                color: scheme.onSurface),
-          ),
-        ]),
-        const SizedBox(height: 8),
-        // Legend
-        Row(children: [
-          _Dot(color: AppColors.success, label: ar ? 'مكتمل' : 'Done'),
-          const SizedBox(width: 14),
-          _Dot(
-              color: AppColors.secondary,
-              label: ar ? 'جاري التحميل' : 'Downloading'),
-          const SizedBox(width: 14),
-          _Dot(
-              color: scheme.outline.withValues(alpha: 0.4),
-              label: ar ? 'لم يُحمَّل' : 'Not yet'),
-        ]),
-        const SizedBox(height: 10),
-        GridView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 10,
-            childAspectRatio: 1,
-            crossAxisSpacing: 4,
-            mainAxisSpacing: 4,
-          ),
-          itemCount: 114,
-          itemBuilder: (ctx, idx) {
-            final n = idx + 1;
-            final isDone = downloadedSurahs.contains(n);
-            final isActive = activeSurahs.contains(n);
-            final bg = isDone
-                ? AppColors.success
-                : isActive
-                    ? AppColors.secondary
-                    : scheme.surfaceContainerHighest;
-            final fg = (isDone || isActive)
-                ? Colors.white
-                : scheme.onSurfaceVariant;
-            return AnimatedContainer(
-              duration: const Duration(milliseconds: 250),
-              decoration: BoxDecoration(
-                color: bg,
-                borderRadius: BorderRadius.circular(5),
+    return Card(
+      margin: EdgeInsets.zero,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      elevation: 2,
+      clipBehavior: Clip.hardEdge,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header strip
+          Container(
+            width: double.infinity,
+            padding:
+                const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                colors: [AppColors.primary, Color(0xFF1A8A58)],
               ),
-              child: Center(
-                child: Text('$n',
-                    style: TextStyle(
-                        fontSize: 9,
-                        fontWeight: FontWeight.w600,
-                        color: fg)),
+            ),
+            child: Row(children: [
+              const Icon(Icons.grid_view_rounded,
+                  color: Colors.white, size: 16),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  ar
+                      ? 'خريطة السور ($done / 114)'
+                      : 'Surah Map ($done / 114)',
+                  style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 13),
+                ),
               ),
-            );
-          },
-        ),
-      ],
+              Container(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 10, vertical: 3),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.2),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  '$pct%',
+                  style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w800,
+                      fontSize: 12),
+                ),
+              ),
+            ]),
+          ),
+          // Legend + Grid
+          Padding(
+            padding: const EdgeInsets.all(14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Legend pills
+                Row(children: [
+                  _LegendPill(
+                      color: AppColors.success,
+                      label: ar ? 'محمَّل' : 'Done'),
+                  const SizedBox(width: 8),
+                  _LegendPill(
+                      color: const Color(0xFFD4AF37),
+                      label: ar ? 'يتحمّل' : 'Active'),
+                  const SizedBox(width: 8),
+                  _LegendPill(
+                      color: const Color(0xFFE0E0E0),
+                      label: ar ? 'لم يُحمَّل' : 'Not yet',
+                      textColor: Colors.grey),
+                ]),
+                const SizedBox(height: 12),
+                GridView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  gridDelegate:
+                      const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 10,
+                    childAspectRatio: 1,
+                    crossAxisSpacing: 3,
+                    mainAxisSpacing: 3,
+                  ),
+                  itemCount: 114,
+                  itemBuilder: (ctx, idx) {
+                    final n = idx + 1;
+                    final isDone = downloadedSurahs.contains(n);
+                    final isActive = activeSurahs.contains(n);
+                    final bg = isDone
+                        ? AppColors.success
+                        : isActive
+                            ? const Color(0xFFD4AF37)
+                            : const Color(0xFFEEEEEE);
+                    final fg =
+                        (isDone || isActive) ? Colors.white : Colors.grey;
+                    return AnimatedContainer(
+                      duration: const Duration(milliseconds: 250),
+                      decoration: BoxDecoration(
+                        color: bg,
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Center(
+                        child: Text('$n',
+                            style: TextStyle(
+                                fontSize: 9,
+                                fontWeight: FontWeight.w700,
+                                color: fg)),
+                      ),
+                    );
+                  },
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
 
-class _Dot extends StatelessWidget {
+class _LegendPill extends StatelessWidget {
   final Color color;
   final String label;
-  const _Dot({required this.color, required this.label});
+  final Color? textColor;
+  const _LegendPill(
+      {required this.color, required this.label, this.textColor});
 
   @override
   Widget build(BuildContext context) {
     return Row(mainAxisSize: MainAxisSize.min, children: [
       Container(
-        width: 10,
-        height: 10,
+        width: 12,
+        height: 12,
         decoration: BoxDecoration(
-            color: color, borderRadius: BorderRadius.circular(3)),
+            color: color, borderRadius: BorderRadius.circular(4)),
       ),
-      const SizedBox(width: 4),
-      Text(label,
-          style: TextStyle(
-              fontSize: 11,
-              color: Theme.of(context).colorScheme.onSurfaceVariant)),
+      const SizedBox(width: 5),
+      Text(
+        label,
+        style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w600,
+            color: textColor ?? Colors.black54),
+      ),
     ]);
   }
 }
@@ -900,129 +1122,161 @@ class _StatsCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
     final ar = isArabicUi;
     final files = _ti(stats['downloadedFiles']);
     final surahs = _ti(stats['downloadedSurahs']);
     final pct = _td(stats['percentage']);
     final sizeMB = _td(stats['totalSizeMB']);
 
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: scheme.surfaceContainerHigh,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: scheme.outline.withValues(alpha: 0.25)),
-      ),
+    return Card(
+      margin: EdgeInsets.zero,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      elevation: 2,
+      clipBehavior: Clip.hardEdge,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(children: [
-            Icon(Icons.storage_rounded, size: 18, color: scheme.primary),
-            const SizedBox(width: 8),
-            Text(
-              ar ? 'إحصائيات التحميل' : 'Download Stats',
-              style: TextStyle(
-                  fontWeight: FontWeight.bold, color: scheme.onSurface),
-            ),
-            const Spacer(),
-            if (onManage != null)
-              TextButton.icon(
-                onPressed: onManage,
-                icon: const Icon(Icons.delete_outline, size: 16),
-                label: Text(ar ? 'إدارة' : 'Manage',
-                    style: const TextStyle(fontSize: 13)),
-                style: TextButton.styleFrom(
-                  foregroundColor: AppColors.error,
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  visualDensity: VisualDensity.compact,
-                ),
+          // Header strip
+          Container(
+            width: double.infinity,
+            padding:
+                const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                colors: [AppColors.primary, Color(0xFF1A8A58)],
               ),
-          ]),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              _Chip(
-                  icon: Icons.audio_file_rounded,
-                  value: '$files',
-                  label: ar ? 'ملف' : 'files',
-                  scheme: scheme),
-              const SizedBox(width: 10),
-              _Chip(
-                  icon: Icons.menu_book_rounded,
-                  value: '$surahs',
-                  label: ar ? 'سورة' : 'surahs',
-                  scheme: scheme),
-              const SizedBox(width: 10),
-              _Chip(
-                  icon: Icons.sd_storage_rounded,
-                  value: '${sizeMB.toStringAsFixed(0)}MB',
-                  label: ar ? 'الحجم' : 'size',
-                  scheme: scheme),
-            ],
+            ),
+            child: Row(children: [
+              const Icon(Icons.storage_rounded,
+                  color: Colors.white, size: 16),
+              const SizedBox(width: 8),
+              Text(
+                ar ? 'إحصائيات التحميل' : 'Download Stats',
+                style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 13),
+              ),
+              const Spacer(),
+              if (onManage != null)
+                InkWell(
+                  onTap: onManage,
+                  borderRadius: BorderRadius.circular(20),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.2),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Row(mainAxisSize: MainAxisSize.min, children: [
+                      const Icon(Icons.delete_outline_rounded,
+                          size: 13, color: Colors.white),
+                      const SizedBox(width: 4),
+                      Text(
+                        ar ? 'إدارة' : 'Manage',
+                        style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600),
+                      ),
+                    ]),
+                  ),
+                ),
+            ]),
           ),
-          const SizedBox(height: 10),
-          Row(children: [
-            Expanded(
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(8),
-                child: LinearProgressIndicator(
-                  value: (pct / 100).clamp(0.0, 1.0),
-                  minHeight: 8,
-                  backgroundColor: scheme.surfaceContainerHighest,
-                  valueColor: const AlwaysStoppedAnimation<Color>(
-                      AppColors.success),
+          // Content
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              children: [
+                Row(
+                  children: [
+                    _StatPill(
+                        icon: Icons.audio_file_rounded,
+                        value: '$files',
+                        label: ar ? 'ملف' : 'files',
+                        color: AppColors.primary),
+                    const SizedBox(width: 10),
+                    _StatPill(
+                        icon: Icons.menu_book_rounded,
+                        value: '$surahs',
+                        label: ar ? 'سورة' : 'surahs',
+                        color: AppColors.primary),
+                    const SizedBox(width: 10),
+                    _StatPill(
+                        icon: Icons.sd_storage_rounded,
+                        value: '${sizeMB.toStringAsFixed(0)}MB',
+                        label: ar ? 'الحجم' : 'size',
+                        color: AppColors.primary),
+                  ],
                 ),
-              ),
+                const SizedBox(height: 14),
+                Row(children: [
+                  Expanded(
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: LinearProgressIndicator(
+                        value: (pct / 100).clamp(0.0, 1.0),
+                        minHeight: 9,
+                        backgroundColor: const Color(0xFFE8F5E9),
+                        valueColor: const AlwaysStoppedAnimation<Color>(
+                            AppColors.success),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Text(
+                    '${pct.toStringAsFixed(0)}%',
+                    style: const TextStyle(
+                        fontWeight: FontWeight.w800,
+                        fontSize: 15,
+                        color: AppColors.success),
+                  ),
+                ]),
+              ],
             ),
-            const SizedBox(width: 10),
-            Text(
-              '${pct.toStringAsFixed(0)}%',
-              style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 13,
-                  color: AppColors.success),
-            ),
-          ]),
+          ),
         ],
       ),
     );
   }
 }
 
-class _Chip extends StatelessWidget {
+class _StatPill extends StatelessWidget {
   final IconData icon;
   final String value;
   final String label;
-  final ColorScheme scheme;
-  const _Chip(
+  final Color color;
+  const _StatPill(
       {required this.icon,
       required this.value,
       required this.label,
-      required this.scheme});
+      required this.color});
 
   @override
   Widget build(BuildContext context) {
     return Expanded(
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 6),
+        padding:
+            const EdgeInsets.symmetric(vertical: 10, horizontal: 6),
         decoration: BoxDecoration(
-          color: scheme.surface,
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: scheme.outline.withValues(alpha: 0.2)),
+          color: color.withValues(alpha: 0.07),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: color.withValues(alpha: 0.2)),
         ),
         child: Column(children: [
-          Icon(icon, size: 18, color: scheme.primary),
+          Icon(icon, size: 18, color: color),
           const SizedBox(height: 3),
           Text(value,
               style: TextStyle(
                   fontSize: 14,
-                  fontWeight: FontWeight.bold,
-                  color: scheme.onSurface)),
+                  fontWeight: FontWeight.w800,
+                  color: color)),
           Text(label,
               style: TextStyle(
-                  fontSize: 10, color: scheme.onSurfaceVariant)),
+                  fontSize: 10,
+                  color: color.withValues(alpha: 0.7))),
         ]),
       ),
     );
@@ -1033,29 +1287,26 @@ class _Chip extends StatelessWidget {
 //  Reciter Card
 // ════════════════════════════════════════════════════════════════════════════
 
-class _ReciterCard extends StatelessWidget {
+class _ReciterCard extends StatefulWidget {
   final Future<List<AudioEdition>> editionsFuture;
   final OfflineAudioService audioService;
   final bool isRunning;
-  final String langFilter;
-  final bool langFilterInit;
   final bool isArabicUi;
-  final void Function(String) onLangChanged;
-  final void Function(String) onEditionChanged;
-  final void Function(String) onLangInit;
+  final Future<void> Function(String) onEditionChanged;
 
   const _ReciterCard({
     required this.editionsFuture,
     required this.audioService,
     required this.isRunning,
-    required this.langFilter,
-    required this.langFilterInit,
     required this.isArabicUi,
-    required this.onLangChanged,
     required this.onEditionChanged,
-    required this.onLangInit,
   });
 
+  @override
+  State<_ReciterCard> createState() => _ReciterCardState();
+}
+
+class _ReciterCardState extends State<_ReciterCard> {
   String _ll(String code, bool ar) {
     switch (code.toLowerCase()) {
       case 'ar': return ar ? 'العربية' : 'Arabic';
@@ -1069,156 +1320,201 @@ class _ReciterCard extends StatelessWidget {
     }
   }
 
+  Future<void> _showPicker(
+    BuildContext ctx,
+    List<AudioEdition> all,
+    String selected,
+    bool isAr,
+    String langCode,
+  ) async {
+    await showModalBottomSheet(
+      context: ctx,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _OfflineReciterPickerSheet(
+        all: all,
+        selected: selected,
+        isAr: isAr,
+        langCode: langCode,
+        languageLabel: _ll,
+        onSelected: (identifier) async {
+          await widget.onEditionChanged(identifier);
+        },
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final settings = context.watch<AppSettingsCubit>().state;
-    final scheme = Theme.of(context).colorScheme;
-    final ar = isArabicUi;
+    final ar = widget.isArabicUi;
 
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-        side: BorderSide(color: scheme.outline.withValues(alpha: 0.3)),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: FutureBuilder<List<AudioEdition>>(
-          future: editionsFuture,
-          builder: (ctx, snap) {
-            final all = snap.data ?? [];
-            final selected = audioService.edition;
+    return FutureBuilder<List<AudioEdition>>(
+      future: widget.editionsFuture,
+      builder: (ctx, snap) {
+        final all = snap.data ?? [];
+        final selected = widget.audioService.edition;
+        final isLoading = snap.connectionState == ConnectionState.waiting;
 
-            // Init language filter from selected edition.
-            if (!langFilterInit && all.isNotEmpty) {
-              final selLang = all
-                  .where((e) => e.identifier == selected)
-                  .cast<AudioEdition?>()
-                  .firstOrNull
-                  ?.language;
-              if (selLang != null && selLang.isNotEmpty) {
-                WidgetsBinding.instance.addPostFrameCallback(
-                    (_) => onLangInit(selLang.trim()));
-              }
-            }
+        final selectedEdition = all
+            .where((e) => e.identifier == selected)
+            .cast<AudioEdition?>()
+            .firstOrNull;
 
-            final langCodes = <String>{};
-            for (final e in all) {
-              final l = e.language;
-              if (l != null && l.isNotEmpty) langCodes.add(l.trim());
-            }
-            final langs = langCodes.toList()..sort();
+        final displayName = isLoading
+            ? (ar ? 'جارٍ التحميل...' : 'Loading...')
+            : (selectedEdition?.displayNameForAppLanguage(settings.appLanguageCode) ?? selected);
 
-            final filtered = langFilter == 'all'
-                ? all
-                : all.where((e) => e.language == langFilter).toList();
-            final items = filtered.isNotEmpty ? filtered : all;
-            final dropItems = List<AudioEdition>.from(items);
-            if (!dropItems.any((e) => e.identifier == selected)) {
-              dropItems.insert(0, AudioEdition(identifier: selected));
-            }
-            final selectedValue = dropItems.any((e) => e.identifier == selected)
-                ? selected
-                : dropItems.first.identifier;
+        final lang = selectedEdition?.language;
+        final langStr = (lang != null && lang.trim().isNotEmpty) ? _ll(lang.trim(), ar) : '';
 
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(children: [
-                  Icon(Icons.record_voice_over_rounded,
-                      size: 18, color: scheme.primary),
+        return Card(
+          margin: EdgeInsets.zero,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          elevation: 2,
+          clipBehavior: Clip.hardEdge,
+          child: Column(
+            children: [
+              // ── Gradient header strip ─────────────────────────
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [AppColors.primary, Color(0xFF1A8A58)],
+                    begin: Alignment.centerLeft,
+                    end: Alignment.centerRight,
+                  ),
+                ),
+                child: Row(children: [
+                  const Icon(Icons.record_voice_over_rounded, color: Colors.white, size: 16),
                   const SizedBox(width: 8),
                   Text(
-                    ar ? 'اختيار القارئ' : 'Select Reciter',
-                    style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        color: scheme.onSurface),
+                    ar ? 'القارئ المختار' : 'Selected Reciter',
+                    style: const TextStyle(
+                        color: Colors.white, fontWeight: FontWeight.w700, fontSize: 13),
                   ),
                 ]),
-                if (isRunning) ...[
-                  const SizedBox(height: 8),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 12, vertical: 8),
-                    decoration: BoxDecoration(
-                      color: scheme.surfaceContainerHigh,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Row(children: [
-                      Icon(Icons.lock_outline,
-                          size: 16, color: scheme.onSurfaceVariant),
-                      const SizedBox(width: 8),
-                      Text(
-                        ar
-                            ? 'لا يمكن تغيير القارئ أثناء التحميل'
-                            : 'Cannot change reciter during download',
-                        style: TextStyle(
-                            fontSize: 12,
-                            color: scheme.onSurfaceVariant),
-                      ),
-                    ]),
-                  ),
-                ] else ...[
-                  const SizedBox(height: 12),
-                  DropdownButtonFormField<String>(
-                    key: ValueKey('lang_$langFilter'),
-                    value: langFilter,
-                    isExpanded: true,
-                    decoration: InputDecoration(
-                      labelText: ar ? 'اللغة' : 'Language',
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 10),
-                    ),
-                    items: [
-                      DropdownMenuItem(
-                        value: 'all',
-                        child: Text(ar ? 'كل اللغات' : 'All languages'),
-                      ),
-                      ...langs.map((c) => DropdownMenuItem(
-                            value: c,
-                            child: Text(_ll(c, ar)),
-                          )),
-                    ],
-                    onChanged: (v) {
-                      if (v != null) onLangChanged(v);
-                    },
-                  ),
-                  const SizedBox(height: 10),
-                  DropdownButtonFormField<String>(
-                    key: ValueKey('ed_${selectedValue}_$langFilter'),
-                    value: selectedValue,
-                    isExpanded: true,
-                    decoration: InputDecoration(
-                      labelText: ar ? 'القارئ' : 'Reciter',
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 10),
-                    ),
-                    items: dropItems
-                        .map((e) => DropdownMenuItem<String>(
-                              value: e.identifier,
-                              child: Text(
-                                e.displayNameForAppLanguage(
-                                    settings.appLanguageCode),
-                                overflow: TextOverflow.ellipsis,
+              ),
+
+              // ── Content ────────────────────────────────────────
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+                child: widget.isRunning
+                    ? Row(children: [
+                        const Icon(Icons.lock_outline_rounded,
+                            size: 18, color: Colors.grey),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            ar
+                                ? 'لا يمكن تغيير القارئ أثناء التحميل'
+                                : 'Cannot change reciter during download',
+                            style: const TextStyle(fontSize: 13, color: Colors.grey),
+                          ),
+                        ),
+                      ])
+                    : Row(
+                        children: [
+                          // Circular avatar
+                          Container(
+                            width: 50,
+                            height: 50,
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                colors: [
+                                  AppColors.primary.withValues(alpha: 0.15),
+                                  const Color(0xFFD4AF37).withValues(alpha: 0.2),
+                                ],
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
                               ),
-                            ))
-                        .toList(),
-                    onChanged: (v) {
-                      if (v != null) onEditionChanged(v);
-                    },
-                  ),
-                ],
-              ],
-            );
-          },
-        ),
-      ),
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                  color: AppColors.primary.withValues(alpha: 0.3),
+                                  width: 1.5),
+                            ),
+                            child: const Icon(Icons.mic_rounded,
+                                color: AppColors.primary, size: 24),
+                          ),
+                          const SizedBox(width: 14),
+
+                          // Name + language badge
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                isLoading
+                                    ? const SizedBox(
+                                        width: 120,
+                                        height: 14,
+                                        child: LinearProgressIndicator(
+                                          color: AppColors.primary,
+                                          backgroundColor: Color(0x220D5E3A),
+                                        ),
+                                      )
+                                    : Text(
+                                        displayName,
+                                        style: const TextStyle(
+                                            fontWeight: FontWeight.w700,
+                                            fontSize: 15),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                if (langStr.isNotEmpty) ...[
+                                  const SizedBox(height: 5),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 8, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFFD4AF37)
+                                          .withValues(alpha: 0.15),
+                                      borderRadius: BorderRadius.circular(12),
+                                      border: Border.all(
+                                          color: const Color(0xFFD4AF37)
+                                              .withValues(alpha: 0.4)),
+                                    ),
+                                    child: Text(
+                                      langStr,
+                                      style: const TextStyle(
+                                          fontSize: 11,
+                                          color: Color(0xFF8B6914),
+                                          fontWeight: FontWeight.w600),
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+
+                          // Change button
+                          FilledButton.tonal(
+                            style: FilledButton.styleFrom(
+                              backgroundColor:
+                                  AppColors.primary.withValues(alpha: 0.12),
+                              foregroundColor: AppColors.primary,
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 14, vertical: 9),
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(10)),
+                            ),
+                            onPressed: isLoading
+                                ? null
+                                : () => _showPicker(ctx, all, selected, ar,
+                                    settings.appLanguageCode),
+                            child: Text(
+                              ar ? 'تغيير' : 'Change',
+                              style: const TextStyle(
+                                  fontSize: 13, fontWeight: FontWeight.w700),
+                            ),
+                          ),
+                        ],
+                      ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 }
@@ -1250,15 +1546,34 @@ class _ActionButtons extends StatelessWidget {
         Row(children: [
           Expanded(
             flex: 3,
-            child: FilledButton.icon(
-              onPressed: isRunning ? null : onDownloadAll,
-              icon: const Icon(Icons.download_rounded),
-              label: Text(ar ? 'تنزيل الكل' : 'Download All'),
-              style: FilledButton.styleFrom(
-                backgroundColor: AppColors.primary,
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12)),
+            child: Container(
+              decoration: BoxDecoration(
+                gradient: isRunning
+                    ? null
+                    : const LinearGradient(
+                        colors: [AppColors.primary, Color(0xFF1A8A58)],
+                        begin: Alignment.centerLeft,
+                        end: Alignment.centerRight,
+                      ),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: FilledButton.icon(
+                onPressed: isRunning ? null : onDownloadAll,
+                icon: const Icon(Icons.download_rounded, size: 20),
+                label: Text(
+                  ar ? 'تنزيل الكل' : 'Download All',
+                  style: const TextStyle(
+                      fontSize: 15, fontWeight: FontWeight.w700),
+                ),
+                style: FilledButton.styleFrom(
+                  backgroundColor: Colors.transparent,
+                  disabledBackgroundColor:
+                      AppColors.primary.withValues(alpha: 0.3),
+                  shadowColor: Colors.transparent,
+                  padding: const EdgeInsets.symmetric(vertical: 15),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14)),
+                ),
               ),
             ),
           ),
@@ -1273,9 +1588,9 @@ class _ActionButtons extends StatelessWidget {
                 foregroundColor: AppColors.primary,
                 side: BorderSide(
                     color: AppColors.primary.withValues(alpha: 0.7)),
-                padding: const EdgeInsets.symmetric(vertical: 14),
+                padding: const EdgeInsets.symmetric(vertical: 15),
                 shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12)),
+                    borderRadius: BorderRadius.circular(14)),
               ),
             ),
           ),
@@ -1390,3 +1705,388 @@ class _ManageDialogState extends State<_ManageDialog> {
   }
 }
 
+// ════════════════════════════════════════════════════════════════════════════
+//  Offline Reciter Picker Bottom Sheet
+// ════════════════════════════════════════════════════════════════════════════
+
+class _OfflineReciterPickerSheet extends StatefulWidget {
+  final List<AudioEdition> all;
+  final String selected;
+  final bool isAr;
+  final String langCode;
+  final String Function(String, bool) languageLabel;
+  final Future<void> Function(String identifier) onSelected;
+
+  const _OfflineReciterPickerSheet({
+    required this.all,
+    required this.selected,
+    required this.isAr,
+    required this.langCode,
+    required this.languageLabel,
+    required this.onSelected,
+  });
+
+  @override
+  State<_OfflineReciterPickerSheet> createState() =>
+      _OfflineReciterPickerSheetState();
+}
+
+class _OfflineReciterPickerSheetState
+    extends State<_OfflineReciterPickerSheet> {
+  late String _langFilter;
+  String _query = '';
+  late String _currentSelected;
+  final TextEditingController _searchCtrl = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _currentSelected = widget.selected;
+    final sel = widget.all
+        .where((e) => e.identifier == widget.selected)
+        .cast<AudioEdition?>()
+        .firstOrNull;
+    _langFilter = sel?.language?.trim().isNotEmpty == true
+        ? sel!.language!.trim()
+        : 'all';
+  }
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
+  List<String> get _languages {
+    final codes = <String>{};
+    for (final e in widget.all) {
+      final l = e.language;
+      if (l != null && l.trim().isNotEmpty) codes.add(l.trim());
+    }
+    return codes.toList()..sort();
+  }
+
+  List<AudioEdition> get _filtered {
+    var list = widget.all;
+    if (_langFilter != 'all') {
+      list = list.where((e) => e.language == _langFilter).toList();
+    }
+    if (_query.isNotEmpty) {
+      final q = _query.toLowerCase();
+      list = list
+          .where((e) =>
+              (e.englishName ?? '').toLowerCase().contains(q) ||
+              (e.name ?? '').toLowerCase().contains(q) ||
+              e.identifier.toLowerCase().contains(q))
+          .toList();
+    }
+    if (!list.any((e) => e.identifier == _currentSelected)) {
+      final sel = widget.all
+          .where((e) => e.identifier == _currentSelected)
+          .cast<AudioEdition?>()
+          .firstOrNull;
+      if (sel != null) list = [sel, ...list];
+    }
+    return list;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isAr = widget.isAr;
+    final languages = _languages;
+    final filtered = _filtered;
+
+    return Container(
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // ── Drag handle ───────────────────────────────────────
+          const SizedBox(height: 10),
+          Container(
+            width: 40,
+            height: 4,
+            decoration: BoxDecoration(
+              color: Colors.grey.shade300,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          const SizedBox(height: 12),
+
+          // ── Header ────────────────────────────────────────────
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                        colors: [AppColors.primary, Color(0xFF1A8A58)]),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(Icons.record_voice_over_rounded,
+                      color: Colors.white, size: 18),
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  isAr ? 'اختيار القارئ' : 'Choose Reciter',
+                  style: const TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.w800,
+                      color: AppColors.primary),
+                ),
+                const Spacer(),
+                IconButton(
+                  icon: const Icon(Icons.close_rounded),
+                  onPressed: () => Navigator.pop(context),
+                  color: Colors.grey.shade600,
+                ),
+              ],
+            ),
+          ),
+
+          // ── Search field ──────────────────────────────────────
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 10, 20, 8),
+            child: TextField(
+              controller: _searchCtrl,
+              textDirection: TextDirection.rtl,
+              onChanged: (v) => setState(() => _query = v),
+              decoration: InputDecoration(
+                isDense: true,
+                hintText: isAr ? 'ابحث عن القارئ...' : 'Search reciter...',
+                prefixIcon: const Icon(Icons.search_rounded,
+                    color: AppColors.primary),
+                suffixIcon: _query.isNotEmpty
+                    ? IconButton(
+                        icon: const Icon(Icons.clear_rounded, size: 18),
+                        onPressed: () {
+                          _searchCtrl.clear();
+                          setState(() => _query = '');
+                        },
+                      )
+                    : null,
+                filled: true,
+                fillColor: const Color(0xFFF5F8F5),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: BorderSide(
+                      color: AppColors.primary.withValues(alpha: 0.2)),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: BorderSide(
+                      color: AppColors.primary.withValues(alpha: 0.2)),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide:
+                      const BorderSide(color: AppColors.primary, width: 1.5),
+                ),
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              ),
+            ),
+          ),
+
+          // ── Language chips ────────────────────────────────────
+          SizedBox(
+            height: 38,
+            child: ListView(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              scrollDirection: Axis.horizontal,
+              children: [
+                _OfflineLangChip(
+                  label: isAr ? 'الكل' : 'All',
+                  selected: _langFilter == 'all',
+                  onTap: () => setState(() => _langFilter = 'all'),
+                ),
+                ...languages.map((code) => _OfflineLangChip(
+                      label: widget.languageLabel(code, isAr),
+                      selected: _langFilter == code,
+                      onTap: () => setState(() => _langFilter = code),
+                    )),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 6),
+          Divider(height: 1, color: Colors.grey.shade200),
+
+          // ── Reciter list ──────────────────────────────────────
+          Flexible(
+            child: filtered.isEmpty
+                ? Padding(
+                    padding: const EdgeInsets.all(32),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.search_off_rounded,
+                            size: 48, color: Colors.grey.shade300),
+                        const SizedBox(height: 12),
+                        Text(
+                          isAr ? 'لا توجد نتائج' : 'No results',
+                          style: TextStyle(color: Colors.grey.shade500),
+                        ),
+                      ],
+                    ),
+                  )
+                : ListView.separated(
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    itemCount: filtered.length,
+                    separatorBuilder: (_, __) => Divider(
+                        height: 1,
+                        indent: 70,
+                        color: Colors.grey.shade100),
+                    itemBuilder: (context, i) {
+                      final ed = filtered[i];
+                      final isSelected = ed.identifier == _currentSelected;
+                      final name =
+                          ed.displayNameForAppLanguage(widget.langCode);
+                      final lang = ed.language;
+                      final langStr =
+                          (lang != null && lang.trim().isNotEmpty)
+                              ? widget.languageLabel(lang, isAr)
+                              : '';
+
+                      return InkWell(
+                        onTap: () async {
+                          setState(
+                              () => _currentSelected = ed.identifier);
+                          await widget.onSelected(ed.identifier);
+                          if (context.mounted) Navigator.pop(context);
+                        },
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 16, vertical: 10),
+                          child: Row(
+                            children: [
+                              // Avatar
+                              Container(
+                                width: 42,
+                                height: 42,
+                                decoration: BoxDecoration(
+                                  color: isSelected
+                                      ? AppColors.primary
+                                      : AppColors.primary
+                                          .withValues(alpha: 0.08),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Icon(
+                                  isSelected
+                                      ? Icons.mic_rounded
+                                      : Icons.mic_none_rounded,
+                                  color: isSelected
+                                      ? Colors.white
+                                      : AppColors.primary,
+                                  size: 20,
+                                ),
+                              ),
+                              const SizedBox(width: 14),
+
+                              // Name + language
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      name,
+                                      style: TextStyle(
+                                        fontWeight: isSelected
+                                            ? FontWeight.w700
+                                            : FontWeight.w500,
+                                        fontSize: 14,
+                                        color: isSelected
+                                            ? AppColors.primary
+                                            : Colors.black87,
+                                      ),
+                                    ),
+                                    if (langStr.isNotEmpty)
+                                      Text(
+                                        langStr,
+                                        style: TextStyle(
+                                            fontSize: 11,
+                                            color: Colors.grey.shade500),
+                                      ),
+                                  ],
+                                ),
+                              ),
+
+                              // Check icon
+                              if (isSelected)
+                                Container(
+                                  padding: const EdgeInsets.all(4),
+                                  decoration: const BoxDecoration(
+                                    color: AppColors.primary,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: const Icon(Icons.check_rounded,
+                                      color: Colors.white, size: 14),
+                                ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+          ),
+
+          SizedBox(height: MediaQuery.of(context).padding.bottom + 8),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Language filter chip ──────────────────────────────────────────────────────
+
+class _OfflineLangChip extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _OfflineLangChip({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(right: 6),
+      child: GestureDetector(
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          padding:
+              const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+          decoration: BoxDecoration(
+            color: selected
+                ? AppColors.primary
+                : AppColors.primary.withValues(alpha: 0.07),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: selected
+                  ? AppColors.primary
+                  : AppColors.primary.withValues(alpha: 0.2),
+            ),
+          ),
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: selected ? Colors.white : AppColors.primary,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}

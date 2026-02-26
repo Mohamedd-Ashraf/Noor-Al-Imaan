@@ -1427,75 +1427,116 @@ class _ReminderCard extends StatelessWidget {
       timeLabel = isAr ? 'لم يُحدَّد وقت' : 'Not set';
     }
 
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: isDark ? AppColors.darkCard : Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: _hasReminder
-              ? AppColors.primary.withValues(alpha: 0.3)
-              : AppColors.divider.withValues(alpha: 0.4),
-        ),
-      ),
-      child: Row(
+    return Card(
+      margin: EdgeInsets.zero,
+      shape:
+          RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      clipBehavior: Clip.hardEdge,
+      elevation: 1.5,
+      child: Column(
         children: [
+          // ── Gradient header strip ─────────────────────────────────
           Container(
-            width: 44,
-            height: 44,
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(
+                horizontal: 16, vertical: 10),
             decoration: BoxDecoration(
-              color: _hasReminder
-                  ? AppColors.primary.withValues(alpha: 0.1)
-                  : AppColors.surfaceVariant,
-              shape: BoxShape.circle,
+              gradient: LinearGradient(
+                colors: _hasReminder
+                    ? const [AppColors.primary, Color(0xFF1A8A58)]
+                    : [Colors.grey.shade600, Colors.grey.shade500],
+                begin: Alignment.centerLeft,
+                end: Alignment.centerRight,
+              ),
             ),
-            child: Icon(
-              Icons.notifications_active_outlined,
-              color:
-                  _hasReminder ? AppColors.primary : AppColors.textSecondary,
-              size: 22,
-            ),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment:
-                  isAr ? CrossAxisAlignment.end : CrossAxisAlignment.start,
-              children: [
-                Text(
-                  isAr ? 'وقت التذكير اليومي' : 'Daily Reminder',
-                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                        fontWeight: FontWeight.w700,
-                        color: _hasReminder
-                            ? AppColors.primary
-                            : AppColors.textSecondary,
-                      ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  timeLabel,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: AppColors.textSecondary,
-                        fontWeight: _hasReminder
-                            ? FontWeight.w600
-                            : FontWeight.normal,
-                      ),
+            child: Row(children: [
+              const Icon(Icons.notifications_active_outlined,
+                  color: Colors.white, size: 16),
+              const SizedBox(width: 8),
+              Text(
+                isAr ? 'وقت التذكير اليومي' : 'Daily Reminder',
+                style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 13),
+              ),
+              if (_hasReminder) ...[  
+                const Spacer(),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 10, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.22),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    timeLabel,
+                    style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700),
+                  ),
                 ),
               ],
-            ),
+            ]),
           ),
-          TextButton.icon(
-            onPressed: () => _editReminder(context),
-            style: TextButton.styleFrom(
-              foregroundColor: AppColors.primary,
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            ),
-            icon: const Icon(Icons.edit_rounded, size: 16),
-            label: Text(
-              isAr ? 'تعديل' : 'Edit',
-              style:
-                  const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+
+          // ── Body ───────────────────────────────────────────────
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+            child: Row(
+              children: [
+                Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: _hasReminder
+                        ? AppColors.primary.withValues(alpha: 0.1)
+                        : AppColors.surfaceVariant,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(
+                    Icons.notifications_active_outlined,
+                    color: _hasReminder
+                        ? AppColors.primary
+                        : AppColors.textSecondary,
+                    size: 22,
+                  ),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Text(
+                    _hasReminder
+                        ? (isAr
+                            ? 'التذكير مفعّل — سيصلك إشعار يوميًا'
+                            : 'Reminder is active — you’ll get a daily notification')
+                        : (isAr ? 'لم يُحدَد وقت بعد' : 'No reminder set yet'),
+                    style:
+                        Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: AppColors.textSecondary,
+                            ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                OutlinedButton.icon(
+                  onPressed: () => _editReminder(context),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppColors.primary,
+                    side: const BorderSide(
+                        color: AppColors.primary, width: 1.2),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10)),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 8),
+                  ),
+                  icon: const Icon(Icons.edit_rounded, size: 15),
+                  label: Text(
+                    isAr ? 'تعديل' : 'Edit',
+                    style: const TextStyle(
+                        fontSize: 12, fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ],
             ),
           ),
         ],
@@ -2160,25 +2201,71 @@ class _DaysGrid extends StatelessWidget {
   Widget build(BuildContext context) {
     final today = plan.currentDay;
 
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: isDark ? AppColors.darkCard : Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.divider.withValues(alpha: 0.4)),
-      ),
+    final completedCount = plan.completedDays.length;
+    final pct = (plan.progressPercent * 100).round();
+
+    return Card(
+      margin: EdgeInsets.zero,
+      shape:
+          RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      clipBehavior: Clip.hardEdge,
+      elevation: 1.5,
       child: Column(
         crossAxisAlignment:
             isAr ? CrossAxisAlignment.end : CrossAxisAlignment.start,
         children: [
-          Text(
-            isAr ? 'تقدم الأيام' : 'Day Progress',
-            style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.primary,
+          // ── Gradient header strip ─────────────────────────────────
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(
+                horizontal: 16, vertical: 10),
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                colors: [AppColors.gradientStart, AppColors.gradientEnd],
+                begin: Alignment.centerLeft,
+                end: Alignment.centerRight,
+              ),
+            ),
+            child: Row(children: [
+              const Icon(Icons.calendar_view_month_rounded,
+                  color: Colors.white, size: 16),
+              const SizedBox(width: 8),
+              Text(
+                isAr ? 'تقدم الأيام' : 'Day Progress',
+                style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 13),
+              ),
+              const Spacer(),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 10, vertical: 3),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.22),
+                  borderRadius: BorderRadius.circular(12),
                 ),
+                child: Text(
+                  isAr
+                      ? 'إنجاز ${_arabicNumerals(pct)}٪ — ${_arabicNumerals(completedCount)} / ${_arabicNumerals(plan.targetDays)}'
+                      : '$pct% — $completedCount / ${plan.targetDays}',
+                  style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700),
+                ),
+              ),
+            ]),
           ),
-          const SizedBox(height: 14),
+
+          // ── Grid body ───────────────────────────────────────────
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: isAr
+                  ? CrossAxisAlignment.end
+                  : CrossAxisAlignment.start,
+              children: [
           GridView.builder(
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
@@ -2282,6 +2369,9 @@ class _DaysGrid extends StatelessWidget {
                   color: AppColors.error,
                   label: isAr ? 'لم يُقرأ' : 'Missed'),
             ],
+          ),
+              ],
+            ),
           ),
         ],
       ),

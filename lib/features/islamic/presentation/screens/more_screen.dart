@@ -44,32 +44,121 @@ class MoreScreen extends StatelessWidget {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          Container(
-            padding: const EdgeInsets.symmetric(vertical: 24),
+          // ── App logo card ──────────────────────────────────────────────
+          Card(
+            margin: const EdgeInsets.only(bottom: 4),
+            shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20)),
+            clipBehavior: Clip.hardEdge,
+            elevation: 2,
             child: Column(
               children: [
-                IslamicLogo(size: 100, darkTheme: isDark),
-                const SizedBox(height: 12),
-                Text(
-                  isArabicUi ? 'تطبيق القرآن الكريم' : 'Quran Application',
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    color: AppColors.primary,
-                    fontWeight: FontWeight.bold,
-                    fontFamily: 'Amiri',
+                // Gradient header strip
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 16, vertical: 12),
+                  decoration: const BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        AppColors.gradientStart,
+                        AppColors.gradientEnd
+                      ],
+                      begin: Alignment.centerLeft,
+                      end: Alignment.centerRight,
+                    ),
+                  ),
+                  child: Text(
+                    isArabicUi ? 'تطبيق القرآن الكريم' : 'Quran Application',
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w800,
+                      fontSize: 15,
+                      fontFamily: 'Amiri',
+                    ),
                   ),
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  isArabicUi ? 'الخدمات الإسلامية' : 'Islamic Services',
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: AppColors.textSecondary,
+                // Logo body
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                      vertical: 22, horizontal: 24),
+                  child: Column(
+                    children: [
+                      IslamicLogo(size: 90, darkTheme: isDark),
+                      const SizedBox(height: 12),
+                      Text(
+                        isArabicUi ? 'الخدمات الإسلامية' : 'Islamic Services',
+                        style:
+                            Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                  color: AppColors.textSecondary,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                      ),
+                    ],
                   ),
                 ),
               ],
             ),
           ),
-          const Divider(),
           const SizedBox(height: 8),
+
+          // ── Section header ─────────────────────────────────────────────
+          Padding(
+            padding: const EdgeInsets.fromLTRB(2, 8, 2, 10),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 14, vertical: 7),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [
+                        AppColors.gradientStart,
+                        AppColors.gradientEnd
+                      ],
+                      begin: Alignment.centerLeft,
+                      end: Alignment.centerRight,
+                    ),
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppColors.primary.withValues(alpha: 0.22),
+                        blurRadius: 8,
+                        offset: const Offset(0, 3),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.grid_view_rounded,
+                          color: Colors.white, size: 14),
+                      const SizedBox(width: 7),
+                      Text(
+                        isArabicUi
+                            ? 'الخدمات الإسلامية'
+                            : 'Islamic Services',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 0.3,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Divider(
+                    color: AppColors.primary.withValues(alpha: 0.15),
+                    height: 1,
+                  ),
+                ),
+              ],
+            ),
+          ),
           _NavCard(
             title: isArabicUi ? 'مواقيت الصلاة' : 'Prayer Times',
             subtitle: isArabicUi
@@ -165,13 +254,27 @@ class _NavCard extends StatelessWidget {
           child: Row(
             children: [
               Container(
-                width: 44,
-                height: 44,
+                width: 48,
+                height: 48,
                 decoration: BoxDecoration(
-                  color: AppColors.primary.withValues(alpha: 0.1),
-                  shape: BoxShape.circle,
+                  gradient: const LinearGradient(
+                    colors: [
+                      AppColors.gradientStart,
+                      AppColors.gradientEnd,
+                    ],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(13),
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppColors.primary.withValues(alpha: 0.25),
+                      blurRadius: 8,
+                      offset: const Offset(0, 3),
+                    ),
+                  ],
                 ),
-                child: Icon(icon, color: AppColors.primary),
+                child: Icon(icon, color: Colors.white, size: 22),
               ),
               const SizedBox(width: 14),
               Expanded(

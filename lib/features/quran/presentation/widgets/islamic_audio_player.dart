@@ -88,11 +88,16 @@ class IslamicAudioPlayer extends StatelessWidget {
                                   : 'Quran';
                             }
 
+                            // Queue mode suffix: "(2/10)"
+                            final queueSuffix = audioState.isQueueMode
+                                ? ' (${audioState.queueIndex + 1}/${audioState.queueTotal})'
+                                : '';
+
                             if (playingAyahNumber != null) {
                               title =
-                                  '$surahName • ${isArabicUi ? 'الآية' : 'Ayah'} $playingAyahNumber';
+                                  '$surahName$queueSuffix • ${isArabicUi ? 'الآية' : 'Ayah'} $playingAyahNumber';
                             } else {
-                              title = surahName;
+                              title = '$surahName$queueSuffix';
                             }
                           } else {
                             title = isArabicUi ? 'القرآن الكريم' : 'Quran';

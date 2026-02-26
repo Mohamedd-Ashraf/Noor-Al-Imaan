@@ -33,8 +33,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
   late final OfflineAudioService _offlineAudio;
   late final AudioEditionService _audioEditionService;
   late Future<List<AudioEdition>> _audioEditionsFuture;
-  String _audioLanguageFilter = 'all';
-  bool _didInitAudioLanguageFilter = false;
 
   String _languageLabel(String code, {required bool isAr}) {
     switch (code.toLowerCase()) {
@@ -73,6 +71,35 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _audioEditionsFuture =
           _audioEditionService.getVerseByVerseAudioEditions();
     });
+  }
+
+  Future<void> _showReciterPicker(
+    BuildContext ctx,
+    List<AudioEdition> all,
+    String selected,
+    bool isAr,
+    String langCode,
+  ) async {
+    await showModalBottomSheet(
+      context: ctx,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _ReciterPickerSheet(
+        all: all,
+        selected: selected,
+        isAr: isAr,
+        langCode: langCode,
+        languageLabel: _languageLabel,
+        onSelected: (identifier, chosenLang) async {
+          await _offlineAudio.setEdition(identifier);
+          if (!ctx.mounted) return;
+          try {
+            ctx.read<AyahAudioCubit>().stop();
+          } catch (_) {}
+          setState(() {});
+        },
+      ),
+    );
   }
 
   @override
@@ -121,32 +148,62 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     icon: Icons.language_rounded,
                     label: isAr ? 'لغة التطبيق' : 'App Language',
                   ),
-                  const SizedBox(height: 10),
-                  DropdownButtonFormField<String>(
-                    initialValue: isAr ? 'ar' : 'en',
-                    isExpanded: true,
-                    decoration: _inputDeco(isAr ? 'اللغة' : 'Language'),
-                    items: [
-                      DropdownMenuItem(
-                          value: 'en',
-                          child: Text(isAr ? 'الإنجليزية' : 'English')),
-                      DropdownMenuItem(
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    child: SegmentedButton<String>(
+                      style: ButtonStyle(
+                        visualDensity: VisualDensity.compact,
+                        foregroundColor: WidgetStateProperty.resolveWith(
+                          (s) => s.contains(WidgetState.selected)
+                              ? Colors.white
+                              : AppColors.primary,
+                        ),
+                        backgroundColor: WidgetStateProperty.resolveWith(
+                          (s) => s.contains(WidgetState.selected)
+                              ? AppColors.primary
+                              : null,
+                        ),
+                      ),
+                      segments: [
+                        ButtonSegment(
                           value: 'ar',
-                          child: Text(isAr ? 'العربية' : 'Arabic')),
-                    ],
-                    onChanged: (value) async {
-                      if (value == null) return;
-                      await context
-                          .read<AppSettingsCubit>()
-                          .setAppLanguage(value);
-                      if (!context.mounted) return;
-                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                        content: Text(value == 'ar'
-                            ? 'تم تحديث لغة التطبيق'
-                            : 'App language updated'),
-                        duration: const Duration(seconds: 1),
-                      ));
-                    },
+                          icon: const Icon(Icons.language_rounded, size: 16),
+                          label: Text(
+                            isAr ? 'العربية' : 'Arabic',
+                            style: const TextStyle(fontSize: 13),
+                          ),
+                        ),
+                        ButtonSegment(
+                          value: 'en',
+                          icon: const Icon(Icons.translate_rounded, size: 16),
+                          label: Text(
+                            isAr ? 'الإنجليزية' : 'English',
+                            style: const TextStyle(fontSize: 13),
+                          ),
+                        ),
+                      ],
+                      selected: {
+                        settings.appLanguageCode
+                                .toLowerCase()
+                                .startsWith('ar')
+                            ? 'ar'
+                            : 'en'
+                      },
+                      onSelectionChanged: (val) async {
+                        if (val.isEmpty) return;
+                        await context
+                            .read<AppSettingsCubit>()
+                            .setAppLanguage(val.first);
+                        if (!context.mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                          content: Text(val.first == 'ar'
+                              ? 'تم تحديث لغة التطبيق'
+                              : 'App language updated'),
+                          duration: const Duration(seconds: 1),
+                        ));
+                      },
+                    ),
                   ),
                 ],
               ),
@@ -418,144 +475,179 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
 
           // Reciter Selector
-          _SettingsCard(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(children: [
-                    const Icon(Icons.record_voice_over_rounded,
-                        color: AppColors.primary, size: 18),
-                    const SizedBox(width: 8),
-                    Text(isAr ? 'اختيار القارئ' : 'Choose Reciter',
-                        style: const TextStyle(
-                            fontWeight: FontWeight.w700, fontSize: 14)),
-                    const Spacer(),
-                    IconButton(
-                      visualDensity: VisualDensity.compact,
-                      tooltip: isAr ? 'تحديث القائمة' : 'Refresh list',
-                      icon: const Icon(Icons.refresh_rounded,
-                          size: 20, color: AppColors.primary),
-                      onPressed: _refreshReciters,
+          FutureBuilder<List<AudioEdition>>(
+            future: _audioEditionsFuture,
+            builder: (context, snap) {
+              final all = (snap.data ?? const <AudioEdition>[]).toList();
+              final selected = _offlineAudio.edition;
+              final selectedEdition = all
+                  .where((e) => e.identifier == selected)
+                  .cast<AudioEdition?>()
+                  .firstOrNull;
+
+              final isLoading =
+                  snap.connectionState == ConnectionState.waiting &&
+                      snap.data == null;
+              final displayName = isLoading
+                  ? (isAr ? 'جارٍ التحميل...' : 'Loading...')
+                  : (selectedEdition?.displayNameForAppLanguage(
+                          settings.appLanguageCode) ??
+                      selected);
+              final langLabel = (selectedEdition?.language != null &&
+                      selectedEdition!.language!.trim().isNotEmpty)
+                  ? _languageLabel(selectedEdition.language!, isAr: isAr)
+                  : '';
+
+              return Card(
+                margin: const EdgeInsets.only(bottom: 10),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16)),
+                elevation: 2,
+                clipBehavior: Clip.hardEdge,
+                child: Column(
+                  children: [
+                    // ── Gradient header strip ─────────────────────
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 10),
+                      decoration: const BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [AppColors.primary, Color(0xFF1A8A58)],
+                          begin: Alignment.centerLeft,
+                          end: Alignment.centerRight,
+                        ),
+                      ),
+                      child: Row(children: [
+                        const Icon(Icons.record_voice_over_rounded,
+                            color: Colors.white, size: 16),
+                        const SizedBox(width: 8),
+                        Text(
+                          isAr ? 'القارئ المختار' : 'Selected Reciter',
+                          style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 13),
+                        ),
+                        const Spacer(),
+                        InkWell(
+                          borderRadius: BorderRadius.circular(20),
+                          onTap: _refreshReciters,
+                          child: const Padding(
+                            padding: EdgeInsets.all(4),
+                            child: Icon(Icons.refresh_rounded,
+                                color: Colors.white70, size: 18),
+                          ),
+                        ),
+                      ]),
                     ),
-                  ]),
-                  const SizedBox(height: 12),
-                  FutureBuilder<List<AudioEdition>>(
-                    future: _audioEditionsFuture,
-                    builder: (context, snap) {
-                      final all =
-                          (snap.data ?? const <AudioEdition>[]).toList();
-                      final selected = _offlineAudio.edition;
 
-                      final selectedEdition = all
-                          .where((e) => e.identifier == selected)
-                          .cast<AudioEdition?>()
-                          .firstOrNull;
+                    // ── Current reciter + change button ───────────
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+                      child: Row(
+                        children: [
+                          // Circular avatar
+                          Container(
+                            width: 50,
+                            height: 50,
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                colors: [
+                                  AppColors.primary.withValues(alpha: 0.15),
+                                  const Color(0xFFD4AF37)
+                                      .withValues(alpha: 0.2),
+                                ],
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                              ),
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                  color:
+                                      AppColors.primary.withValues(alpha: 0.3),
+                                  width: 1.5),
+                            ),
+                            child: const Icon(Icons.mic_rounded,
+                                color: AppColors.primary, size: 24),
+                          ),
+                          const SizedBox(width: 14),
 
-                      if (!_didInitAudioLanguageFilter) {
-                        final lang = selectedEdition?.language;
-                        if (lang != null && lang.trim().isNotEmpty) {
-                          WidgetsBinding.instance.addPostFrameCallback((_) {
-                            if (!mounted || _didInitAudioLanguageFilter)
-                              return;
-                            setState(() {
-                              _audioLanguageFilter = lang;
-                              _didInitAudioLanguageFilter = true;
-                            });
-                          });
-                        } else {
-                          _didInitAudioLanguageFilter = true;
-                        }
-                      }
-
-                      final languageCodes = <String>{};
-                      for (final e in all) {
-                        final l = e.language;
-                        if (l != null && l.trim().isNotEmpty) {
-                          languageCodes.add(l.trim());
-                        }
-                      }
-                      final languages = languageCodes.toList()..sort();
-
-                      final filtered = _audioLanguageFilter == 'all'
-                          ? all
-                          : all
-                              .where(
-                                  (e) => e.language == _audioLanguageFilter)
-                              .toList();
-
-                      final reciterItems =
-                          (filtered.isNotEmpty ? filtered : all).toList();
-                      if (!reciterItems.any((e) => e.identifier == selected)) {
-                        reciterItems.insert(
-                            0, AudioEdition(identifier: selected));
-                      }
-
-                      return Column(children: [
-                        DropdownButtonFormField<String>(
-                          initialValue: _audioLanguageFilter,
-                          isExpanded: true,
-                          decoration: _inputDeco(
-                              isAr ? 'لغة القارئ' : 'Language'),
-                          items: [
-                            DropdownMenuItem(
-                                value: 'all',
-                                child: Text(
-                                    isAr ? 'كل اللغات' : 'All languages')),
-                            ...languages.map((code) => DropdownMenuItem(
-                                  value: code,
-                                  child: Text(
-                                      _languageLabel(code, isAr: isAr)),
-                                )),
-                          ],
-                          onChanged: (v) {
-                            if (v == null || v.isEmpty) return;
-                            setState(() => _audioLanguageFilter = v);
-                          },
-                        ),
-                        const SizedBox(height: 10),
-                        DropdownButtonFormField<String>(
-                          initialValue: selected,
-                          isExpanded: true,
-                          decoration: _inputDeco(
-                              isAr ? 'اسم القارئ' : 'Reciter name'),
-                          items: reciterItems
-                              .map((e) => DropdownMenuItem(
-                                    value: e.identifier,
-                                    child: Text(
-                                      e.displayNameForAppLanguage(
-                                          settings.appLanguageCode),
-                                      overflow: TextOverflow.ellipsis,
+                          // Name + language badge
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                isLoading
+                                    ? const SizedBox(
+                                        width: 120,
+                                        height: 14,
+                                        child: LinearProgressIndicator(
+                                          color: AppColors.primary,
+                                          backgroundColor: Color(0x220D5E3A),
+                                        ),
+                                      )
+                                    : Text(
+                                        displayName,
+                                        style: const TextStyle(
+                                            fontWeight: FontWeight.w700,
+                                            fontSize: 15),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                if (langLabel.isNotEmpty) ...[
+                                  const SizedBox(height: 5),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 8, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFFD4AF37)
+                                          .withValues(alpha: 0.15),
+                                      borderRadius: BorderRadius.circular(12),
+                                      border: Border.all(
+                                          color: const Color(0xFFD4AF37)
+                                              .withValues(alpha: 0.4)),
                                     ),
-                                  ))
-                              .toList(),
-                          onChanged: (v) async {
-                            if (v == null || v.isEmpty) return;
-                            await _offlineAudio.setEdition(v);
-                            if (!context.mounted) return;
-                            try {
-                              context.read<AyahAudioCubit>().stop();
-                            } catch (_) {}
-                            final chosen = all
-                                .where((e) => e.identifier == v)
-                                .cast<AudioEdition?>()
-                                .firstOrNull;
-                            final chosenLang = chosen?.language;
-                            setState(() {
-                              if (chosenLang != null &&
-                                  chosenLang.trim().isNotEmpty) {
-                                _audioLanguageFilter = chosenLang.trim();
-                              }
-                            });
-                          },
-                        ),
-                      ]);
-                    },
-                  ),
-                ],
-              ),
-            ),
+                                    child: Text(
+                                      langLabel,
+                                      style: const TextStyle(
+                                          fontSize: 11,
+                                          color: Color(0xFF8B6914),
+                                          fontWeight: FontWeight.w600),
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+
+                          // Change button
+                          FilledButton.tonal(
+                            style: FilledButton.styleFrom(
+                              backgroundColor:
+                                  AppColors.primary.withValues(alpha: 0.12),
+                              foregroundColor: AppColors.primary,
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 14, vertical: 9),
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(10)),
+                            ),
+                            onPressed: isLoading
+                                ? null
+                                : () => _showReciterPicker(context, all,
+                                    selected, isAr, settings.appLanguageCode),
+                            child: Text(
+                              isAr ? 'تغيير' : 'Change',
+                              style: const TextStyle(
+                                  fontSize: 13, fontWeight: FontWeight.w700),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
           ),
 
           // Download Quran Audio (conditional)
@@ -663,11 +755,65 @@ class _SettingsScreenState extends State<SettingsScreen> {
           Card(
             margin: const EdgeInsets.only(bottom: 28),
             shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(14)),
+                borderRadius: BorderRadius.circular(16)),
+            clipBehavior: Clip.hardEdge,
             child: Column(children: [
+              // ── Gradient header ────────────────────────────────
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 16, vertical: 14),
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [AppColors.gradientStart, AppColors.gradientEnd],
+                    begin: Alignment.centerLeft,
+                    end: Alignment.centerRight,
+                  ),
+                ),
+                child: Row(children: [
+                  const Icon(Icons.auto_awesome_rounded,
+                      color: Colors.white, size: 18),
+                  const SizedBox(width: 10),
+                  Text(
+                    isAr ? 'حول التطبيق' : 'About the App',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 14,
+                    ),
+                  ),
+                  const Spacer(),
+                  if (_version.isNotEmpty)
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.22),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        'v$_version',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                    ),
+                ]),
+              ),
+
               ListTile(
-                leading: const Icon(Icons.verified_rounded,
-                    color: AppColors.primary),
+                leading: Container(
+                  padding: const EdgeInsets.all(7),
+                  decoration: BoxDecoration(
+                    color: AppColors.primary.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(9),
+                  ),
+                  child: const Icon(Icons.verified_rounded,
+                      color: AppColors.primary, size: 18),
+                ),
                 title: _TileTitle(isAr ? 'الإصدار' : 'Version'),
                 trailing: Text(_version.isEmpty ? '...' : _version,
                     style: const TextStyle(
@@ -682,8 +828,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         child: CircularProgressIndicator(
                             strokeWidth: 2, color: AppColors.primary),
                       )
-                    : const Icon(Icons.system_update_rounded,
-                        color: AppColors.primary),
+                    : Container(
+                        padding: const EdgeInsets.all(7),
+                        decoration: BoxDecoration(
+                          color: AppColors.primary.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(9),
+                        ),
+                        child: const Icon(Icons.system_update_rounded,
+                            color: AppColors.primary, size: 18),
+                      ),
                 title: _TileTitle(
                     isAr ? 'البحث عن تحديثات' : 'Check for Updates'),
                 subtitle: _TileSubtitle(isAr
@@ -697,8 +850,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
               const Divider(height: 1, indent: 56),
               ListTile(
-                leading:
-                    const Icon(Icons.cloud_outlined, color: AppColors.primary),
+                leading: Container(
+                  padding: const EdgeInsets.all(7),
+                  decoration: BoxDecoration(
+                    color: AppColors.primary.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(9),
+                  ),
+                  child: const Icon(Icons.cloud_outlined,
+                      color: AppColors.primary, size: 18),
+                ),
                 title: _TileTitle(isAr ? 'مصدر البيانات' : 'Data Source'),
                 subtitle: const Text('AlQuran.cloud API',
                     style: TextStyle(
@@ -709,8 +869,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
               const Divider(height: 1, indent: 56),
               ListTile(
-                leading: const Icon(Icons.feedback_outlined,
-                    color: AppColors.secondary),
+                leading: Container(
+                  padding: const EdgeInsets.all(7),
+                  decoration: BoxDecoration(
+                    color: AppColors.secondary.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(9),
+                  ),
+                  child: const Icon(Icons.feedback_outlined,
+                      color: AppColors.secondary, size: 18),
+                ),
                 title: _TileTitle(
                     isAr ? 'اقتراحات ومشاركات' : 'Feedback & Suggestions'),
                 subtitle: _TileSubtitle(isAr
@@ -745,14 +912,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  static InputDecoration _inputDeco(String label) => InputDecoration(
-        isDense: true,
-        labelText: label,
-        border:
-            OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      );
 
   Future<void> _manualCheckForUpdates() async {
     final isAr = context
@@ -857,27 +1016,52 @@ class _SectionHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(2, 8, 2, 10),
-      child: Row(children: [
-        Icon(icon, size: 16, color: AppColors.primary),
-        const SizedBox(width: 6),
-        Text(
-          title,
-          style: const TextStyle(
-            fontSize: 13,
-            fontWeight: FontWeight.w800,
-            color: AppColors.primary,
-            letterSpacing: 0.3,
+      padding: const EdgeInsets.fromLTRB(2, 14, 2, 10),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [AppColors.gradientStart, AppColors.gradientEnd],
+                begin: Alignment.centerLeft,
+                end: Alignment.centerRight,
+              ),
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: [
+                BoxShadow(
+                  color: AppColors.primary.withValues(alpha: 0.22),
+                  blurRadius: 8,
+                  offset: const Offset(0, 3),
+                ),
+              ],
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(icon, color: Colors.white, size: 14),
+                const SizedBox(width: 7),
+                Text(
+                  title,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.3,
+                  ),
+                ),
+              ],
+            ),
           ),
-        ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: Divider(
-            color: AppColors.primary.withValues(alpha: 0.25),
-            height: 1,
+          const SizedBox(width: 10),
+          Expanded(
+            child: Divider(
+              color: AppColors.primary.withValues(alpha: 0.15),
+              height: 1,
+            ),
           ),
-        ),
-      ]),
+        ],
+      ),
     );
   }
 }
@@ -1188,3 +1372,383 @@ class _FollowUpIntervalTile extends StatelessWidget {
   }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Reciter Picker Bottom Sheet
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _ReciterPickerSheet extends StatefulWidget {
+  final List<AudioEdition> all;
+  final String selected;
+  final bool isAr;
+  final String langCode;
+  final String Function(String, {required bool isAr}) languageLabel;
+  final Future<void> Function(String identifier, String? lang) onSelected;
+
+  const _ReciterPickerSheet({
+    required this.all,
+    required this.selected,
+    required this.isAr,
+    required this.langCode,
+    required this.languageLabel,
+    required this.onSelected,
+  });
+
+  @override
+  State<_ReciterPickerSheet> createState() => _ReciterPickerSheetState();
+}
+
+class _ReciterPickerSheetState extends State<_ReciterPickerSheet> {
+  late String _langFilter;
+  String _query = '';
+  late String _currentSelected;
+  final TextEditingController _searchCtrl = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _currentSelected = widget.selected;
+    // Default language filter to the selected reciter's language
+    final sel = widget.all
+        .where((e) => e.identifier == widget.selected)
+        .cast<AudioEdition?>()
+        .firstOrNull;
+    _langFilter = sel?.language?.trim().isNotEmpty == true
+        ? sel!.language!.trim()
+        : 'all';
+  }
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
+  List<String> get _languages {
+    final codes = <String>{};
+    for (final e in widget.all) {
+      final l = e.language;
+      if (l != null && l.trim().isNotEmpty) codes.add(l.trim());
+    }
+    return codes.toList()..sort();
+  }
+
+  List<AudioEdition> get _filtered {
+    var list = widget.all;
+    if (_langFilter != 'all') {
+      list = list.where((e) => e.language == _langFilter).toList();
+    }
+    if (_query.isNotEmpty) {
+      final q = _query.toLowerCase();
+      list = list
+          .where((e) =>
+              (e.englishName ?? '').toLowerCase().contains(q) ||
+              (e.name ?? '').toLowerCase().contains(q) ||
+              e.identifier.toLowerCase().contains(q))
+          .toList();
+    }
+    // Ensure current selection always appears
+    if (!list.any((e) => e.identifier == _currentSelected)) {
+      final sel = widget.all
+          .where((e) => e.identifier == _currentSelected)
+          .cast<AudioEdition?>()
+          .firstOrNull;
+      if (sel != null) list = [sel, ...list];
+    }
+    return list;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isAr = widget.isAr;
+    final languages = _languages;
+    final filtered = _filtered;
+
+    return Container(
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // ── Drag handle ───────────────────────────────────────
+          const SizedBox(height: 10),
+          Container(
+            width: 40,
+            height: 4,
+            decoration: BoxDecoration(
+              color: Colors.grey.shade300,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          const SizedBox(height: 12),
+
+          // ── Header ────────────────────────────────────────────
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [AppColors.primary, Color(0xFF1A8A58)],
+                    ),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(Icons.record_voice_over_rounded,
+                      color: Colors.white, size: 18),
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  isAr ? 'اختيار القارئ' : 'Choose Reciter',
+                  style: const TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.w800,
+                      color: AppColors.primary),
+                ),
+                const Spacer(),
+                IconButton(
+                  icon: const Icon(Icons.close_rounded),
+                  onPressed: () => Navigator.pop(context),
+                  color: Colors.grey.shade600,
+                ),
+              ],
+            ),
+          ),
+
+          // ── Search field ──────────────────────────────────────
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 10, 20, 8),
+            child: TextField(
+              controller: _searchCtrl,
+              textDirection: TextDirection.rtl,
+              onChanged: (v) => setState(() => _query = v),
+              decoration: InputDecoration(
+                isDense: true,
+                hintText: isAr ? 'ابحث عن القارئ...' : 'Search reciter...',
+                prefixIcon:
+                    const Icon(Icons.search_rounded, color: AppColors.primary),
+                suffixIcon: _query.isNotEmpty
+                    ? IconButton(
+                        icon: const Icon(Icons.clear_rounded, size: 18),
+                        onPressed: () {
+                          _searchCtrl.clear();
+                          setState(() => _query = '');
+                        },
+                      )
+                    : null,
+                filled: true,
+                fillColor: const Color(0xFFF5F8F5),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide:
+                      BorderSide(color: AppColors.primary.withValues(alpha: 0.2)),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide:
+                      BorderSide(color: AppColors.primary.withValues(alpha: 0.2)),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide:
+                      const BorderSide(color: AppColors.primary, width: 1.5),
+                ),
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              ),
+            ),
+          ),
+
+          // ── Language chips ────────────────────────────────────
+          SizedBox(
+            height: 38,
+            child: ListView(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              scrollDirection: Axis.horizontal,
+              children: [
+                _LangChip(
+                  label: isAr ? 'الكل' : 'All',
+                  selected: _langFilter == 'all',
+                  onTap: () => setState(() => _langFilter = 'all'),
+                ),
+                ...languages.map((code) => _LangChip(
+                      label: widget.languageLabel(code, isAr: isAr),
+                      selected: _langFilter == code,
+                      onTap: () => setState(() => _langFilter = code),
+                    )),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 6),
+          Divider(height: 1, color: Colors.grey.shade200),
+
+          // ── Reciter list ──────────────────────────────────────
+          Flexible(
+            child: filtered.isEmpty
+                ? Padding(
+                    padding: const EdgeInsets.all(32),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.search_off_rounded,
+                            size: 48,
+                            color: Colors.grey.shade300),
+                        const SizedBox(height: 12),
+                        Text(
+                          isAr ? 'لا توجد نتائج' : 'No results',
+                          style: TextStyle(color: Colors.grey.shade500),
+                        ),
+                      ],
+                    ),
+                  )
+                : ListView.separated(
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    itemCount: filtered.length,
+                    separatorBuilder: (_, __) =>
+                        Divider(height: 1, indent: 70, color: Colors.grey.shade100),
+                    itemBuilder: (context, i) {
+                      final ed = filtered[i];
+                      final isSelected = ed.identifier == _currentSelected;
+                      final name = ed.displayNameForAppLanguage(widget.langCode);
+                      final lang = ed.language;
+                      final langStr = (lang != null && lang.trim().isNotEmpty)
+                          ? widget.languageLabel(lang, isAr: isAr)
+                          : '';
+
+                      return InkWell(
+                        onTap: () async {
+                          setState(() => _currentSelected = ed.identifier);
+                          await widget.onSelected(ed.identifier, ed.language);
+                          if (context.mounted) Navigator.pop(context);
+                        },
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 16, vertical: 10),
+                          child: Row(
+                            children: [
+                              // Avatar circle
+                              Container(
+                                width: 42,
+                                height: 42,
+                                decoration: BoxDecoration(
+                                  color: isSelected
+                                      ? AppColors.primary
+                                      : AppColors.primary.withValues(alpha: 0.08),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Icon(
+                                  isSelected
+                                      ? Icons.mic_rounded
+                                      : Icons.mic_none_rounded,
+                                  color: isSelected
+                                      ? Colors.white
+                                      : AppColors.primary,
+                                  size: 20,
+                                ),
+                              ),
+                              const SizedBox(width: 14),
+
+                              // Name + language
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      name,
+                                      style: TextStyle(
+                                        fontWeight: isSelected
+                                            ? FontWeight.w700
+                                            : FontWeight.w500,
+                                        fontSize: 14,
+                                        color: isSelected
+                                            ? AppColors.primary
+                                            : Colors.black87,
+                                      ),
+                                    ),
+                                    if (langStr.isNotEmpty)
+                                      Text(
+                                        langStr,
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          color: Colors.grey.shade500,
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                              ),
+
+                              // Check icon
+                              if (isSelected)
+                                Container(
+                                  padding: const EdgeInsets.all(4),
+                                  decoration: const BoxDecoration(
+                                    color: AppColors.primary,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: const Icon(Icons.check_rounded,
+                                      color: Colors.white, size: 14),
+                                ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+          ),
+
+          // Bottom safe area
+          SizedBox(height: MediaQuery.of(context).padding.bottom + 8),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Language chip ─────────────────────────────────────────────────────────────
+
+class _LangChip extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _LangChip({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(right: 6),
+      child: GestureDetector(
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+          decoration: BoxDecoration(
+            color:
+                selected ? AppColors.primary : AppColors.primary.withValues(alpha: 0.07),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: selected
+                  ? AppColors.primary
+                  : AppColors.primary.withValues(alpha: 0.2),
+            ),
+          ),
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: selected ? Colors.white : AppColors.primary,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
