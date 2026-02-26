@@ -27,7 +27,7 @@ class SurahDetailScreen extends StatefulWidget {
   const SurahDetailScreen({
     super.key,
     required this.surahNumber,
-    required this.surahName,
+    this.surahName = '',
     this.initialAyahNumber,
     this.initialPageNumber,
   });
@@ -193,6 +193,14 @@ class _SurahDetailScreenState extends State<SurahDetailScreen> {
               } else if (state is SurahDetailLoaded) {
                 final surah = state.surah;
 
+                // Guard: the bloc may still hold the previous surah's data
+                // while the new request is in-flight (e.g. after pushReplacement).
+                // Treat stale data as loading so MushafPageView is never built
+                // with the wrong surah, which would trigger immediate onNextSurah.
+                if (surah.number != widget.surahNumber) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+
                 // Use Mushaf page view when Uthmani script is enabled
                 if (useUthmaniScript) {
                   return Scaffold(
@@ -219,6 +227,32 @@ class _SurahDetailScreenState extends State<SurahDetailScreen> {
                               : null),
                       initialAyahNumber: widget.initialAyahNumber,
                       isArabicUi: isArabicUi,
+                      onNextSurah: widget.surahNumber < 114
+                          ? () {
+                              if (!context.mounted) return;
+                              final nextNumber = widget.surahNumber + 1;
+                              Navigator.of(context).pushReplacement(
+                                MaterialPageRoute(
+                                  builder: (_) => SurahDetailScreen(
+                                    surahNumber: nextNumber,
+                                  ),
+                                ),
+                              );
+                            }
+                          : null,
+                      onPreviousSurah: widget.surahNumber > 1
+                          ? () {
+                              if (!context.mounted) return;
+                              final prevNumber = widget.surahNumber - 1;
+                              Navigator.of(context).pushReplacement(
+                                MaterialPageRoute(
+                                  builder: (_) => SurahDetailScreen(
+                                    surahNumber: prevNumber,
+                                  ),
+                                ),
+                              );
+                            }
+                          : null,
                     ),
                   );
                 }

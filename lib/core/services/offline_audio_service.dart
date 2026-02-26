@@ -378,6 +378,8 @@ class OfflineAudioService {
     'ar.saoodshuraym'       : 'Saood_ash-Shuraym_128kbps',
     'ar.shaatree'           : 'Abu_Bakr_Ash-Shaatree_128kbps',
     'ar.parhizgar'          : 'Parhizgar_48kbps',
+    // ─── قراء مضافون يدوياً ────────────────────────────────────────────────
+    'ar.alijaber'           : 'Ali_Jaber_64kbps',        // علي جابر
   };
 
   /// Builds a direct everyayah.com URL (no API call needed).

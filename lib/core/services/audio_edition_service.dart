@@ -86,20 +86,45 @@ class AudioEditionService {
 
   AudioEditionService(this._prefs, this._client, this._networkInfo);
 
+  /// قراء مضافون يدوياً غير متاحين في AlQuran.cloud API ولكنهم
+  /// مدعومون عبر everyayah.com أو مصادر أخرى.
+  static const List<AudioEdition> _extraEditions = [
+    AudioEdition(
+      identifier: 'ar.alijaber',
+      name: 'علي جابر',
+      englishName: 'Ali Jaber',
+      language: 'ar',
+      format: 'audio',
+      type: 'versebyverse',
+    ),
+  ];
+
   List<AudioEdition> _readCache() {
     final raw = _prefs.getString(_cacheKey);
-    if (raw == null || raw.isEmpty) return const [];
+    if (raw == null || raw.isEmpty) return _mergeExtras(const []);
 
     try {
       final decoded = jsonDecode(raw) as List<dynamic>;
-      return decoded
+      final cached = decoded
           .whereType<Map<String, dynamic>>()
           .map(AudioEdition.fromJson)
           .where((e) => e.identifier.trim().isNotEmpty)
           .toList();
+      return _mergeExtras(cached);
     } catch (_) {
-      return const [];
+      return _mergeExtras(const []);
     }
+  }
+
+  /// دمج القراء المضافين يدوياً مع القائمة المُستلمة بدون تكرار.
+  List<AudioEdition> _mergeExtras(List<AudioEdition> editions) {
+    final existing = {for (final e in editions) e.identifier: e};
+    for (final extra in _extraEditions) {
+      existing.putIfAbsent(extra.identifier, () => extra);
+    }
+    final merged = existing.values.toList()
+      ..sort((a, b) => a.displayName.toLowerCase().compareTo(b.displayName.toLowerCase()));
+    return merged;
   }
 
   Future<void> _writeCache(List<AudioEdition> editions) async {
@@ -156,7 +181,7 @@ class AudioEditionService {
 
     if (editions.isNotEmpty) {
       await _writeCache(editions);
-      return editions;
+      return _mergeExtras(editions);
     }
 
     return cached;

@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -12,6 +12,7 @@ import '../../../../core/settings/app_settings_cubit.dart';
 import '../../../../core/services/bookmark_service.dart';
 import '../../../../core/di/injection_container.dart' as di;
 import '../../../../core/utils/arabic_text_style_helper.dart';
+import '../../../../core/constants/surah_names.dart';
 import '../bloc/tafsir/tafsir_cubit.dart';
 import '../screens/tafsir_screen.dart';
 
@@ -37,6 +38,10 @@ class MushafPageView extends StatefulWidget {
   final bool isArabicUi;
   final int surahNumber;
   final int? initialAyahNumber;
+  /// Called when the user taps the button on the next-surah transition page.
+  final VoidCallback? onNextSurah;
+  /// Called when the user taps the button on the previous-surah transition page.
+  final VoidCallback? onPreviousSurah;
 
   const MushafPageView({
     super.key,
@@ -45,6 +50,8 @@ class MushafPageView extends StatefulWidget {
     required this.isArabicUi,
     required this.surahNumber,
     this.initialAyahNumber,
+    this.onNextSurah,
+    this.onPreviousSurah,
   });
 
   @override
@@ -58,33 +65,17 @@ class _MushafPageViewState extends State<MushafPageView>
   late final BookmarkService _bookmarkService;
   int? _highlightedAyahNumber;
   bool _isAnimating = false;
-  int _currentPageIndex = 0;
-
-  void _jumpToPage(int newIndex) {
-    if (newIndex < 0 || newIndex >= _pages.length) return;
-    _pageController.jumpToPage(newIndex);
-    setState(() {
-      _currentPageIndex = newIndex;
-    });
-  }
-
-  void _animateToPageSwipe(int newIndex) {
-    if (newIndex < 0 || newIndex >= _pages.length) return;
-    _pageController.animateToPage(
-      newIndex,
-      duration: const Duration(milliseconds: 200),
-      curve: Curves.easeInOut,
-    );
-    setState(() {
-      _currentPageIndex = newIndex;
-    });
-  }
   final Map<int, GlobalKey> _richTextKeys = {};
   final Map<int, List<({int start, int end, int ayahNumber, String ayahFullText})>>
       _pageAyahOffsets = {};
   late AnimationController _highlightAnimationController;
   late Animation<double> _highlightAnimation;
   final Map<int, ScrollController> _pageScrollControllers = {};
+
+  /// 1 when a previous-surah virtual page is prepended, 0 otherwise.
+  /// All PageController indices must be shifted by this offset.
+  int get _pageOffset =>
+      (widget.surahNumber > 1 && widget.onPreviousSurah != null) ? 1 : 0;
 
   @override
   void initState() {
@@ -105,7 +96,8 @@ class _MushafPageViewState extends State<MushafPageView>
     // Always start from first page when we have a target
     final hasTarget =
         widget.initialAyahNumber != null || widget.initialPage != null;
-    final initialPage = hasTarget ? 0 : _getInitialPageIndex();
+    final initialPage =
+        (hasTarget ? 0 : _getInitialPageIndex()) + _pageOffset;
     _pageController = PageController(initialPage: initialPage);
 
     // Animate to target ayah if specified
@@ -166,21 +158,13 @@ class _MushafPageViewState extends State<MushafPageView>
 
     if (targetPageIndex == -1) return;
 
-    // Always calculate distance from page 0 for realistic page-flipping
-    final distance = targetPageIndex;
-
     setState(() {
       _isAnimating = true;
     });
 
-    // Calculate animation duration based on distance
-    // Faster animation: 150ms per page, max 2.5 seconds
-    final baseDuration = 150; // milliseconds per page
-    final maxDuration = 2500; // max 2.5 seconds
-    final duration = (baseDuration * distance).clamp(300, maxDuration);
-
     // Jump straight to the page without any animation
-    _pageController.jumpToPage(targetPageIndex);
+    // (add _pageOffset because the controller includes the virtual prev-surah page)
+    _pageController.jumpToPage(targetPageIndex + _pageOffset);
 
     // Highlight the ayah immediately (no scrolling animation)
     setState(() {
@@ -223,20 +207,12 @@ class _MushafPageViewState extends State<MushafPageView>
         ? _pages[targetPageIndex].ayahs.first.numberInSurah
         : null;
 
-    // Always calculate distance from page 0 for realistic page-flipping
-    final distance = targetPageIndex;
-
     setState(() {
       _isAnimating = true;
     });
 
-    // Calculate animation duration based on distance
-    final baseDuration = 150; // milliseconds per page
-    final maxDuration = 2500; // max 2.5 seconds
-    final duration = (baseDuration * distance).clamp(300, maxDuration);
-
     // Jump straight to the page without animation
-    _pageController.jumpToPage(targetPageIndex);
+    _pageController.jumpToPage(targetPageIndex + _pageOffset);
 
     // Highlight the first ayah immediately
     if (firstAyahInPage != null) {
@@ -331,40 +307,6 @@ class _MushafPageViewState extends State<MushafPageView>
     );
   }
 
-  String _removeBasmalaIfNeeded(String text, int ayahNumber) {
-    // Remove Basmala from first ayah of every surah except Al-Fatiha (surah 1)
-    // and At-Tawbah (surah 9) which doesn't have Basmala
-    if (ayahNumber == 1 && widget.surahNumber != 1 && widget.surahNumber != 9) {
-      // Use regex to match any form of Basmala with different diacritics
-      final basmalaRegex = RegExp(
-        r'^[\s]*ب[ِۡ]?س[ْۡ]?م[ِ]?\s*ا?لل[َّ]?ه[ِ]?\s*ا?لر[َّ]?ح[ْۡ]?م[َٰ]?ن[ِ]?\s*ا?لر[َّ]?ح[ِ]?ي[ۡ]?م[ِ]?[\s]*',
-        unicode: true,
-      );
-
-      if (basmalaRegex.hasMatch(text)) {
-        final result = text.replaceFirst(basmalaRegex, '').trim();
-        print(
-          '🔍 Removed Basmala from Surah ${widget.surahNumber}, Ayah $ayahNumber',
-        );
-        print(
-          '   Before: ${text.substring(0, text.length > 50 ? 50 : text.length)}...',
-        );
-        print(
-          '   After: ${result.substring(0, result.length > 50 ? 50 : result.length)}...',
-        );
-        return result;
-      } else {
-        print(
-          '⚠️ No Basmala pattern matched for Surah ${widget.surahNumber}, Ayah $ayahNumber',
-        );
-        print(
-          '   Text: ${text.substring(0, text.length > 80 ? 80 : text.length)}...',
-        );
-      }
-    }
-    return text;
-  }
-
   @override
   Widget build(BuildContext context) {
     if (_pages.isEmpty) {
@@ -373,25 +315,296 @@ class _MushafPageViewState extends State<MushafPageView>
       );
     }
 
+    final hasNextSurah =
+        widget.surahNumber < 114 && widget.onNextSurah != null;
+    final hasPreviousSurah = _pageOffset == 1;
+    final totalPages = _pageOffset + _pages.length + (hasNextSurah ? 1 : 0);
+    final isRtlFlip = context.watch<AppSettingsCubit>().state.pageFlipRightToLeft;
+
     return Directionality(
       textDirection: TextDirection.rtl,
       child: PageView.builder(
         controller: _pageController,
-        itemCount: _pages.length,
-        reverse: context
-            .watch<AppSettingsCubit>()
-            .state
-            .pageFlipRightToLeft,
+        itemCount: totalPages,
+        reverse: isRtlFlip,
         clipBehavior: Clip.none,
         dragStartBehavior: DragStartBehavior.down,
+        // Navigation happens only via button tap on the transition page.
         physics: _isAnimating
             ? const NeverScrollableScrollPhysics()
             : const _EasySwipePagePhysics(),
-        onPageChanged: (idx) => _currentPageIndex = idx,
         itemBuilder: (context, index) {
-          return _buildMushafPage(_pages[index]);
+          if (hasPreviousSurah && index == 0) {
+            return _buildPreviousSurahPage(context);
+          }
+          final realIndex = index - _pageOffset;
+          if (realIndex == _pages.length) {
+            return _buildNextSurahPage(context);
+          }
+          return _buildMushafPage(_pages[realIndex]);
         },
       ),
+    );
+  }
+
+  Widget _buildSurahTransitionPage({
+    required BuildContext context,
+    required int targetSurahNumber,
+    required String directionLabel,
+    required String buttonLabel,
+    required String backHint,
+    required VoidCallback? onConfirm,
+    required bool isNext,
+  }) {
+    final isDark = context.watch<AppSettingsCubit>().state.darkMode;
+    final arabicName = SurahNames.getArabicName(targetSurahNumber);
+    final englishName = SurahNames.getEnglishName(targetSurahNumber);
+
+    // Match the Mushaf page background colours
+    final bgColors = isDark
+        ? [const Color(0xFF0E1A12), const Color(0xFF131F16), const Color(0xFF0E1A12)]
+        : [const Color(0xFFFFF9ED), const Color(0xFFFFF4D8), const Color(0xFFFFF0C8)];
+    final cardColor = isDark ? const Color(0xFF1C2E24) : Colors.white;
+    final borderColor = isDark
+        ? AppColors.secondary.withValues(alpha: 0.45)
+        : AppColors.secondary.withValues(alpha: 0.5);
+    final textSecondary =
+        isDark ? Colors.white54 : AppColors.textSecondary;
+
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: bgColors,
+          stops: const [0.0, 0.5, 1.0],
+        ),
+      ),
+      child: Stack(
+        children: [
+          // Same subtle Islamic pattern as regular pages
+          Positioned.fill(
+            child: CustomPaint(
+              painter: IslamicPatternPainter(color: AppColors.primary),
+            ),
+          ),
+          Positioned.fill(
+            child: CustomPaint(
+              painter: BorderOrnamentPainter(color: AppColors.primary),
+            ),
+          ),
+          SafeArea(
+            child: Center(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 28),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Direction label chip
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: AppColors.primary.withValues(
+                            alpha: isDark ? 0.25 : 0.1),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: borderColor, width: 1),
+                      ),
+                      child: Text(
+                        directionLabel,
+                        style: GoogleFonts.cairo(
+                          fontSize: 13,
+                          color: isDark ? AppColors.secondary : AppColors.primary,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    // Ornamental divider
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        _ornamentLine(isDark),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                          child: Icon(Icons.star,
+                              size: 10,
+                              color: AppColors.secondary
+                                  .withValues(alpha: 0.7)),
+                        ),
+                        _ornamentLine(isDark),
+                      ],
+                    ),
+                    const SizedBox(height: 20),
+                    // Surah name card
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(
+                          vertical: 24, horizontal: 20),
+                      decoration: BoxDecoration(
+                        color: cardColor,
+                        borderRadius: BorderRadius.circular(18),
+                        border: Border.all(color: borderColor, width: 1.5),
+                        boxShadow: [
+                          BoxShadow(
+                            color: AppColors.primary
+                                .withValues(alpha: isDark ? 0.15 : 0.06),
+                            blurRadius: 16,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                      child: Column(
+                        children: [
+                          Text(
+                            arabicName,
+                            textAlign: TextAlign.center,
+                            style: GoogleFonts.amiriQuran(
+                              fontSize: 32,
+                              color: isDark
+                                  ? AppColors.secondary
+                                  : AppColors.primary,
+                              fontWeight: FontWeight.w700,
+                              height: 1.5,
+                            ),
+                          ),
+                          if (!widget.isArabicUi) ...[  
+                            const SizedBox(height: 6),
+                            Text(
+                              englishName,
+                              textAlign: TextAlign.center,
+                              style: GoogleFonts.cairo(
+                                fontSize: 16,
+                                color: textSecondary,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
+                          const SizedBox(height: 8),
+                          Text(
+                            widget.isArabicUi
+                                ? 'السورة $targetSurahNumber'
+                                : 'Surah $targetSurahNumber',
+                            style: GoogleFonts.cairo(
+                              fontSize: 13,
+                              color: textSecondary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 28),
+                    // Navigate button
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.primary,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 15),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          elevation: 2,
+                          shadowColor:
+                              AppColors.primary.withValues(alpha: 0.4),
+                        ),
+                        onPressed: onConfirm,
+                        child: Directionality(
+                          textDirection: TextDirection.ltr,
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              // Next: ‹ [text] — arrow on left
+                              if (isNext) ...[
+                                const Icon(Icons.chevron_left_rounded, size: 22),
+                                const SizedBox(width: 4),
+                              ],
+                              Text(
+                                buttonLabel,
+                                style: GoogleFonts.cairo(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              // Previous: [text] › — arrow on right
+                              if (!isNext) ...[
+                                const SizedBox(width: 4),
+                                const Icon(Icons.chevron_right_rounded, size: 22),
+                              ],
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    Text(
+                      backHint,
+                      style: GoogleFonts.cairo(
+                        fontSize: 12,
+                        color: textSecondary.withValues(alpha: 0.6),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _ornamentLine(bool isDark) {
+    return Expanded(
+      child: Container(
+        height: 1,
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [
+              Colors.transparent,
+              AppColors.secondary.withValues(alpha: isDark ? 0.6 : 0.5),
+              Colors.transparent,
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildNextSurahPage(BuildContext context) {
+    final nextNumber = widget.surahNumber + 1;
+    return _buildSurahTransitionPage(
+      context: context,
+      targetSurahNumber: nextNumber,
+      directionLabel:
+          widget.isArabicUi ? 'السورة التالية' : 'Next Surah',
+      buttonLabel: widget.isArabicUi
+          ? 'انتقل إلى السورة التالية'
+          : 'Go to Next Surah',
+      backHint: widget.isArabicUi
+          ? 'اسحب للخلف للعودة'
+          : 'Swipe back to return',
+      isNext: true,
+      onConfirm: widget.onNextSurah,
+    );
+  }
+
+  Widget _buildPreviousSurahPage(BuildContext context) {
+    final prevNumber = widget.surahNumber - 1;
+    return _buildSurahTransitionPage(
+      context: context,
+      targetSurahNumber: prevNumber,
+      directionLabel:
+          widget.isArabicUi ? 'السورة السابقة' : 'Previous Surah',
+      buttonLabel: widget.isArabicUi
+          ? 'انتقل إلى السورة السابقة'
+          : 'Go to Previous Surah',
+      backHint: widget.isArabicUi
+          ? 'اسحب للأمام للعودة'
+          : 'Swipe forward to return',
+      isNext: false,
+      onConfirm: widget.onPreviousSurah,
     );
   }
 
@@ -1019,25 +1232,37 @@ class _MushafPageViewState extends State<MushafPageView>
       builder: (context, settingsState) {
         final isDarkMode = settingsState.darkMode;
         final textColor = isDarkMode ? AppColors.secondary : AppColors.primary;
-        // Smaller font so number fits inside the octagonal frame
-        final fontSize = number > 99 ? 8.0 : (number > 9 ? 10.0 : 12.0);
+
+        // Scale everything proportionally with the arabic font size (base = 18)
+        final scale = settingsState.arabicFontSize / 18.0;
+        final frameSize = 30.0 * scale;
+
+        // Smaller font so number fits inside the octagonal frame, scaled
+        final baseFontSize = number > 99 ? 8.0 : (number > 9 ? 10.0 : 12.0);
+        final fontSize = baseFontSize * scale;
+
+        // Bottom padding to vertically center text inside the frame, scaled
+        final bottomPadding = 10.0 * scale;
 
         return Stack(
           alignment: Alignment.center,
           children: [
             Image.asset(
               'assets/logo/files/transparent/frame.png',
-              width: 46,
-              height: 46,
+              width: frameSize,
+              height: frameSize,
             ),
-            Text(
-              _toArabicNumerals(number),
-              textAlign: TextAlign.center,
-              style: GoogleFonts.amiriQuran(
-                fontSize: fontSize,
-                fontWeight: FontWeight.w800,
-                color: textColor,
-                height: 1,
+            Padding(
+              padding: EdgeInsets.fromLTRB(0, 0, 0, bottomPadding),
+              child: Text(
+                _toArabicNumerals(number),
+                textAlign: TextAlign.center,
+                style: GoogleFonts.amiriQuran(
+                  fontSize: fontSize,
+                  fontWeight: FontWeight.w800,
+                  color: textColor,
+                  height: 1,
+                ),
               ),
             ),
           ],
@@ -1157,6 +1382,7 @@ class _MushafPageViewState extends State<MushafPageView>
             AppColors.primary.withValues(alpha: 0.6),
             AppColors.primary.withValues(alpha: 0),
           ],
+
         ),
         borderRadius: BorderRadius.circular(2),
         boxShadow: [

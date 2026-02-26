@@ -46,6 +46,7 @@ class _AdhanSettingsScreenState extends State<AdhanSettingsScreen>
   bool _isSaving = false;
   bool _isTesting = false;
   bool _schedulingTest = false;
+  Timer? _debounce;
 
   /// true  = user already whitelisted the app → hide the battery card
   /// false = not yet whitelisted → show the card
@@ -133,6 +134,7 @@ class _AdhanSettingsScreenState extends State<AdhanSettingsScreen>
 
   @override
   void dispose() {
+    _debounce?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     _adhanChannel.setMethodCallHandler(null);
     _stopPreview();
@@ -181,7 +183,14 @@ class _AdhanSettingsScreenState extends State<AdhanSettingsScreen>
     }
   }
 
+  /// Debounced auto-save — called after every setting change.
+  void _autoSave({Duration delay = const Duration(milliseconds: 600)}) {
+    _debounce?.cancel();
+    _debounce = Timer(delay, _save);
+  }
+
   Future<void> _save() async {
+    if (!mounted) return;
     setState(() => _isSaving = true);
     await _settings.setSelectedAdhanSound(_selectedSoundId);
     await _settings.setPrayerCalculationMethod(_selectedMethodId);
@@ -196,17 +205,7 @@ class _AdhanSettingsScreenState extends State<AdhanSettingsScreen>
       await _adhanService.disable();
     }
 
-    setState(() => _isSaving = false);
-
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(_isAr ? 'تم الحفظ بنجاح ✓' : 'Settings saved ✓'),
-          backgroundColor: AppColors.success,
-          duration: const Duration(seconds: 2),
-        ),
-      );
-    }
+    if (mounted) setState(() => _isSaving = false);
   }
 
   bool get _isAr {
@@ -254,16 +253,49 @@ class _AdhanSettingsScreenState extends State<AdhanSettingsScreen>
               ),
             )
           else
-            IconButton(
-              icon: const Icon(Icons.save_rounded),
-              tooltip: isAr ? 'حفظ' : 'Save',
-              onPressed: _save,
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: Tooltip(
+                message: isAr ? 'الحفظ تلقائي' : 'Auto-saved',
+                child: const Icon(Icons.cloud_done_rounded,
+                    color: Colors.white70, size: 22),
+              ),
             ),
         ],
       ),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
+          // ── Disabled Banner ────────────────────────────────────
+          if (!_notificationsEnabled)
+            Container(
+              margin: const EdgeInsets.only(bottom: 16),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              decoration: BoxDecoration(
+                color: Colors.orange.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                    color: Colors.orange.withValues(alpha: 0.45), width: 1.4),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.notifications_off_rounded,
+                      color: Colors.orange, size: 22),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      isAr
+                          ? 'الأذان معطَّل حالياً — فعِّله من الإعداد أدناه ليُشغَّل تلقائياً عند أوقات الصلاة'
+                          : 'Adhan is currently disabled. Enable it below to play automatically at prayer times.',
+                      style: const TextStyle(
+                          color: Colors.orange,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           // ── Notifications ──────────────────────────────────────
           _SectionHeader(title: isAr ? 'إشعارات الأذان' : 'Adhan Notifications'),
           _SettingsTile(
@@ -280,7 +312,10 @@ class _AdhanSettingsScreenState extends State<AdhanSettingsScreen>
             trailing: Switch.adaptive(
               value: _notificationsEnabled,
               activeColor: AppColors.primary,
-              onChanged: (v) => setState(() => _notificationsEnabled = v),
+              onChanged: (v) {
+                setState(() => _notificationsEnabled = v);
+                _autoSave();
+              },
             ),
           ),
           _SettingsTile(
@@ -296,7 +331,10 @@ class _AdhanSettingsScreenState extends State<AdhanSettingsScreen>
               value: _includeFajr,
               activeColor: AppColors.primary,
               onChanged: _notificationsEnabled
-                  ? (v) => setState(() => _includeFajr = v)
+                  ? (v) {
+                      setState(() => _includeFajr = v);
+                      _autoSave();
+                    }
                   : null,
             ),
           ),
@@ -366,6 +404,9 @@ class _AdhanSettingsScreenState extends State<AdhanSettingsScreen>
                         : Colors.grey,
                     onChanged: _notificationsEnabled
                         ? (v) => setState(() => _adhanVolume = v)
+                        : null,
+                    onChangeEnd: _notificationsEnabled
+                        ? (_) => _autoSave(delay: const Duration(milliseconds: 800))
                         : null,
                   ),
                   // ── System alarm volume indicator ─────────────
@@ -449,7 +490,10 @@ class _AdhanSettingsScreenState extends State<AdhanSettingsScreen>
                         isSelected: _selectedSoundId == sound.id,
                         isPreviewing: _previewingId == sound.id,
                         isAr: isAr,
-                        onSelect: () => setState(() => _selectedSoundId = sound.id),
+                        onSelect: () {
+                          setState(() => _selectedSoundId = sound.id);
+                          _autoSave();
+                        },
                         onPreview: () => _previewSound(sound.id),
                         onStop: _stopPreview,
                       ))
@@ -479,7 +523,10 @@ class _AdhanSettingsScreenState extends State<AdhanSettingsScreen>
                           : 'Auto-detect method from location',
                       style: const TextStyle(fontSize: 14),
                     ),
-                    onChanged: (v) => setState(() => _methodAutoDetected = v),
+                    onChanged: (v) {
+                      setState(() => _methodAutoDetected = v);
+                      _autoSave();
+                    },
                   ),
                   const Divider(height: 0),
                   const SizedBox(height: 8),
@@ -525,6 +572,7 @@ class _AdhanSettingsScreenState extends State<AdhanSettingsScreen>
                             : (v) {
                                 if (v != null) {
                                   setState(() => _selectedMethodId = v);
+                                  _autoSave();
                                 }
                               },
                       );
@@ -808,34 +856,6 @@ class _AdhanSettingsScreenState extends State<AdhanSettingsScreen>
                     ],
                   ),
                 ],
-              ),
-            ),
-          ),
-
-          const SizedBox(height: 24),
-          FilledButton.icon(
-            onPressed: _isSaving ? null : _save,
-            style: FilledButton.styleFrom(
-              backgroundColor: AppColors.primary,
-              minimumSize: const Size.fromHeight(52),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(14),
-              ),
-            ),
-            icon: _isSaving
-                ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(
-                        strokeWidth: 2, color: Colors.white),
-                  )
-                : const Icon(Icons.save_rounded, color: Colors.white),
-            label: Text(
-              isAr ? 'حفظ الإعدادات' : 'Save Settings',
-              style: const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
               ),
             ),
           ),

@@ -10,7 +10,7 @@ class WhatsNewService {
   /// ────────────────────────────────────────────────────────────────────────
   /// 
   //TODO : Remove this flag and related logic before release, to ensure users see the screen only on new versions.
-  static const bool alwaysShow = true;
+  static const bool alwaysShow = false;
 
 
   final SharedPreferences _prefs;

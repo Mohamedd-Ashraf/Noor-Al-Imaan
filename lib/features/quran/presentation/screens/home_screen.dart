@@ -9,6 +9,8 @@ import '../bloc/surah/surah_bloc.dart';
 import '../bloc/surah/surah_event.dart';
 import '../bloc/surah/surah_state.dart';
 import '../../../../core/constants/app_colors.dart';
+import '../../../../core/di/injection_container.dart' as di;
+import '../../../../core/services/settings_service.dart';
 import '../../../../core/settings/app_settings_cubit.dart';
 import '../../../../core/audio/ayah_audio_cubit.dart';
 import '../../../../core/widgets/islamic_logo.dart';
@@ -606,6 +608,10 @@ class _CategoriesSection extends StatelessWidget {
                       label: isArabicUi ? 'الأذان' : 'Adhan',
                       imagePath: 'assets/logo/button icons/nabawi-mosque.png',
                       imagePadding: 3,
+                      showDisabledBadge:
+                          !di.sl<SettingsService>().getAdhanNotificationsEnabled(),
+                      disabledTooltip:
+                          isArabicUi ? 'الأذان معطَّل' : 'Adhan disabled',
                       onTap: () {
                         Navigator.of(context).push(
                           MaterialPageRoute(
@@ -743,15 +749,17 @@ class _CategoryTile extends StatelessWidget {
   final String label;
   final String imagePath;
   final VoidCallback onTap;
-  final Color? imageTint;
   final double imagePadding;
+  final bool showDisabledBadge;
+  final String? disabledTooltip;
 
   const _CategoryTile({
     required this.label,
     required this.imagePath,
     required this.onTap,
-    this.imageTint,
     this.imagePadding = 4,
+    this.showDisabledBadge = false,
+    this.disabledTooltip,
   });
 
   @override
@@ -815,16 +823,42 @@ class _CategoryTile extends StatelessWidget {
                         ),
                       ],
                     ),
-                    child: Padding(
-                      padding: EdgeInsets.all(imagePadding),
-                      child: Image.asset(
-                        imagePath,
-                        fit: BoxFit.contain,
-                        color: imageTint,
-                        colorBlendMode: imageTint != null
-                            ? BlendMode.srcIn
-                            : null,
-                      ),
+                    child: Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        Padding(
+                          padding: EdgeInsets.all(imagePadding),
+                          child: Image.asset(
+                            imagePath,
+                            fit: BoxFit.contain,
+                          ),
+                        ),
+                        if (showDisabledBadge)
+                          Positioned(
+                            top: 2,
+                            right: 2,
+                            child: Tooltip(
+                              message: disabledTooltip ?? '',
+                              child: Container(
+                                width: 12,
+                                height: 12,
+                                decoration: BoxDecoration(
+                                  color: Colors.orange,
+                                  shape: BoxShape.circle,
+                                  border: Border.all(
+                                      color: Colors.white, width: 1.5),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color:
+                                          Colors.orange.withValues(alpha: 0.6),
+                                      blurRadius: 4,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                      ],
                     ),
                   ),
                 ),

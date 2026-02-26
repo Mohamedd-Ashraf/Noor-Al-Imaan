@@ -4,6 +4,7 @@ import '../../../../core/constants/app_colors.dart';
 import '../../../../core/services/bookmark_service.dart';
 import '../../../../core/di/injection_container.dart' as di;
 import '../../../../core/settings/app_settings_cubit.dart';
+import '../../../../core/utils/arabic_text_style_helper.dart';
 import '../bloc/surah/surah_bloc.dart';
 import '../bloc/surah/surah_state.dart';
 import 'surah_detail_screen.dart';
@@ -291,18 +292,26 @@ class BookmarksScreenState extends State<BookmarksScreen> {
                       ],
                     ),
                     const SizedBox(height: 16),
-                    Text(
-                      bookmark['arabicText'] ??
-                          'بِسْمِ ٱللَّهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ',
-                      textAlign: TextAlign.right,
-                      textDirection: TextDirection.rtl,
-                      style: Theme.of(context).textTheme.headlineSmall
-                          ?.copyWith(
-                            color: AppColors.arabicText,
-                            fontWeight: FontWeight.w500,
-                            height: 1.8,
-                          ),
-                    ),
+                    Builder(builder: (context) {
+                      final quranFont = context
+                          .read<AppSettingsCubit>()
+                          .state
+                          .quranFont;
+                      return Text(
+                        bookmark['arabicText'] ??
+                            'بِسْمِ ٱللَّهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ',
+                        textAlign: TextAlign.right,
+                        textDirection: TextDirection.rtl,
+                        maxLines: 3,
+                        overflow: TextOverflow.ellipsis,
+                        style: ArabicTextStyleHelper.quranFontStyle(
+                          fontKey: quranFont,
+                          fontSize: 20,
+                          color: AppColors.arabicText,
+                          height: 2.2,
+                        ),
+                      );
+                    }),
                     if (bookmark['note'] != null) ...[
                       const SizedBox(height: 12),
                       Container(
@@ -435,7 +444,17 @@ class BookmarksScreenState extends State<BookmarksScreen> {
           ? '$resolvedSurahName • الآية $ayahNumber'
           : '$resolvedSurahName • Ayah $ayahNumber';
     }
-    return (bookmark['reference'] as String?) ??
-        (isArabicUi ? 'إشارة' : 'Bookmark');
+    // Format page bookmark reference (stored as "surahNum:page:pageNum")
+    final reference = bookmark['reference'] as String?;
+    if (reference != null && reference.contains(':page:')) {
+      final parts = reference.split(':');
+      if (parts.length == 3) {
+        final pageNum = parts[2];
+        return isArabicUi
+            ? '$resolvedSurahName • صفحة $pageNum'
+            : '$resolvedSurahName • Page $pageNum';
+      }
+    }
+    return reference ?? (isArabicUi ? 'إشارة' : 'Bookmark');
   }
 }

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'firebase_options.dart';
 import 'core/di/injection_container_firebase.dart' as di;
 import 'core/services/adhan_notification_service.dart';
@@ -18,6 +19,7 @@ import 'core/widgets/onboarding_gate.dart';
 import 'features/quran/presentation/bloc/surah/surah_bloc.dart';
 import 'features/quran/presentation/bloc/ayah/ayah_bloc.dart';
 import 'features/wird/presentation/cubit/wird_cubit.dart';
+import 'features/adhkar/presentation/cubit/adhkar_progress_cubit.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -26,6 +28,12 @@ void main() async {
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
+  // Ensure Firestore is initialized (fixes gray screen in release if tree-shaken)
+  try {
+    await FirebaseFirestore.instance.settings;
+  } catch (e) {
+    print('Firestore init error: $e');
+  }
   
   // Initialize dependency injection
   await di.init();
@@ -34,7 +42,7 @@ void main() async {
   // and open instantly on subsequent visits.  Runs fully in background.
   di.sl<QuranCacheWarmupService>().startInBackground();
 
-  // Initialize update service
+  // Initialize update service (Remote Config defaults + first fetch)
   final updateService = di.sl<AppUpdateServiceFirebase>();
   await updateService.initialize();
 
@@ -131,6 +139,9 @@ class MyApp extends StatelessWidget {
         ),
         BlocProvider(
           create: (_) => di.sl<WirdCubit>()..load(),
+        ),
+        BlocProvider(
+          create: (_) => di.sl<AdhkarProgressCubit>()..load(),
         ),
       ],
       child: BlocBuilder<AppSettingsCubit, AppSettingsState>(

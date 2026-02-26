@@ -130,7 +130,11 @@ class AdhanPlayerService : Service() {
 
             player.prepare()
             val prefs  = getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
-            val volume = prefs.getFloat("flutter.adhan_volume", 1.0f).coerceIn(0.0f, 1.0f)
+            // Flutter stores doubles as Strings in SharedPreferences on Android.
+            val volume = prefs.getString("flutter.adhan_volume", null)
+                ?.toFloatOrNull()
+                ?.coerceIn(0.0f, 1.0f)
+                ?: 1.0f
             player.setVolume(volume, volume)
             player.start()
             mediaPlayer = player
