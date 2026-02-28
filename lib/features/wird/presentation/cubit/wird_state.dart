@@ -46,6 +46,15 @@ class WirdPlanLoaded extends WirdState {
   /// Last reading bookmark: ayah number. Null if not set.
   final int? lastReadAyah;
 
+  /// Makeup bookmark: which missed plan-day the user was last working on.
+  final int? makeupBookmarkDay;
+
+  /// Makeup bookmark: surah position.
+  final int? makeupBookmarkSurah;
+
+  /// Makeup bookmark: ayah position.
+  final int? makeupBookmarkAyah;
+
   const WirdPlanLoaded(
     this.plan, {
     this.reminderHour,
@@ -54,12 +63,21 @@ class WirdPlanLoaded extends WirdState {
     this.followUpIntervalHours = 4,
     this.lastReadSurah,
     this.lastReadAyah,
+    this.makeupBookmarkDay,
+    this.makeupBookmarkSurah,
+    this.makeupBookmarkAyah,
   });
 
   bool get hasReminder => reminderHour != null && reminderMinute != null;
 
   /// True when the user has a saved reading bookmark.
   bool get hasLastRead => lastReadSurah != null && lastReadAyah != null;
+
+  /// True when the user has a saved makeup reading bookmark.
+  bool get hasMakeupBookmark =>
+      makeupBookmarkDay != null &&
+      makeupBookmarkSurah != null &&
+      makeupBookmarkAyah != null;
 
   @override
   List<Object?> get props => [
@@ -73,5 +91,8 @@ class WirdPlanLoaded extends WirdState {
         followUpIntervalHours,
         lastReadSurah,
         lastReadAyah,
+        makeupBookmarkDay,
+        makeupBookmarkSurah,
+        makeupBookmarkAyah,
       ];
 }

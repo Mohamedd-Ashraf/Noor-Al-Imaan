@@ -26,9 +26,23 @@ class SettingsService {
   static const String _keySelectedAdhanSound = 'selected_adhan_sound';
   static const String _keyPrayerMethodAutoDetected = 'prayer_method_auto_detected';
   static const String _keyAdhanVolume = 'adhan_volume';
+
+  // ── New notification feature keys ────────────────────────────────────────
+  static const String _keyAdhanShortMode          = 'adhan_short_mode';
+  static const String _keyPrayerReminderEnabled   = 'prayer_reminder_enabled';
+  static const String _keyPrayerReminderMinutes   = 'prayer_reminder_minutes';
+  static const String _keyIqamaEnabled            = 'iqama_enabled';
+  static const String _keyIqamaMinutes            = 'iqama_minutes';
+  static const String _keySalawatEnabled          = 'salawat_enabled';
+  static const String _keySalawatMinutes          = 'salawat_minutes';
+  /// 'ringtone' (default) or 'alarm' — controls which Android audio stream
+  /// is used for adhan playback and which system volume is displayed.
+  static const String _keyAdhanAudioStream        = 'adhan_audio_stream';
   static const String _keyQuranEdition = 'quran_edition';
   static const String _keyQuranFont = 'quran_font';
   static const String _keyFontSizeMigratedV18 = 'font_size_migrated_v18';
+  static const String _keyScrollMode = 'scroll_mode';
+  static const String _keyWordByWordAudio = 'word_by_word_audio';
 
   final SharedPreferences _prefs;
 
@@ -231,13 +245,22 @@ class SettingsService {
     return _prefs.getBool(_keyPrayerMethodAutoDetected) ?? true;
   }
 
-  // Adhan Volume (0.0 – 1.0, relative to system alarm stream)
+  // Adhan Volume (0.0 – 1.0, relative to system audio stream)
   Future<bool> setAdhanVolume(double volume) async {
     return await _prefs.setDouble(_keyAdhanVolume, volume);
   }
 
   double getAdhanVolume() {
     return _prefs.getDouble(_keyAdhanVolume) ?? 1.0;
+  }
+
+  // Adhan Audio Stream: 'ringtone' (default) or 'alarm'
+  Future<bool> setAdhanAudioStream(String stream) async {
+    return await _prefs.setString(_keyAdhanAudioStream, stream);
+  }
+
+  String getAdhanAudioStream() {
+    return _prefs.getString(_keyAdhanAudioStream) ?? 'ringtone';
   }
 
   // ─── Quran Display Edition ────────────────────────────────────────────────
@@ -262,4 +285,38 @@ class SettingsService {
   String getQuranFont() {
     return _prefs.getString(_keyQuranFont) ?? 'scheherazade';
   }
+
+  // ── Adhan short mode ───────────────────────────────────────────────────────
+  bool getAdhanShortMode() => _prefs.getBool(_keyAdhanShortMode) ?? false;
+  Future<bool> setAdhanShortMode(bool v) => _prefs.setBool(_keyAdhanShortMode, v);
+
+  // ── Pre-prayer reminder ────────────────────────────────────────────────────
+  bool getPrayerReminderEnabled() =>
+      _prefs.getBool(_keyPrayerReminderEnabled) ?? false;
+  Future<bool> setPrayerReminderEnabled(bool v) =>
+      _prefs.setBool(_keyPrayerReminderEnabled, v);
+  int getPrayerReminderMinutes() =>
+      _prefs.getInt(_keyPrayerReminderMinutes) ?? 10;
+  Future<bool> setPrayerReminderMinutes(int v) =>
+      _prefs.setInt(_keyPrayerReminderMinutes, v);
+
+  // ── Iqama notification ────────────────────────────────────────────────────
+  bool getIqamaEnabled() => _prefs.getBool(_keyIqamaEnabled) ?? false;
+  Future<bool> setIqamaEnabled(bool v) => _prefs.setBool(_keyIqamaEnabled, v);
+  int getIqamaMinutes() => _prefs.getInt(_keyIqamaMinutes) ?? 15;
+  Future<bool> setIqamaMinutes(int v) => _prefs.setInt(_keyIqamaMinutes, v);
+
+  // ── Salawat reminder ──────────────────────────────────────────────────────
+  bool getSalawatEnabled() => _prefs.getBool(_keySalawatEnabled) ?? false;
+  Future<bool> setSalawatEnabled(bool v) => _prefs.setBool(_keySalawatEnabled, v);
+  int getSalawatMinutes() => _prefs.getInt(_keySalawatMinutes) ?? 30;
+  Future<bool> setSalawatMinutes(int v) => _prefs.setInt(_keySalawatMinutes, v);
+
+  // ── Scroll mode (تصفح المصحف بالسحب من أسفل لأعلى) ──────────────────────
+  bool getScrollMode() => _prefs.getBool(_keyScrollMode) ?? false;
+  Future<bool> setScrollMode(bool v) => _prefs.setBool(_keyScrollMode, v);
+
+  // ── Word-by-word audio (اضغط كلمة لتسمعها) ─────────────────────────────
+  bool getWordByWordAudio() => _prefs.getBool(_keyWordByWordAudio) ?? false;
+  Future<bool> setWordByWordAudio(bool v) => _prefs.setBool(_keyWordByWordAudio, v);
 }

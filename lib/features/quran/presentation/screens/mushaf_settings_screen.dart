@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
 import '../../../../core/constants/api_constants.dart';
 import '../../../../core/constants/app_colors.dart';
@@ -24,6 +25,9 @@ class _MushafSettingsScreenState extends State<MushafSettingsScreen>
     with SingleTickerProviderStateMixin {
   late double _fontSizeDraft;
   late TabController _tabController;
+
+  /// Show the "جديد / New" badge only while the app is on version 1.0.7.
+  bool _showScrollModeBadge = false;
 
   // Groupings for editions – key = group label, value = list of edition ids
   static const _editionGroups = <String, List<String>>{
@@ -61,6 +65,13 @@ class _MushafSettingsScreenState extends State<MushafSettingsScreen>
     if (_editionGroups['simple']!.contains(currentId)) tabIndex = 1;
     if (_editionGroups['special']!.contains(currentId)) tabIndex = 2;
     _tabController.index = tabIndex;
+
+    // Show the "جديد" badge only for version 1.0.7
+    PackageInfo.fromPlatform().then((info) {
+      if (mounted) {
+        setState(() => _showScrollModeBadge = info.version == '1.0.7');
+      }
+    });
   }
 
   @override
@@ -200,7 +211,11 @@ class _MushafSettingsScreenState extends State<MushafSettingsScreen>
                   Icons.import_contacts_rounded,
                 ),
                 const SizedBox(height: 8),
-                _DisplayModeCard(isAr: isAr, settings: settings),
+                _DisplayModeCard(
+                  isAr: isAr,
+                  settings: settings,
+                  showScrollModeBadge: _showScrollModeBadge,
+                ),
                 const SizedBox(height: 20),
 
                 // 3. Font Selection
@@ -382,8 +397,13 @@ class _LivePreviewPanel extends StatelessWidget {
 class _DisplayModeCard extends StatelessWidget {
   final bool isAr;
   final AppSettingsState settings;
+  final bool showScrollModeBadge;
 
-  const _DisplayModeCard({required this.isAr, required this.settings});
+  const _DisplayModeCard({
+    required this.isAr,
+    required this.settings,
+    this.showScrollModeBadge = false,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -444,6 +464,111 @@ class _DisplayModeCard extends StatelessWidget {
             activeColor: AppColors.primary,
             onChanged: (v) =>
                 context.read<AppSettingsCubit>().setPageFlipRightToLeft(v),
+          ),
+          const Divider(height: 1, indent: 56, endIndent: 16),
+          SwitchListTile(
+            secondary: Container(
+              padding: const EdgeInsets.all(7),
+              decoration: BoxDecoration(
+                color: AppColors.primary.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Icon(Icons.swipe_up_rounded,
+                  color: AppColors.primary, size: 20),
+            ),
+            title: Row(
+              children: [
+                Flexible(
+                  child: Text(
+                    isAr ? 'وضع التمرير العمودي' : 'Vertical Scroll Mode',
+                    style: const TextStyle(
+                        fontWeight: FontWeight.w700, fontSize: 14),
+                  ),
+                ),
+                if (showScrollModeBadge) ...[
+                  const SizedBox(width: 6),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 7, vertical: 2),
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [AppColors.secondary, Color(0xFFF4D03F)],
+                      ),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      isAr ? 'جديد' : 'New',
+                      style: const TextStyle(
+                          fontSize: 10,
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+            subtitle: Text(
+              isAr
+                  ? 'اسحب لأسفل للتصفح، ةسحب من أسفل لأعلى عند النهاية للانتقال'
+                  : 'Scroll within page — pull past the bottom to flip',
+              style: const TextStyle(
+                  fontSize: 12, color: AppColors.textSecondary),
+            ),
+            value: settings.scrollMode,
+            activeColor: AppColors.primary,
+            onChanged: (v) =>
+                context.read<AppSettingsCubit>().setScrollMode(v),
+          ),
+          const Divider(height: 1, indent: 56, endIndent: 16),
+          SwitchListTile(
+            secondary: Container(
+              padding: const EdgeInsets.all(7),
+              decoration: BoxDecoration(
+                color: AppColors.primary.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Icon(Icons.touch_app_rounded,
+                  color: AppColors.primary, size: 20),
+            ),
+            title: Text(
+              isAr ? 'تشغيل كلمة بكلمة' : 'Word-by-Word Audio',
+              style: const TextStyle(
+                  fontWeight: FontWeight.w700, fontSize: 14),
+            ),
+            subtitle: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  isAr
+                      ? 'اضغط على أي كلمة لسماعها بصوت واضح'
+                      : 'Tap any word to hear it clearly recited',
+                  style: const TextStyle(
+                      fontSize: 12, color: AppColors.textSecondary),
+                ),
+                const SizedBox(height: 3),
+                Row(
+                  children: [
+                    Icon(Icons.mic_rounded,
+                        size: 11,
+                        color: AppColors.secondary.withValues(alpha: 0.8)),
+                    const SizedBox(width: 4),
+                    Text(
+                      isAr
+                          ? 'الصوت: مشاري راشد العفاسي'
+                          : 'Voice: Mishari Rashid Al-Afasy',
+                      style: TextStyle(
+                          fontSize: 11,
+                          color: AppColors.secondary.withValues(alpha: 0.9),
+                          fontWeight: FontWeight.w500),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            value: settings.wordByWordAudio,
+            activeColor: AppColors.primary,
+            onChanged: (v) =>
+                context.read<AppSettingsCubit>().setWordByWordAudio(v),
           ),
         ],
       ),

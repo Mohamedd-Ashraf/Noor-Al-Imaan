@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/settings/app_settings_cubit.dart';
+import '../widgets/islamic_audio_player.dart';
 import 'home_screen.dart';
 import 'bookmarks_screen.dart';
 import 'settings_screen.dart';
@@ -51,7 +52,11 @@ class _MainNavigatorState extends State<MainNavigator> {
         index: _currentIndex,
         children: _screens,
       ),
-      bottomNavigationBar: Container(
+      bottomNavigationBar: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          IslamicAudioPlayer(isArabicUi: isArabicUi),
+          Container(
         decoration: BoxDecoration(
           boxShadow: [
             BoxShadow(
@@ -108,6 +113,8 @@ class _MainNavigatorState extends State<MainNavigator> {
             ),
           ],
         ),
+      ),
+        ],
       ),
     );
   }

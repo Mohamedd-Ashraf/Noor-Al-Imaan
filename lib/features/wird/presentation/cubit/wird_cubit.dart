@@ -36,6 +36,9 @@ class WirdCubit extends Cubit<WirdState> {
         followUpIntervalHours: followUpInterval,
         lastReadSurah: _wirdService.lastReadSurah,
         lastReadAyah: _wirdService.lastReadAyah,
+        makeupBookmarkDay:   _wirdService.makeupBookmarkDay,
+        makeupBookmarkSurah: _wirdService.makeupBookmarkSurah,
+        makeupBookmarkAyah:  _wirdService.makeupBookmarkAyah,
       ));
     }
   }
@@ -82,11 +85,18 @@ class WirdCubit extends Cubit<WirdState> {
       }
     } else {
       await _wirdService.markDayComplete(day);
-      // If completing today, cancel follow-up reminders + clear reading bookmark.
+      // Always re-evaluate notifications after completion:
+      // • cancels today's stale follow-ups
+      // • pre-schedules tomorrow's follow-ups so the user keeps getting
+      //   reminded for the new day even without reopening the app.
       final todayDay = currentState.plan.currentDay;
       if (day == todayDay) {
-        await _notifService.cancelFollowUps();
+        await _notifService.refreshFollowUps();
         await _wirdService.clearLastRead();
+      }
+      // If completing a makeup day, clear its bookmark.
+      if (_wirdService.makeupBookmarkDay == day) {
+        await _wirdService.clearMakeupBookmark();
       }
     }
     load();
@@ -155,4 +165,19 @@ class WirdCubit extends Cubit<WirdState> {
   Future<void> clearLastRead() async {
     await _wirdService.clearLastRead();
     load();
-  }}
+  }
+
+  // ── Makeup bookmark ───────────────────────────────────────────────────────
+
+  /// Saves where the user stopped inside a makeup-wird session.
+  Future<void> saveMakeupBookmark(int day, int surah, int ayah) async {
+    await _wirdService.saveMakeupBookmark(day, surah, ayah);
+    load();
+  }
+
+  /// Clears the makeup bookmark.
+  Future<void> clearMakeupBookmark() async {
+    await _wirdService.clearMakeupBookmark();
+    load();
+  }
+}

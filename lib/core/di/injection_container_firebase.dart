@@ -8,6 +8,7 @@ import 'package:firebase_remote_config/firebase_remote_config.dart';
 import '../../features/quran/data/datasources/quran_remote_data_source.dart';
 import '../../features/quran/data/datasources/quran_local_data_source.dart';
 import '../../features/quran/data/datasources/quran_bundled_data_source.dart';
+import '../../features/quran/data/datasources/ibn_kathir_remote_data_source.dart';
 import '../../features/quran/data/repositories/quran_repository_impl.dart';
 import '../../features/quran/domain/repositories/quran_repository.dart';
 import '../../features/quran/domain/usecases/get_all_surahs.dart';
@@ -63,7 +64,7 @@ Future<void> init() async {
   );
 
   sl.registerFactory(
-    () => TafsirCubit(sl()),
+    () => TafsirCubit(sl(), sl()),
   );
 
   // Use cases
@@ -94,6 +95,10 @@ Future<void> init() async {
 
   sl.registerLazySingleton<QuranBundledDataSource>(
     () => QuranBundledDataSourceImpl(),
+  );
+
+  sl.registerLazySingleton(
+    () => IbnKathirRemoteDataSource(client: sl()),
   );
 
   //! Core

@@ -14,6 +14,8 @@ class AppSettingsState extends Equatable {
   final String diacriticsColorMode; // 'same' or 'different'
   final String quranEdition; // API edition identifier e.g. 'quran-uthmani'
   final String quranFont;   // font key e.g. 'amiri_quran'
+  final bool scrollMode;    // vertical scroll mode for reading pages
+  final bool wordByWordAudio; // tap a single word to hear it
 
   const AppSettingsState({
     required this.arabicFontSize,
@@ -26,6 +28,8 @@ class AppSettingsState extends Equatable {
     required this.diacriticsColorMode,
     required this.quranEdition,
     required this.quranFont,
+    required this.scrollMode,
+    required this.wordByWordAudio,
   });
 
   factory AppSettingsState.initial(SettingsService service) {
@@ -40,6 +44,8 @@ class AppSettingsState extends Equatable {
       diacriticsColorMode: service.getDiacriticsColorMode(),
       quranEdition: service.getQuranEdition(),
       quranFont: service.getQuranFont(),
+      scrollMode: service.getScrollMode(),
+      wordByWordAudio: service.getWordByWordAudio(),
     );
   }
 
@@ -54,6 +60,8 @@ class AppSettingsState extends Equatable {
     String? diacriticsColorMode,
     String? quranEdition,
     String? quranFont,
+    bool? scrollMode,
+    bool? wordByWordAudio,
   }) {
     return AppSettingsState(
       arabicFontSize: arabicFontSize ?? this.arabicFontSize,
@@ -66,6 +74,8 @@ class AppSettingsState extends Equatable {
       diacriticsColorMode: diacriticsColorMode ?? this.diacriticsColorMode,
       quranEdition: quranEdition ?? this.quranEdition,
       quranFont: quranFont ?? this.quranFont,
+      scrollMode: scrollMode ?? this.scrollMode,
+      wordByWordAudio: wordByWordAudio ?? this.wordByWordAudio,
     );
   }
 
@@ -81,6 +91,8 @@ class AppSettingsState extends Equatable {
     diacriticsColorMode,
     quranEdition,
     quranFont,
+    scrollMode,
+    wordByWordAudio,
   ];
 }
 
@@ -154,5 +166,15 @@ class AppSettingsCubit extends Cubit<AppSettingsState> {
   Future<void> setQuranFont(String font) async {
     await _service.setQuranFont(font);
     emit(state.copyWith(quranFont: font));
+  }
+
+  Future<void> setScrollMode(bool value) async {
+    await _service.setScrollMode(value);
+    emit(state.copyWith(scrollMode: value));
+  }
+
+  Future<void> setWordByWordAudio(bool value) async {
+    await _service.setWordByWordAudio(value);
+    emit(state.copyWith(wordByWordAudio: value));
   }
 }

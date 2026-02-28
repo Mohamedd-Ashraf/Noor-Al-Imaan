@@ -8,7 +8,7 @@ import 'package:just_audio/just_audio.dart';
 import '../services/ayah_audio_service.dart';
 import '../services/adhan_notification_service.dart';
 
-enum AyahAudioMode { ayah, surah }
+enum AyahAudioMode { ayah, surah, word }
 
 enum AyahAudioStatus { idle, buffering, playing, paused, error }
 
@@ -22,6 +22,8 @@ class AyahAudioState extends Equatable {
   final int queueIndex;
   /// Total number of surahs in the queue (0 = not in queue mode).
   final int queueTotal;
+  /// 1-based word index within the ayah (only set in word mode).
+  final int? wordIndex;
 
   const AyahAudioState({
     required this.status,
@@ -31,14 +33,25 @@ class AyahAudioState extends Equatable {
     this.errorMessage,
     this.queueIndex = 0,
     this.queueTotal = 0,
+    this.wordIndex,
   });
 
-  const AyahAudioState.idle() : this(status: AyahAudioStatus.idle);
+  const AyahAudioState.idle()
+      : status = AyahAudioStatus.idle,
+        mode = AyahAudioMode.ayah,
+        surahNumber = null,
+        ayahNumber = null,
+        errorMessage = null,
+        queueIndex = 0,
+        queueTotal = 0,
+        wordIndex = null;
 
   bool get hasTarget => surahNumber != null && ayahNumber != null;
   bool get isQueueMode => queueTotal > 1;
 
   bool isCurrent(int s, int a) => surahNumber == s && ayahNumber == a;
+  bool isCurrentWord(int s, int a, int w) =>
+      mode == AyahAudioMode.word && surahNumber == s && ayahNumber == a && wordIndex == w;
 
   @override
   List<Object?> get props => [
@@ -49,6 +62,7 @@ class AyahAudioState extends Equatable {
     errorMessage,
     queueIndex,
     queueTotal,
+    wordIndex,
   ];
 
   AyahAudioState copyWith({
@@ -60,6 +74,8 @@ class AyahAudioState extends Equatable {
     bool clearError = false,
     int? queueIndex,
     int? queueTotal,
+    int? wordIndex,
+    bool clearWordIndex = false,
   }) {
     return AyahAudioState(
       status: status ?? this.status,
@@ -69,6 +85,7 @@ class AyahAudioState extends Equatable {
       errorMessage: clearError ? null : (errorMessage ?? this.errorMessage),
       queueIndex: queueIndex ?? this.queueIndex,
       queueTotal: queueTotal ?? this.queueTotal,
+      wordIndex: clearWordIndex ? null : (wordIndex ?? this.wordIndex),
     );
   }
 }
@@ -93,6 +110,9 @@ class AyahAudioCubit extends Cubit<AyahAudioState> {
   int _playlistLength = 1;
   /// Number of ayah items only (excludes silence gaps).
   int _ayahCount = 1;
+  /// Ayah number of the first item in the playlist (1 for full surahs,
+  /// [startAyah] for range playback).
+  int _firstAyahNumber = 1;
   /// Index of the item currently being played.
   int _currentItemIndex = 0;
   /// Known duration for each completed / loaded playlist item.
@@ -103,6 +123,10 @@ class AyahAudioCubit extends Cubit<AyahAudioState> {
   static const Duration _ayahGap = Duration(milliseconds: 400);
   /// Tag used on SilenceAudioSource items so we can identify them.
   static const int _kSilenceTag = -1;
+  /// True while [seekToAbsolute] is in progress.
+  /// Suppresses spurious `ProcessingState.completed` events that just_audio
+  /// fires during the internal FLUSHING/RESUMING cycle of a seek operation.
+  bool _isSeeking = false;
   AyahAudioCubit(this._service, this._adhanService)
     : _player = AudioPlayer(),
       super(const AyahAudioState.idle()) {
@@ -155,6 +179,9 @@ class AyahAudioCubit extends Cubit<AyahAudioState> {
       }
 
       if (processing == ProcessingState.completed) {
+        // Suppress false 'completed' that just_audio fires during the
+        // FLUSHING → FLUSHED → RESUMING cycle triggered by a seek.
+        if (_isSeeking) return;
         _onPlaylistCompleted();
         return;
       }
@@ -217,8 +244,10 @@ class AyahAudioCubit extends Cubit<AyahAudioState> {
         }
       }
 
-      // Fallback: assume playlist starts from ayah 1
-      emit(state.copyWith(ayahNumber: idx + 1));
+      // Fallback: derive ayah number from playlist position.
+      // Even indices are ayahs; odd indices are silences (never reach here).
+      // Each ayah occupies 2 slots (ayah + silence) except the last.
+      emit(state.copyWith(ayahNumber: _firstAyahNumber + idx ~/ 2));
     });
   }
 
@@ -235,39 +264,48 @@ class AyahAudioCubit extends Cubit<AyahAudioState> {
       _player.positionStream.map((pos) => _accumulatedDuration + pos);
 
   /// Total duration of the full playlist.
-  /// Becomes more accurate as each item's duration is loaded.
-  /// Falls back to a proportional estimate while items are still loading.
+  /// Uses actual cached durations for known items; estimates the rest via
+  /// the running average.  The estimate only changes for the *unknown* part,
+  /// so already-known durations never shift the total unexpectedly.
   Stream<Duration?> get effectiveDurationStream =>
-      _player.durationStream.map((currentItemDur) {
-        if (_ayahCount <= 1) return currentItemDur;
+      _player.durationStream.map((_) => _computeEffectiveDuration());
 
-        // Fixed total silence duration is always known.
-        final silenceTotal = _ayahGap * (_ayahCount - 1);
+  /// Compute the effective total duration synchronously so both the stream
+  /// and [seekToAbsolute] can call it without duplicating logic.
+  Duration? _computeEffectiveDuration() {
+    if (_ayahCount <= 1) return _player.duration;
 
-        // Collect known ayah durations (even indices 0, 2, 4, …).
-        final knownAyahDurs = <Duration>[];
-        for (var i = 0; i < _playlistLength; i += 2) {
-          final d = _itemDurations[i];
-          if (d != null) knownAyahDurs.add(d);
-        }
+    // Fixed total silence duration is always known.
+    final silenceTotal = _ayahGap * (_ayahCount - 1);
 
-        if (knownAyahDurs.isEmpty) return currentItemDur;
+    // Sum the durations we ACTUALLY know (even playlist indices = ayahs).
+    int knownCount = 0;
+    int knownTotalMs = 0;
+    for (var i = 0; i < _playlistLength; i += 2) {
+      final d = _itemDurations[i];
+      if (d != null && d > Duration.zero) {
+        knownCount++;
+        knownTotalMs += d.inMilliseconds;
+      }
+    }
 
-        final knownAyahTotal =
-            knownAyahDurs.fold(Duration.zero, (sum, d) => sum + d);
+    if (knownCount == 0) return _player.duration; // nothing known yet
 
-        if (knownAyahDurs.length >= _ayahCount) {
-          // All ayah durations known — return exact total.
-          return knownAyahTotal + silenceTotal;
-        }
+    if (knownCount >= _ayahCount) {
+      // All ayah durations are known — return the exact total.
+      return Duration(milliseconds: knownTotalMs) + silenceTotal;
+    }
 
-        // Proportional estimate for the remaining ayahs.
-        final avgMs = knownAyahTotal.inMilliseconds / knownAyahDurs.length;
-        return Duration(
-          milliseconds:
-              (avgMs * _ayahCount).round() + silenceTotal.inMilliseconds,
-        );
-      });
+    // Estimate ONLY the unknown ayahs using the average of the known ones.
+    // This keeps the known part of the sum fixed, so the total only shifts
+    // by (avgChange × unknownCount) as new data arrives — not by
+    // (avgChange × totalAyahCount) as the old formula did.
+    final unknownCount = _ayahCount - knownCount;
+    final avgMs = knownTotalMs / knownCount;
+    final estimatedTotalMs =
+        knownTotalMs + (avgMs * unknownCount).round() + silenceTotal.inMilliseconds;
+    return Duration(milliseconds: estimatedTotalMs);
+  }
 
   // ── Queue helpers ─────────────────────────────────────────────────────────
 
@@ -309,22 +347,49 @@ class AyahAudioCubit extends Cubit<AyahAudioState> {
     await _playSurahQueueItem(0);
   }
 
+  /// Skip to the next surah in the queue. No-op if not in queue mode or
+  /// already at the last surah.
+  Future<void> nextSurah() async {
+    if (_surahQueue.isEmpty) return;
+    final next = _surahQueueIndex + 1;
+    if (next >= _surahQueue.length) return;
+    _surahQueueIndex = next;
+    await _playSurahQueueItem(next);
+  }
+
+  /// Go back to the previous surah in the queue. No-op if not in queue mode
+  /// or already at the first surah.
+  Future<void> previousSurah() async {
+    if (_surahQueue.isEmpty) return;
+    final prev = _surahQueueIndex - 1;
+    if (prev < 0) return;
+    _surahQueueIndex = prev;
+    await _playSurahQueueItem(prev);
+  }
+
   Future<void> togglePlayAyah({
     required int surahNumber,
     required int ayahNumber,
   }) async {
     if (state.mode == AyahAudioMode.ayah &&
-        state.isCurrent(surahNumber, ayahNumber) &&
-        _player.playing) {
-      await pause();
-      return;
+        state.isCurrent(surahNumber, ayahNumber)) {
+      if (_player.playing) {
+        await pause();
+        return;
+      }
+      // Resume from current position instead of restarting from the beginning.
+      if (state.status == AyahAudioStatus.paused) {
+        await resume();
+        return;
+      }
     }
 
     await playAyah(surahNumber: surahNumber, ayahNumber: ayahNumber);
   }
 
-  void _resetPlaylistTracking(int ayahCount) {
+  void _resetPlaylistTracking(int ayahCount, {int firstAyahNumber = 1}) {
     _ayahCount = ayahCount;
+    _firstAyahNumber = firstAyahNumber;
     // Total items: ayahs interleaved with silence gaps.
     // N ayahs → N + (N−1) = 2N−1 items.  Single ayah → 1 item (no gap).
     _playlistLength = ayahCount <= 1 ? 1 : 2 * ayahCount - 1;
@@ -383,6 +448,63 @@ class AyahAudioCubit extends Cubit<AyahAudioState> {
           mode: AyahAudioMode.ayah,
           surahNumber: surahNumber,
           ayahNumber: ayahNumber,
+          errorMessage: e.toString().replaceFirst('Exception: ', ''),
+        ),
+      );
+    }
+  }
+
+  // ── Word-by-word playback ─────────────────────────────────────────────────
+
+  /// Play a single word.  [wordIndex] is 1-based (first word = 1).
+  ///
+  /// Audio source: audio.qurancdn.com word-by-word CDN.
+  /// NOTE: This CDN only provides one reciter: Mishary Rashid Al-Afasy.
+  /// The selected Quran reciter in settings does NOT affect word-by-word audio.
+  Future<void> playWord({
+    required int surahNumber,
+    required int ayahNumber,
+    required int wordIndex,
+  }) async {
+    // Stop Adhan / any active playback first.
+    await _adhanService.stopCurrentAdhan();
+    if (!_initialized) {
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+    }
+    _surahQueue = [];
+    _surahQueueIndex = 0;
+    _resetPlaylistTracking(1);
+
+    emit(
+      AyahAudioState(
+        status: AyahAudioStatus.buffering,
+        mode: AyahAudioMode.word,
+        surahNumber: surahNumber,
+        ayahNumber: ayahNumber,
+        wordIndex: wordIndex,
+      ),
+    );
+
+    final s = surahNumber.toString().padLeft(3, '0');
+    final a = ayahNumber.toString().padLeft(3, '0');
+    final w = wordIndex.toString().padLeft(3, '0');
+    final uri = Uri.parse(
+      'https://audio.qurancdn.com/wbw/${s}_${a}_${w}.mp3',
+    );
+
+    try {
+      await _player.setAudioSource(AudioSource.uri(uri));
+      await _player.setLoopMode(LoopMode.off);
+      await _player.setShuffleModeEnabled(false);
+      await _player.play();
+    } catch (e) {
+      emit(
+        AyahAudioState(
+          status: AyahAudioStatus.error,
+          mode: AyahAudioMode.word,
+          surahNumber: surahNumber,
+          ayahNumber: ayahNumber,
+          wordIndex: wordIndex,
           errorMessage: e.toString().replaceFirst('Exception: ', ''),
         ),
       );
@@ -504,7 +626,7 @@ class AyahAudioCubit extends Cubit<AyahAudioState> {
     if (!_initialized) {
       await Future<void>.delayed(const Duration(milliseconds: 10));
     }
-    _resetPlaylistTracking(endAyah - startAyah + 1);
+    _resetPlaylistTracking(endAyah - startAyah + 1, firstAyahNumber: startAyah);
     emit(
       AyahAudioState(
         status: AyahAudioStatus.buffering,
@@ -556,6 +678,93 @@ class AyahAudioCubit extends Cubit<AyahAudioState> {
           errorMessage: e.toString().replaceFirst('Exception: ', ''),
         ),
       );
+    }
+  }
+
+  /// Seek to [position] in the current audio (effective / playlist-aware).
+  ///
+  /// For single-ayah mode this maps directly to [AudioPlayer.seek].
+  /// For playlist (surah) mode it walks the accumulated item durations to
+  /// find the correct playlist index + in-item offset.
+  Future<void> seekToAbsolute(Duration position) async {
+    if (position < Duration.zero) position = Duration.zero;
+    _isSeeking = true;
+    try {
+      // Single-item: just seek directly.
+      if (_ayahCount <= 1) {
+        final dur = _player.duration;
+        if (dur != null && position > dur) position = dur;
+        await _player.seek(position);
+        return;
+      }
+
+      // ── Average ayah duration (for items whose duration isn't cached yet) ──
+      // We need this because just_audio only reports the duration of the
+      // *current* item.  Items ahead of the playhead haven't been loaded yet
+      // so their durations are unknown.  Using 0 for them causes the walk to
+      // fall through to the last item and seek past its end → player stops.
+      int knownCount = 0;
+      int knownTotalMs = 0;
+      for (var i = 0; i < _playlistLength; i += 2) {
+        final d = _itemDurations[i];
+        if (d != null && d > Duration.zero) {
+          knownCount++;
+          knownTotalMs += d.inMilliseconds;
+        }
+      }
+      // Fallback: 30 s average when nothing is known (shouldn't happen if the
+      // user has been playing long enough to touch the slider).
+      final avgAyahMs =
+          knownCount > 0 ? knownTotalMs ~/ knownCount : 30000;
+
+      // ── Clamp position to estimated total duration ─────────────────────────
+      // Re-use the same formula as _computeEffectiveDuration so the seek
+      // clamp is always consistent with what the slider shows.
+      final silenceTotalMs = _ayahGap.inMilliseconds * (_ayahCount - 1);
+      final unknownCount = _ayahCount - knownCount;
+      final estimatedTotalMs = knownCount > 0
+          ? knownTotalMs + (avgAyahMs * unknownCount) + silenceTotalMs
+          : avgAyahMs * _ayahCount + silenceTotalMs;
+      // Keep 500 ms margin so we don't accidentally seek to the very end.
+      final maxSeekMs = (estimatedTotalMs - 500).clamp(0, estimatedTotalMs);
+      if (position.inMilliseconds > maxSeekMs) {
+        position = Duration(milliseconds: maxSeekMs);
+      }
+
+      // ── Walk the playlist to find target item + in-item offset ─────────────
+      Duration consumed = Duration.zero;
+      for (var i = 0; i < _playlistLength; i++) {
+        final isAyahItem = i.isEven; // ayahs are at even indices
+        // Use the actual cached duration if available, otherwise estimate.
+        final dur = _itemDurations[i] ??
+            (isAyahItem
+                ? Duration(milliseconds: avgAyahMs)
+                : _ayahGap);
+
+        final end = consumed + dur;
+        if (end > position || i == _playlistLength - 1) {
+          final offsetInItem = position - consumed;
+          final clamped =
+              offsetInItem.isNegative ? Duration.zero : offsetInItem;
+          // Update tracking so effectivePositionStream stays consistent.
+          _currentItemIndex = i;
+          _accumulatedDuration = consumed;
+          await _player.seek(clamped, index: i);
+          return;
+        }
+        consumed += dur;
+      }
+    } finally {
+      // Give the player a frame to settle its internal state before we
+      // re-enable completion handling.
+      await Future<void>.delayed(const Duration(milliseconds: 200));
+      _isSeeking = false;
+      // If the player landed in 'completed' during the seek-guard window
+      // (e.g. the user dragged past the last known position), handle it now.
+      if (!isClosed &&
+          _player.playerState.processingState == ProcessingState.completed) {
+        _onPlaylistCompleted();
+      }
     }
   }
 

@@ -1,5 +1,6 @@
 package com.example.quraan
 
+import android.content.Context
 import android.content.Intent
 import android.media.AudioAttributes
 import android.media.AudioManager
@@ -42,8 +43,11 @@ class MainActivity : FlutterActivity() {
 
                     // ── Full adhan — always via foreground service ──────────
                     "startAdhanService" -> {
-                        val soundName = call.argument<String>("soundName") ?: "adhan_1"
-                        startAdhanService(soundName)
+                        val soundName          = call.argument<String>("soundName") ?: "adhan_1"
+                        val shortMode          = call.argument<Boolean>("shortMode") ?: false
+                        val shortCutoffSeconds = call.argument<Int>("shortCutoffSeconds") ?: 15
+                        val useAlarmStream     = call.argument<Boolean>("useAlarmStream") ?: false
+                        startAdhanService(soundName, shortMode, shortCutoffSeconds, useAlarmStream)
                         result.success(true)
                     }
 
@@ -57,8 +61,16 @@ class MainActivity : FlutterActivity() {
                     // ── AlarmManager scheduling ────────────────────────────
                     "scheduleAdhanAlarms" -> {
                         @Suppress("UNCHECKED_CAST")
-                        val alarms    = call.argument<List<Map<String, Any>>>("alarms") ?: emptyList()
-                        val soundName = call.argument<String>("soundName") ?: "adhan_1"
+                        val alarms             = call.argument<List<Map<String, Any>>>("alarms") ?: emptyList()
+                        val soundName          = call.argument<String>("soundName") ?: "adhan_1"
+                        val shortCutoffSeconds = call.argument<Int>("shortCutoffSeconds") ?: 15
+                        val useAlarmStream     = call.argument<Boolean>("useAlarmStream") ?: false
+                        // Persist both settings so AdhanAlarmReceiver can use them after the app is killed.
+                        getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
+                            .edit()
+                            .putInt("flutter.adhan_short_cutoff_seconds", shortCutoffSeconds)
+                            .putString("flutter.adhan_audio_stream", if (useAlarmStream) "alarm" else "ringtone")
+                            .apply()
                         AdhanAlarmReceiver.scheduleAlarms(this, alarms, soundName)
                         result.success(null)
                     }
@@ -86,12 +98,16 @@ class MainActivity : FlutterActivity() {
                         result.success(disabled)
                     }
 
-                    // ── System alarm volume ────────────────────────────────
+                    // Returns current volume of whichever stream the user has selected for adhan.
+                    // Also returns 'streamType' so the Dart UI can show the right label.
                     "getAlarmVolume" -> {
                         val am      = getSystemService(AUDIO_SERVICE) as AudioManager
-                        val current = am.getStreamVolume(AudioManager.STREAM_ALARM)
-                        val max     = am.getStreamMaxVolume(AudioManager.STREAM_ALARM)
-                        result.success(mapOf("current" to current, "max" to max))
+                        val prefs   = getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
+                        val isAlarm = prefs.getString("flutter.adhan_audio_stream", "ringtone") == "alarm"
+                        val stream  = if (isAlarm) AudioManager.STREAM_ALARM else AudioManager.STREAM_RING
+                        val current = am.getStreamVolume(stream)
+                        val max     = am.getStreamMaxVolume(stream)
+                        result.success(mapOf("current" to current, "max" to max, "streamType" to if (isAlarm) "alarm" else "ringtone"))
                     }
 
                     "openSoundSettings" -> {
@@ -157,7 +173,8 @@ class MainActivity : FlutterActivity() {
             player.setWakeMode(applicationContext, PowerManager.PARTIAL_WAKE_LOCK)
             player.setAudioAttributes(
                 AudioAttributes.Builder()
-                    .setUsage(AudioAttributes.USAGE_ALARM)
+                    // Preview is in-app: use media stream so it ducked by other media.
+                    .setUsage(AudioAttributes.USAGE_MEDIA)
                     .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
                     .build()
             )
@@ -195,16 +212,19 @@ class MainActivity : FlutterActivity() {
 
     // ── Full adhan via foreground service ─────────────────────────────────────
 
-    private fun startAdhanService(soundName: String) {
+    private fun startAdhanService(soundName: String, shortMode: Boolean = false, shortCutoffSeconds: Int = 15, useAlarmStream: Boolean = false) {
         val intent = Intent(this, AdhanPlayerService::class.java).apply {
             putExtra(AdhanPlayerService.EXTRA_SOUND, soundName)
+            putExtra(AdhanPlayerService.EXTRA_SHORT_MODE, shortMode)
+            putExtra(AdhanPlayerService.EXTRA_SHORT_CUTOFF_SECONDS, shortCutoffSeconds)
+            putExtra(AdhanPlayerService.EXTRA_USE_ALARM_STREAM, useAlarmStream)
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             startForegroundService(intent)
         } else {
             startService(intent)
         }
-        Log.d("MainActivity", "AdhanPlayerService started: $soundName")
+        Log.d("MainActivity", "AdhanPlayerService started: $soundName (shortMode=$shortMode, cutoff=${shortCutoffSeconds}s, alarmStream=$useAlarmStream)")
     }
 
     private fun stopAdhanService() {

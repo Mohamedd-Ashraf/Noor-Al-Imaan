@@ -128,11 +128,20 @@ class WirdNotificationService {
     await cancelAll();
     await _scheduleMainReminder(hour, minute);
 
-    // Schedule today's follow-ups only if interval is not 0 ("Never").
-    final todayIndex = plan.currentDay;
-    if (_wirdService.followUpIntervalHours > 0 &&
-        !plan.isDayComplete(todayIndex)) {
-      await _scheduleFollowUps(hour, minute);
+    // Schedule follow-ups only if interval is not 0 ("Never").
+    if (_wirdService.followUpIntervalHours > 0) {
+      final todayIndex = plan.currentDay;
+      if (!plan.isDayComplete(todayIndex)) {
+        // Today's wird not done — schedule follow-ups for today.
+        await _scheduleFollowUps(hour, minute, forNextDay: false);
+      } else {
+        // Today is done — pre-schedule follow-ups for the next plan day so
+        // the user gets reminded tomorrow without needing to open the app.
+        final nextDay = todayIndex + 1;
+        if (nextDay <= plan.targetDays && !plan.isDayComplete(nextDay)) {
+          await _scheduleFollowUps(hour, minute, forNextDay: true);
+        }
+      }
     }
 
     debugPrint('📿 [Wird] Scheduled daily reminder at $hour:$minute');
@@ -155,8 +164,16 @@ class WirdNotificationService {
 
     final todayIndex = plan.currentDay;
     if (!plan.isDayComplete(todayIndex)) {
+      // Today not done — schedule follow-ups for today.
       await _scheduleFollowUps(
-          reminderTime['hour']!, reminderTime['minute']!);
+          reminderTime['hour']!, reminderTime['minute']!, forNextDay: false);
+    } else {
+      // Today done — pre-schedule tomorrow's follow-ups.
+      final nextDay = todayIndex + 1;
+      if (nextDay <= plan.targetDays && !plan.isDayComplete(nextDay)) {
+        await _scheduleFollowUps(
+            reminderTime['hour']!, reminderTime['minute']!, forNextDay: true);
+      }
     }
   }
 
@@ -181,29 +198,43 @@ class WirdNotificationService {
     );
   }
 
-  Future<void> _scheduleFollowUps(int hour, int minute) async {
+  /// Schedules follow-up notifications.
+  ///
+  /// [forNextDay] = false → follow-ups start after today's reminder time.
+  /// [forNextDay] = true  → follow-ups start after tomorrow's reminder time
+  ///                        (pre-schedule for the next plan day so reminders
+  ///                         arrive even if the user never reopens the app).
+  Future<void> _scheduleFollowUps(int hour, int minute,
+      {required bool forNextDay}) async {
     final now = tz.TZDateTime.now(tz.local);
-    final todayBase =
-        tz.TZDateTime(tz.local, now.year, now.month, now.day, hour, minute);
-    // "Next-day reminder" boundary — follow-ups must fire before this moment.
-    final nextDayBase = todayBase.add(const Duration(days: 1));
 
-    // Use the user-configured interval (default 4 h), up to 5 follow-ups max.
+    // Base = the reminder time of the target day (today or tomorrow).
+    var baseDay =
+        tz.TZDateTime(tz.local, now.year, now.month, now.day, hour, minute);
+    if (forNextDay) {
+      baseDay = baseDay.add(const Duration(days: 1));
+    } else {
+      // If today's base is already in the past (user set reminder earlier),
+      // it still makes sense to schedule follow-ups from that past anchor.
+    }
+
+    // Follow-up boundary: must fire before the day AFTER the target day's reminder.
+    final boundaryTime = baseDay.add(const Duration(days: 1));
+
     final intervalHours = _wirdService.followUpIntervalHours;
     final maxSlots = _followUpIds.length; // 5
     final offsets = List.generate(maxSlots, (i) => (i + 1) * intervalHours);
 
     int scheduledCount = 0;
     for (var i = 0; i < offsets.length; i++) {
-      final followUpTime =
-          todayBase.add(Duration(hours: offsets[i]));
+      final followUpTime = baseDay.add(Duration(hours: offsets[i]));
 
-      // Only schedule if in the future AND strictly before tomorrow's main reminder.
-      if (followUpTime.isBefore(now) || !followUpTime.isBefore(nextDayBase)) {
+      // Must be in the future and before the boundary.
+      if (followUpTime.isBefore(now) || !followUpTime.isBefore(boundaryTime)) {
         continue;
       }
 
-      final hoursToNext = nextDayBase.difference(followUpTime).inHours;
+      final hoursToNext = boundaryTime.difference(followUpTime).inHours;
       final body = hoursToNext <= 2
           ? 'اغتنم ما تبقى من الوقت وأكمل وردك اليومي 🌙'
           : 'لم تسجّل وردك بعد — لا تؤخر القراءة';
@@ -220,7 +251,8 @@ class WirdNotificationService {
     }
 
     debugPrint(
-        '📿 [Wird] Scheduled $scheduledCount follow-up notification(s) (every $intervalHours h)');
+        '📿 [Wird] Scheduled $scheduledCount follow-up(s) '
+        '(${forNextDay ? "next day" : "today"}, every $intervalHours h)');
   }
 
   // ── Test notification ───────────────────────────────────────────────────────

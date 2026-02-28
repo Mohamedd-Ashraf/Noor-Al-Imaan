@@ -26,9 +26,12 @@ class AdhanAlarmReceiver : BroadcastReceiver() {
         const val ACTION_FIRE   = "com.example.quraan.ADHAN_FIRE"
         private const val TAG         = "AdhanAlarmReceiver"
         private const val PREFS_NAME  = "FlutterSharedPreferences"
-        private const val KEY_ENABLED  = "flutter.adhan_notifications_enabled"
-        private const val KEY_SOUND    = "flutter.selected_adhan_sound"
-        private const val KEY_SCHEDULE = "flutter.adhan_schedule_preview"
+        private const val KEY_ENABLED       = "flutter.adhan_notifications_enabled"
+        private const val KEY_SOUND          = "flutter.selected_adhan_sound"
+        private const val KEY_SCHEDULE       = "flutter.adhan_schedule_preview"
+        private const val KEY_SHORT_MODE     = "flutter.adhan_short_mode"
+        private const val KEY_SHORT_CUTOFF   = "flutter.adhan_short_cutoff_seconds"
+        private const val KEY_AUDIO_STREAM   = "flutter.adhan_audio_stream"
 
         /**
          * Schedule a list of alarms via AlarmManager.
@@ -135,10 +138,16 @@ class AdhanAlarmReceiver : BroadcastReceiver() {
             Log.d(TAG, "Adhan disabled — ignoring alarm fire")
             return
         }
-        val soundName = intent.getStringExtra("soundName") ?: "adhan_1"
-        Log.d(TAG, "Adhan alarm fired: $soundName")
+        val soundName   = intent.getStringExtra("soundName") ?: "adhan_1"
+        val shortMode   = prefs.getBoolean(KEY_SHORT_MODE, false)
+        val shortCutoff = prefs.getInt(KEY_SHORT_CUTOFF, 15)
+        val useAlarm    = prefs.getString(KEY_AUDIO_STREAM, "ringtone") == "alarm"
+        Log.d(TAG, "Adhan alarm fired: $soundName (shortMode=$shortMode, cutoff=${shortCutoff}s, alarmStream=$useAlarm)")
         val serviceIntent = Intent(context, AdhanPlayerService::class.java).apply {
             putExtra(AdhanPlayerService.EXTRA_SOUND, soundName)
+            putExtra(AdhanPlayerService.EXTRA_SHORT_MODE, shortMode)
+            putExtra(AdhanPlayerService.EXTRA_SHORT_CUTOFF_SECONDS, shortCutoff)
+            putExtra(AdhanPlayerService.EXTRA_USE_ALARM_STREAM, useAlarm)
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             context.startForegroundService(serviceIntent)

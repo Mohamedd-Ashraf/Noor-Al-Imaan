@@ -72,6 +72,21 @@ class _MushafPageViewState extends State<MushafPageView>
   late Animation<double> _highlightAnimation;
   final Map<int, ScrollController> _pageScrollControllers = {};
 
+  // ── Scroll-mode state ────────────────────────────────────────────────
+  /// Whether each mushaf page is scrolled to its bottom (for indicator).
+  final Map<int, bool> _pageAtBottom = {};
+  /// Whether each mushaf page is scrolled to its top (for indicator).
+  final Map<int, bool> _pageAtTop = {};
+  /// Y position (global) where the current boundary-drag started, keyed by
+  /// page number. Non-null only when the pointer went down while the page
+  /// was already at a scroll boundary, so excess drag can be measured.
+  final Map<int, double> _boundaryDragStart = {};
+  /// Scroll position (pixels) at the moment the pointer went down.
+  /// Used to detect whether the scroll view moved during this touch.
+  /// If it moved significantly the user was doing a real scroll, not a
+  /// boundary-excess drag, so we cancel flip tracking.
+  final Map<int, double> _boundaryScrollPosAtDown = {};
+
   /// 1 when a previous-surah virtual page is prepended, 0 otherwise.
   /// All PageController indices must be shifted by this offset.
   int get _pageOffset =>
@@ -303,8 +318,58 @@ class _MushafPageViewState extends State<MushafPageView>
   ScrollController _getScrollController(int pageNumber) {
     return _pageScrollControllers.putIfAbsent(
       pageNumber,
-      () => ScrollController(),
+      () {
+        final sc = ScrollController();
+        // Attach a listener so _pageAtBottom / _pageAtTop stay current
+        // synchronously — no addPostFrameCallback delay.
+        sc.addListener(() {
+          if (!sc.hasClients || !mounted) return;
+          final px  = sc.position.pixels;
+          final max = sc.position.maxScrollExtent;
+          final atBottom = px >= max - 2;
+          final atTop    = px <= 2;
+          bool changed = false;
+          if (_pageAtBottom[pageNumber] != atBottom) {
+            _pageAtBottom[pageNumber] = atBottom;
+            changed = true;
+          }
+          if (_pageAtTop[pageNumber] != atTop) {
+            _pageAtTop[pageNumber] = atTop;
+            changed = true;
+          }
+          if (changed) setState(() {});
+        });
+        return sc;
+      },
     );
+  }
+
+  /// Navigate to the next page programmatically (used in scroll mode).
+  void _navigateNextInScrollMode() {
+    if (_isAnimating) return;
+    final hasNextSurah = widget.surahNumber < 114 && widget.onNextSurah != null;
+    final totalPages = _pageOffset + _pages.length + (hasNextSurah ? 1 : 0);
+    final currentPage = _pageController.page?.round() ?? 0;
+    if (currentPage < totalPages - 1) {
+      HapticFeedback.lightImpact();
+      _pageController.nextPage(
+        duration: const Duration(milliseconds: 380),
+        curve: Curves.easeInOut,
+      );
+    }
+  }
+
+  /// Navigate to the previous page programmatically (used in scroll mode).
+  void _navigatePreviousInScrollMode() {
+    if (_isAnimating) return;
+    final currentPage = _pageController.page?.round() ?? 0;
+    if (currentPage > 0) {
+      HapticFeedback.lightImpact();
+      _pageController.previousPage(
+        duration: const Duration(milliseconds: 380),
+        curve: Curves.easeInOut,
+      );
+    }
   }
 
   @override
@@ -315,12 +380,18 @@ class _MushafPageViewState extends State<MushafPageView>
       );
     }
 
+    final settings = context.watch<AppSettingsCubit>().state;
     final hasNextSurah =
         widget.surahNumber < 114 && widget.onNextSurah != null;
     final hasPreviousSurah = _pageOffset == 1;
     final totalPages = _pageOffset + _pages.length + (hasNextSurah ? 1 : 0);
-    final isRtlFlip = context.watch<AppSettingsCubit>().state.pageFlipRightToLeft;
+    final isRtlFlip = settings.pageFlipRightToLeft;
+    final isScrollMode = settings.scrollMode;
 
+    // ── Unified horizontal PageView ────────────────────────────────────
+    // In scroll mode: disable horizontal PageView swipe — navigation is
+    // handled exclusively by vertical drag (GestureDetector on each page).
+    // In normal mode: horizontal swipe flips pages as usual.
     return Directionality(
       textDirection: TextDirection.rtl,
       child: PageView.builder(
@@ -329,8 +400,7 @@ class _MushafPageViewState extends State<MushafPageView>
         reverse: isRtlFlip,
         clipBehavior: Clip.none,
         dragStartBehavior: DragStartBehavior.down,
-        // Navigation happens only via button tap on the transition page.
-        physics: _isAnimating
+        physics: (_isAnimating || isScrollMode)
             ? const NeverScrollableScrollPhysics()
             : const _EasySwipePagePhysics(),
         itemBuilder: (context, index) {
@@ -341,7 +411,7 @@ class _MushafPageViewState extends State<MushafPageView>
           if (realIndex == _pages.length) {
             return _buildNextSurahPage(context);
           }
-          return _buildMushafPage(_pages[realIndex]);
+          return _buildMushafPage(_pages[realIndex], scrollMode: isScrollMode);
         },
       ),
     );
@@ -608,7 +678,82 @@ class _MushafPageViewState extends State<MushafPageView>
     );
   }
 
-  Widget _buildMushafPage(MushafPage page) {
+  Widget _buildMushafPage(MushafPage page, {bool scrollMode = false}) {
+    // Seed boundary maps on first build so indicators show immediately.
+    // The ScrollController listener will keep them up to date after that.
+    _pageAtBottom.putIfAbsent(page.pageNumber, () => true);
+    _pageAtTop.putIfAbsent(page.pageNumber, () => true);
+
+    if (!scrollMode) return _buildPageContent(page, scrollMode: false);
+
+    // In scroll mode: wrap the page in a Listener that detects boundary drag.
+    // Listener never joins the gesture arena, so the inner CustomScrollView
+    // scrolls freely. We only start measuring “excess” drag once the scroll
+    // view has already hit an edge (pointer went down while at boundary).
+    return Listener(
+      behavior: HitTestBehavior.translucent,
+      onPointerDown: (e) {
+        final sc = _pageScrollControllers[page.pageNumber];
+        if (sc == null || !sc.hasClients) {
+          _boundaryDragStart.remove(page.pageNumber);
+          _boundaryScrollPosAtDown.remove(page.pageNumber);
+          return;
+        }
+        final px  = sc.position.pixels;
+        final max = sc.position.maxScrollExtent;
+        if (px >= max - 2 || px <= 2) {
+          _boundaryDragStart[page.pageNumber] = e.position.dy;
+          _boundaryScrollPosAtDown[page.pageNumber] = px;
+        } else {
+          _boundaryDragStart.remove(page.pageNumber);
+          _boundaryScrollPosAtDown.remove(page.pageNumber);
+        }
+      },
+      onPointerMove: (e) {
+        final start = _boundaryDragStart[page.pageNumber];
+        if (start == null) return;
+        final sc = _pageScrollControllers[page.pageNumber];
+        if (sc == null || !sc.hasClients) return;
+        final px  = sc.position.pixels;
+        final max = sc.position.maxScrollExtent;
+
+        // If the scroll view actually moved since the finger went down it
+        // means the view was consuming the gesture (normal scroll), NOT
+        // an excess/boundary drag.  Cancel tracking to avoid accidental flips.
+        final scrollAtDown = _boundaryScrollPosAtDown[page.pageNumber] ?? px;
+        if ((px - scrollAtDown).abs() > 8) {
+          _boundaryDragStart.remove(page.pageNumber);
+          _boundaryScrollPosAtDown.remove(page.pageNumber);
+          return;
+        }
+
+        final dy = start - e.position.dy; // positive = finger moved up
+        if (dy > 60 && px >= max - 2) {
+          _boundaryDragStart.remove(page.pageNumber);
+          _boundaryScrollPosAtDown.remove(page.pageNumber);
+          _navigateNextInScrollMode();
+        } else if (dy < -60 && px <= 2) {
+          _boundaryDragStart.remove(page.pageNumber);
+          _boundaryScrollPosAtDown.remove(page.pageNumber);
+          _navigatePreviousInScrollMode();
+        }
+      },
+      onPointerUp: (e) {
+        _boundaryDragStart.remove(page.pageNumber);
+        _boundaryScrollPosAtDown.remove(page.pageNumber);
+      },
+      onPointerCancel: (e) {
+        _boundaryDragStart.remove(page.pageNumber);
+        _boundaryScrollPosAtDown.remove(page.pageNumber);
+      },
+      child: _buildPageContent(page, scrollMode: true),
+    );
+  }
+
+  /// Actual visible content of a single mushaf page.
+  Widget _buildPageContent(MushafPage page, {required bool scrollMode}) {
+    final isDarkMode = context.watch<AppSettingsCubit>().state.darkMode;
+
     final isFirstAyahOfSurah =
         page.ayahs.isNotEmpty && page.ayahs.first.numberInSurah == 1;
     final needsBasmalah =
@@ -616,19 +761,16 @@ class _MushafPageViewState extends State<MushafPageView>
         widget.surah.number != 1 &&
         widget.surah.number != 9;
 
-    // Get theme colors for light/dark mode support
-    final isDarkMode = context.watch<AppSettingsCubit>().state.darkMode;
-
     final backgroundGradientColors = isDarkMode
         ? [
-            const Color(0xFF0E1A12), // Deep warm dark (ink-on-night)
+            const Color(0xFF0E1A12),
             const Color(0xFF131F16),
             const Color(0xFF0E1A12),
           ]
         : [
-            const Color(0xFFFFF9ED), // Warm ivory parchment
-            const Color(0xFFFFF4D8), // Classic vellum
-            const Color(0xFFFFF0C8), // Aged amber
+            const Color(0xFFFFF9ED),
+            const Color(0xFFFFF4D8),
+            const Color(0xFFFFF0C8),
           ];
 
     return Container(
@@ -642,23 +784,26 @@ class _MushafPageViewState extends State<MushafPageView>
       ),
       child: Stack(
         children: [
-          // Islamic pattern background
           Positioned.fill(
             child: CustomPaint(
               painter: IslamicPatternPainter(color: AppColors.primary),
             ),
           ),
-          // Border ornaments
           Positioned.fill(
             child: CustomPaint(
               painter: BorderOrnamentPainter(color: AppColors.primary),
             ),
           ),
-          // Main content with CustomScrollView
+          // Scrollable content. AlwaysScrollableScrollPhysics makes the
+          // scroll view claim vertical gestures even when content fits on
+          // screen; the Listener wrapper in _buildMushafPage detects
+          // boundary-excess drag and triggers page flips.
           CustomScrollView(
             controller: _getScrollController(page.pageNumber),
+            physics: scrollMode
+                ? const AlwaysScrollableScrollPhysics()
+                : null,
             slivers: [
-              // Collapsible decorative header
               SliverAppBar(
                 automaticallyImplyLeading: false,
                 toolbarHeight: 50,
@@ -675,7 +820,6 @@ class _MushafPageViewState extends State<MushafPageView>
                   _buildPagePlayButton(page),
                 ],
               ),
-              // Content area
               SliverPadding(
                 padding: const EdgeInsets.symmetric(
                   horizontal: 20,
@@ -691,12 +835,35 @@ class _MushafPageViewState extends State<MushafPageView>
                   ]),
                 ),
               ),
-              // Footer
               SliverToBoxAdapter(
                 child: _buildDecorativeFooter(page.pageNumber),
               ),
             ],
           ),
+          // "Swipe up" indicator — shown when at bottom
+          if (scrollMode && (_pageAtBottom[page.pageNumber] ?? true))
+            Positioned(
+              bottom: 6,
+              left: 0,
+              right: 0,
+              child: _ScrollModeIndicator(
+                isDark: isDarkMode,
+                isArabic: widget.isArabicUi,
+              ),
+            ),
+          // "Swipe down" indicator — shown when at top and not first page
+          if (scrollMode &&
+              (_pageAtTop[page.pageNumber] ?? true) &&
+              (_pageController.page?.round() ?? _pageOffset) > _pageOffset)
+            Positioned(
+              top: 56,
+              left: 0,
+              right: 0,
+              child: _ScrollModeBackIndicator(
+                isDark: isDarkMode,
+                isArabic: widget.isArabicUi,
+              ),
+            ),
         ],
       ),
     );
@@ -1134,21 +1301,80 @@ class _MushafPageViewState extends State<MushafPageView>
                     decorationStyle: TextDecorationStyle.solid,
                   );
 
-                  // Build the text span with optional different color for diacritics
-                  // and include tap gesture recognizer
-                  final textSpan = ArabicTextStyleHelper.buildTextSpan(
-                    text: ayahText,
-                    baseStyle: baseTextStyle,
-                    useDifferentColorForDiacritics: useDifferentDiacriticsColor,
-                    diacriticsColor: diacriticsColor,
-                    recognizer: TapGestureRecognizer()
-                      ..onTap = () {
-                        context.read<AyahAudioCubit>().togglePlayAyah(
-                          surahNumber: widget.surahNumber,
-                          ayahNumber: ayah.numberInSurah,
+                  // Build the text span: word-by-word tappable or full-ayah tap
+                  final bool wordByWord = settingsState.wordByWordAudio;
+                  final InlineSpan textSpan;
+
+                  if (wordByWord) {
+                    // Split into individual words, each with its own recognizer
+                    final words = ayahText
+                        .split(' ')
+                        .where((w) => w.isNotEmpty)
+                        .toList();
+                    final wordSpans = <InlineSpan>[];
+                    for (int wi = 0; wi < words.length; wi++) {
+                      final wordNum = wi + 1;
+                      final isActiveWord = audioState.isCurrentWord(
+                        widget.surahNumber,
+                        ayah.numberInSurah,
+                        wordNum,
+                      );
+                      final isWordLit = isActiveWord &&
+                          (audioState.status == AyahAudioStatus.playing ||
+                              audioState.status == AyahAudioStatus.buffering);
+                      final wordStyle = baseTextStyle.copyWith(
+                        backgroundColor: isWordLit
+                            ? AppColors.secondary.withValues(alpha: 0.30)
+                            : baseTextStyle.backgroundColor,
+                        color: isWordLit
+                            ? AppColors.secondary
+                            : baseTextStyle.color,
+                        fontWeight: isWordLit
+                            ? FontWeight.w700
+                            : baseTextStyle.fontWeight,
+                      );
+                      final wordRecognizer = TapGestureRecognizer()
+                        ..onTap = () {
+                          HapticFeedback.selectionClick();
+                          context.read<AyahAudioCubit>().playWord(
+                            surahNumber: widget.surahNumber,
+                            ayahNumber: ayah.numberInSurah,
+                            wordIndex: wordNum,
+                          );
+                        };
+                      wordSpans.add(
+                        ArabicTextStyleHelper.buildTextSpan(
+                          text: words[wi],
+                          baseStyle: wordStyle,
+                          useDifferentColorForDiacritics:
+                              useDifferentDiacriticsColor && !isWordLit,
+                          diacriticsColor: diacriticsColor,
+                          recognizer: wordRecognizer,
+                        ),
+                      );
+                      if (wi < words.length - 1) {
+                        wordSpans.add(
+                          TextSpan(text: ' ', style: baseTextStyle),
                         );
-                      },
-                  );
+                      }
+                    }
+                    textSpan = TextSpan(children: wordSpans);
+                  } else {
+                    // Default: tap whole ayah to play / pause
+                    textSpan = ArabicTextStyleHelper.buildTextSpan(
+                      text: ayahText,
+                      baseStyle: baseTextStyle,
+                      useDifferentColorForDiacritics: useDifferentDiacriticsColor,
+                      diacriticsColor: diacriticsColor,
+                      recognizer: TapGestureRecognizer()
+                        ..onTap = () {
+                          context.read<AyahAudioCubit>().togglePlayAyah(
+                            surahNumber: widget.surahNumber,
+                            ayahNumber: ayah.numberInSurah,
+                          );
+                        },
+                    );
+                  }
 
                   // Add ayah text
                   textSpans.add(textSpan);
@@ -1655,3 +1881,153 @@ class AyahNumberPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Scroll Mode Indicator
+// Subtle animated chevron that hints the user to swipe up for the next page.
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _ScrollModeIndicator extends StatefulWidget {
+  final bool isDark;
+  final bool isArabic;
+  const _ScrollModeIndicator({required this.isDark, required this.isArabic});
+
+  @override
+  State<_ScrollModeIndicator> createState() => _ScrollModeIndicatorState();
+}
+
+class _ScrollModeIndicatorState extends State<_ScrollModeIndicator>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _offsetAnimation;
+  late Animation<double> _fadeAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    )..repeat(reverse: true);
+
+    _offsetAnimation = Tween<double>(begin: 0, end: -6).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
+    );
+    _fadeAnimation = Tween<double>(begin: 0.35, end: 0.75).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final color = widget.isDark ? AppColors.secondary : AppColors.primary;
+
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, child) {
+        return Transform.translate(
+          offset: Offset(0, _offsetAnimation.value),
+          child: Opacity(
+            opacity: _fadeAnimation.value,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.keyboard_arrow_up_rounded, color: color, size: 20),
+                Text(
+                  widget.isArabic ? 'اسحب للأعلى' : 'Swipe up',
+                  style: TextStyle(
+                    fontSize: 10,
+                    color: color,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 0.3,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Scroll-mode back indicator — top hint to swipe down for previous page
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _ScrollModeBackIndicator extends StatefulWidget {
+  final bool isDark;
+  final bool isArabic;
+
+  const _ScrollModeBackIndicator({required this.isDark, required this.isArabic});
+
+  @override
+  State<_ScrollModeBackIndicator> createState() =>
+      _ScrollModeBackIndicatorState();
+}
+
+class _ScrollModeBackIndicatorState extends State<_ScrollModeBackIndicator>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl;
+  late final Animation<double> _bob;
+  late final Animation<double> _fade;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    )..repeat(reverse: true);
+    _bob = Tween<double>(begin: 0, end: 4).animate(
+      CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut),
+    );
+    _fade = Tween<double>(begin: 0.5, end: 1.0).animate(
+      CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final color = widget.isDark
+        ? Colors.white.withValues(alpha: 0.6)
+        : Colors.black.withValues(alpha: 0.4);
+    return AnimatedBuilder(
+      animation: _ctrl,
+      builder: (_, __) => Transform.translate(
+        offset: Offset(0, -_bob.value),
+        child: Opacity(
+          opacity: _fade.value,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.keyboard_arrow_down_rounded, color: color, size: 20),
+              Text(
+                widget.isArabic ? 'اسحب للأسفل للعودة' : 'Swipe down to go back',
+                style: TextStyle(
+                  fontSize: 10,
+                  color: color,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 0.3,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+

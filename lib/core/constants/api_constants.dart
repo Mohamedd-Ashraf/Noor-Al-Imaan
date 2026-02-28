@@ -14,7 +14,12 @@ class ApiConstants {
   static const String defaultTranslation = 'en.asad';
 
   // ─── Tafsir / Commentary editions ────────────────────────────────────────
-  // Arabic tafsirs
+  // Ibn Kathir – served via api.quran.com (separate API, not alquran.cloud)
+  static const String tafsirIbnKathir = 'ar.ibnkathir';  // تفسير ابن كثير
+  static const String quranComBaseUrl  = 'https://api.quran.com/api/v4';
+  static const int    ibnKathirTafsirId = 14; // quran.com tafsir ID for Ibn Kathir Arabic (ar-tafsir-ibn-kathir)
+
+  // Arabic tafsirs (alquran.cloud)
   static const String tafsirMuyassar  = 'ar.muyassar';   // التفسير الميسر
   static const String tafsirJalalayn  = 'ar.jalalayn';   // تفسير الجلالين
   static const String tafsirWahidi    = 'ar.wahidi';     // أسباب النزول
@@ -34,6 +39,12 @@ class ApiConstants {
       'id'      : tafsirMuyassar,
       'nameAr'  : 'الميسر',
       'nameEn'  : 'Al-Muyassar (AR)',
+      'lang'    : 'ar',
+    },
+    {
+      'id'      : tafsirIbnKathir,
+      'nameAr'  : 'ابن كثير',
+      'nameEn'  : 'Ibn Kathir (AR)',
       'lang'    : 'ar',
     },
     {

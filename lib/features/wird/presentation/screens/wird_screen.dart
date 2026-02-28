@@ -139,6 +139,9 @@ class _WirdScreenState extends State<WirdScreen> with WidgetsBindingObserver {
                 reminderMinute: state.reminderMinute,
                 lastReadSurah: state.lastReadSurah,
                 lastReadAyah: state.lastReadAyah,
+                makeupBookmarkDay: state.makeupBookmarkDay,
+                makeupBookmarkSurah: state.makeupBookmarkSurah,
+                makeupBookmarkAyah: state.makeupBookmarkAyah,
               );
             }
             return const SizedBox.shrink();
@@ -1081,13 +1084,16 @@ class _SetupSheetState extends State<_SetupSheet> {
 
 // ── Active Plan View ────────────────────────────────────────────────────────
 
-class _ActivePlanView extends StatelessWidget {
+class _ActivePlanView extends StatefulWidget {
   final WirdPlan plan;
   final bool isAr;
   final int? reminderHour;
   final int? reminderMinute;
   final int? lastReadSurah;
   final int? lastReadAyah;
+  final int? makeupBookmarkDay;
+  final int? makeupBookmarkSurah;
+  final int? makeupBookmarkAyah;
 
   const _ActivePlanView({
     required this.plan,
@@ -1096,74 +1102,191 @@ class _ActivePlanView extends StatelessWidget {
     this.reminderMinute,
     this.lastReadSurah,
     this.lastReadAyah,
+    this.makeupBookmarkDay,
+    this.makeupBookmarkSurah,
+    this.makeupBookmarkAyah,
   });
+
+  @override
+  State<_ActivePlanView> createState() => _ActivePlanViewState();
+}
+
+class _ActivePlanViewState extends State<_ActivePlanView> {
+  bool _showMakeupMode = false;
+  bool _daysExpanded = false;
+
+  List<int> _missedDays(WirdPlan plan) {
+    final today = plan.currentDay;
+    return [for (int d = 1; d < today; d++) if (!plan.isDayComplete(d)) d];
+  }
+
+  @override
+  void didUpdateWidget(_ActivePlanView old) {
+    super.didUpdateWidget(old);
+    final today = widget.plan.currentDay;
+    final wasDone = old.plan.isDayComplete(today);
+    final isDone  = widget.plan.isDayComplete(today);
+    if (!wasDone && isDone) {
+      final missed = _missedDays(widget.plan);
+      if (missed.isNotEmpty && !_showMakeupMode) {
+        setState(() => _showMakeupMode = true);
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final plan = widget.plan;
+    final isAr = widget.isAr;
     final today = plan.currentDay;
     final todayComplete = plan.isDayComplete(today);
     final range = getReadingRangeForDay(today, plan.targetDays);
+    final missed = _missedDays(plan);
+    final hasMissedDays = missed.isNotEmpty;
+
+    int daysBehind = 0;
+    for (int d = 1; d < today; d++) {
+      if (!plan.isDayComplete(d)) daysBehind++;
+    }
+
+    final completedCount = plan.completedDays.length;
 
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // ── Progress Header ─────────────────────────────────────────────
           _ProgressHeader(plan: plan, isAr: isAr, isDark: isDark),
-          const SizedBox(height: 18),
+          const SizedBox(height: 10),
 
-          // ── Late Warning ─────────────────────────────────────────────────
-          _LateWarningCard(plan: plan, isAr: isAr, isDark: isDark),
+          _MotivationalPhrase(day: today, isAr: isAr, isDark: isDark),
+          const SizedBox(height: 14),
 
-          // ── Today's Wird Card ───────────────────────────────────────────
-          _TodayCard(
-            plan: plan,
-            today: today,
-            range: range,
-            isComplete: todayComplete,
-            isAr: isAr,
-            isDark: isDark,
-            lastReadSurah: lastReadSurah,
-            lastReadAyah: lastReadAyah,
+          if (hasMissedDays) ...[
+            _WirdModeToggle(
+              isAr: isAr,
+              isDark: isDark,
+              isMakeupMode: _showMakeupMode,
+              missedCount: missed.length,
+              onToggle: (v) => setState(() => _showMakeupMode = v),
+            ),
+            const SizedBox(height: 14),
+          ],
+
+          if (!_showMakeupMode) ...[
+            _TodayCard(
+              plan: plan,
+              today: today,
+              range: range,
+              isComplete: todayComplete,
+              isAr: isAr,
+              isDark: isDark,
+              lastReadSurah: widget.lastReadSurah,
+              lastReadAyah: widget.lastReadAyah,
+              daysBehind: daysBehind,
+            ),
+            const SizedBox(height: 18),
+          ],
+
+          if (_showMakeupMode && hasMissedDays) ...[
+            _MakeupCard(
+              plan: plan,
+              isAr: isAr,
+              isDark: isDark,
+              makeupBookmarkDay:   widget.makeupBookmarkDay,
+              makeupBookmarkSurah: widget.makeupBookmarkSurah,
+              makeupBookmarkAyah:  widget.makeupBookmarkAyah,
+            ),
+            const SizedBox(height: 18),
+          ],
+
+          // ── Collapsible Days Progress ─────────────────────────────────
+          GestureDetector(
+            onTap: () => setState(() => _daysExpanded = !_daysExpanded),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [AppColors.gradientStart, AppColors.gradientEnd],
+                  begin: Alignment.centerLeft,
+                  end: Alignment.centerRight,
+                ),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.calendar_view_month_rounded,
+                      color: Colors.white, size: 16),
+                  const SizedBox(width: 8),
+                  Text(
+                    isAr ? 'تقدم الأيام' : 'Day Progress',
+                    style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 13),
+                  ),
+                  const Spacer(),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 10, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.22),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      isAr
+                          ? '${_arabicNumerals(completedCount)} / ${_arabicNumerals(plan.targetDays)}'
+                          : '$completedCount / ${plan.targetDays}',
+                      style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Icon(
+                    _daysExpanded
+                        ? Icons.expand_less_rounded
+                        : Icons.expand_more_rounded,
+                    color: Colors.white,
+                    size: 20,
+                  ),
+                ],
+              ),
+            ),
+          ),
+          AnimatedCrossFade(
+            firstChild: const SizedBox.shrink(),
+            secondChild: Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: _DaysGrid(plan: plan, isAr: isAr, isDark: isDark),
+            ),
+            crossFadeState: _daysExpanded
+                ? CrossFadeState.showSecond
+                : CrossFadeState.showFirst,
+            duration: const Duration(milliseconds: 250),
           ),
           const SizedBox(height: 18),
 
-          // ── Makeup Wird Card (shown only after today's wird is done) ──────
-          _MakeupCard(
-            plan: plan,
-            isAr: isAr,
-            isDark: isDark,
-            todayComplete: todayComplete,
-          ),
-
-          // ── Days Grid ───────────────────────────────────────────────────
-          _DaysGrid(plan: plan, isAr: isAr, isDark: isDark),
-          const SizedBox(height: 18),
-
-          // ── Reminder time card ──────────────────────────────────────────
           _ReminderCard(
             isAr: isAr,
             isDark: isDark,
-            reminderHour: reminderHour,
-            reminderMinute: reminderMinute,
+            reminderHour: widget.reminderHour,
+            reminderMinute: widget.reminderMinute,
           ),
-          const SizedBox(height: 18),
+          const SizedBox(height: 12),
 
-          // ── Reset / Delete ──────────────────────────────────────────────
-          OutlinedButton.icon(
-            onPressed: () => _confirmReset(context),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: AppColors.error,
-              side: const BorderSide(color: AppColors.error, width: 1.2),
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12)),
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+          Center(
+            child: TextButton.icon(
+              onPressed: () => _confirmReset(context),
+              icon: const Icon(Icons.refresh_rounded, size: 15),
+              label: Text(isAr ? 'إعادة ضبط الخطة' : 'Reset Plan'),
+              style: TextButton.styleFrom(
+                foregroundColor: AppColors.error,
+                textStyle: const TextStyle(fontSize: 13),
+              ),
             ),
-            icon: const Icon(Icons.refresh_rounded),
-            label: Text(isAr ? 'إعادة ضبط الخطة' : 'Reset Plan'),
           ),
         ],
       ),
@@ -1171,6 +1294,7 @@ class _ActivePlanView extends StatelessWidget {
   }
 
   void _confirmReset(BuildContext context) {
+    final isAr = widget.isAr;
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -1201,204 +1325,163 @@ class _ActivePlanView extends StatelessWidget {
   }
 }
 
-// ── Late Warning Card ─────────────────────────────────────────────────────
+// ── Islamic Motivational Phrases ─────────────────────────────────────────────
 
-class _LateWarningCard extends StatelessWidget {
-  final WirdPlan plan;
+const _kIslamicPhrases = <(String, String)>[
+  ('﴿ وَرَتِّلِ ٱلْقُرْءَانَ تَرْتِيلًا ﴾', 'سورة المزمل: ٤'),
+  ('﴿ إِنَّ ٱلَّذِينَ يَتْلُونَ كِتَٰبَ ٱللَّهِ وَأَقَامُواْ ٱلصَّلَوٰةَ ﴾', 'سورة فاطر: ٢٩'),
+  ('﴿ وَنُنَزِّلُ مِنَ ٱلْقُرْءَانِ مَا هُوَ شِفَآءٌ وَرَحْمَةٌ ﴾', 'سورة الإسراء: ٨٢'),
+  ('﴿ كِتَٰبٌ أَنزَلْنَٰهُ إِلَيْكَ مُبَٰرَكٌ لِّيَدَّبَّرُوٓاْ ءَايَٰتِهِۦ ﴾', 'سورة ص: ٢٩'),
+  ('﴿ أَفَلَا يَتَدَبَّرُونَ ٱلْقُرْءَانَ ﴾', 'سورة محمد: ٢٤'),
+  ('﴿ وَلَقَدْ يَسَّرْنَا ٱلْقُرْءَانَ لِلذِّكْرِ فَهَلْ مِن مُّدَّكِرٍ ﴾', 'سورة القمر: ١٧'),
+  ('«خَيْرُكُمْ مَنْ تَعَلَّمَ الْقُرْآنَ وَعَلَّمَهُ»', 'صحيح البخاري'),
+  ('«اقْرَءُوا الْقُرْآنَ فَإِنَّهُ يَأْتِي يَوْمَ الْقِيَامَةِ شَفِيعًا لِأَصْحَابِهِ»', 'صحيح مسلم'),
+  ('«الْمَاهِرُ بِالْقُرْآنِ مَعَ السَّفَرَةِ الْكِرَامِ الْبَرَرَةِ»', 'صحيح البخاري'),
+  ('﴿ إِنَّ هَٰذَا ٱلْقُرْءَانَ يَهْدِى لِلَّتِى هِىَ أَقْوَمُ ﴾', 'سورة الإسراء: ٩'),
+];
+
+class _MotivationalPhrase extends StatelessWidget {
+  final int day;
   final bool isAr;
   final bool isDark;
 
-  const _LateWarningCard({
-    required this.plan,
+  const _MotivationalPhrase({
+    required this.day,
     required this.isAr,
     required this.isDark,
   });
 
-  // ── Juz label helper ──────────────────────────────────────────────────────
-
-  /// Formats a juz count (may be fractional) into a readable string.
-  /// Rounds up to the nearest quarter-juz for display.
-  static String _juzLabel(double juz, bool ar) {
-    if (juz <= 0) return ar ? '٠ جزء' : '0 juz';
-    // Ceiling to nearest 0.25
-    final double rounded = (juz * 4).ceil() / 4;
-    final int whole = rounded.floor();
-    final double frac = rounded - whole;
-
-    if (ar) {
-      // Fraction label
-      String fracLabel;
-      if (frac == 0) {
-        fracLabel = '';
-      } else if (frac <= 0.26) {
-        fracLabel = ' وربع';
-      } else if (frac <= 0.51) {
-        fracLabel = ' ونصف';
-      } else {
-        fracLabel = ' وثلاثة أرباع';
-      }
-      if (whole == 0) {
-        if (frac <= 0.26) return 'ربع جزء';
-        if (frac <= 0.51) return 'نصف جزء';
-        return 'ثلاثة أرباع جزء';
-      }
-      final juzWord = whole == 1 ? 'جزء' : 'أجزاء';
-      return '${_arabicNumerals(whole)} $juzWord$fracLabel';
-    } else {
-      String fracLabel;
-      if (frac == 0) {
-        fracLabel = '';
-      } else if (frac <= 0.26) {
-        fracLabel = '¼';
-      } else if (frac <= 0.51) {
-        fracLabel = '½';
-      } else {
-        fracLabel = '¾';
-      }
-      if (whole == 0) return '$fracLabel juz';
-      return '$whole$fracLabel juz';
-    }
+  @override
+  Widget build(BuildContext context) {
+    final phrase = _kIslamicPhrases[day % _kIslamicPhrases.length];
+    final accent = isDark ? AppColors.secondary : AppColors.primary;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 2),
+      child: Row(
+        children: [
+          Icon(Icons.format_quote_rounded,
+              size: 16, color: accent.withValues(alpha: 0.55)),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              phrase.$1,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: GoogleFonts.amiriQuran(
+                fontSize: 13.5,
+                color: accent.withValues(alpha: 0.8),
+              ),
+            ),
+          ),
+          if (phrase.$2.isNotEmpty) ...[
+            const SizedBox(width: 6),
+            Text(
+              phrase.$2,
+              style: TextStyle(
+                color: AppColors.textSecondary,
+                fontSize: 10,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
   }
+}
+
+// ── Wird Mode Toggle ──────────────────────────────────────────────────────────
+
+class _WirdModeToggle extends StatelessWidget {
+  final bool isAr;
+  final bool isDark;
+  final bool isMakeupMode;
+  final int missedCount;
+  final ValueChanged<bool> onToggle;
+
+  const _WirdModeToggle({
+    required this.isAr,
+    required this.isDark,
+    required this.isMakeupMode,
+    required this.missedCount,
+    required this.onToggle,
+  });
 
   @override
   Widget build(BuildContext context) {
-    // ── Guard: plan already complete ─────────────────────────────────────
-    if (plan.isComplete) return const SizedBox.shrink();
-
-    final int today = plan.currentDay; // 1-indexed, clamped [1, targetDays]
-    // Can't be "late" on the first day — nothing has elapsed yet.
-    if (today <= 1) return const SizedBox.shrink();
-
-    // Sanitise completed set to valid day numbers only.
-    final Set<int> done = plan.completedDays
-        .where((d) => d >= 1 && d <= plan.targetDays)
-        .toSet();
-
-    // ── How many past days are missed? ────────────────────────────────────
-    // "Past" = days 1 .. (today - 1) that are NOT in done.
-    int daysBehind = 0;
-    for (int d = 1; d < today; d++) {
-      if (!done.contains(d)) daysBehind++;
-    }
-    if (daysBehind <= 0) return const SizedBox.shrink();
-
-    // ── Remaining work from today onward ──────────────────────────────────
-    // Count uncompleted days from today..targetDays.
-    int remainingUncompleted = 0;
-    for (int d = today; d <= plan.targetDays; d++) {
-      if (!done.contains(d)) remainingUncompleted++;
-    }
-
-    // Calendar days left including today (always >= 1 because currentDay is clamped).
-    final int daysLeft = plan.targetDays - today + 1;
-
-    // ── Juz math ──────────────────────────────────────────────────────────
-    // Each plan-day represents this many juz (e.g. 1.0 for 30-day Ramadan khatm,
-    // 0.5 for 60-day, 2.0 for 15-day).
-    final double juzPerPlanDay = 30.0 / plan.targetDays;
-
-    // Total juz still needed = future uncompleted days + missed past days.
-    // Both must be read to finish the khatm, so we include daysBehind as well.
-    final double juzNeeded = (remainingUncompleted + daysBehind) * juzPerPlanDay;
-
-    // Juz per calendar day required to finish exactly on schedule.
-    final double catchUpRate = juzNeeded / daysLeft;
-
-    // Normal (on-schedule) rate.
-    final double normalRate = juzPerPlanDay; // same as 30/targetDays
-
-    // Considered impossible if it would require >8 juz/day.
-    final bool canCatchUp = catchUpRate <= 8.0;
-
-    // ── Build text ────────────────────────────────────────────────────────
-    final String behindStr = isAr
-        ? '${_arabicNumerals(daysBehind)} ${daysBehind == 1 ? "يوم" : "أيام"}'
-        : '$daysBehind ${daysBehind == 1 ? "day" : "days"}';
-
-    final String daysBehindText = isAr
-        ? 'أنت متأخر $behindStr عن جدول الورد.'
-        : 'You are $behindStr behind your wird schedule.';
-
-    final String adviceText;
-    if (!canCatchUp) {
-      adviceText = isAr
-          ? 'التأخر كبير — حاول إكمال ما فاتك تدريجياً بإذن الله، كل جهد يُحتسب.'
-          : 'The gap is large — try to catch up gradually. Every effort counts.';
-    } else if (daysLeft == 1) {
-      // Last day of the plan.
-      adviceText = isAr
-          ? 'هذا آخر يوم — اقرأ ${_juzLabel(juzNeeded, true)} اليوم لإتمام الختمة.'
-          : 'Last day — read ${_juzLabel(juzNeeded, false)} today to complete your khatm.';
-    } else if (catchUpRate <= normalRate + 0.01) {
-      // Essentially on track (daysBehind all already-marked days? Rare edge case).
-      adviceText = isAr
-          ? 'تبقى ${_juzLabel(juzNeeded, true)} في ${_arabicNumerals(daysLeft)} ${daysLeft == 1 ? "يوم" : "أيام"} — واصل بالحجم المعتاد.'
-          : '${_juzLabel(juzNeeded, false)} left in $daysLeft ${daysLeft == 1 ? "day" : "days"} — keep your usual pace.';
-    } else {
-      adviceText = isAr
-          ? 'لإنهاء الختمة في موعدها، اقرأ ${_juzLabel(catchUpRate, true)} يومياً — تبقى ${_juzLabel(juzNeeded, true)} في ${_arabicNumerals(daysLeft)} ${daysLeft == 1 ? "يوم" : "أيام"}.'
-          : 'To finish on time, read ${_juzLabel(catchUpRate, false)}/day — ${_juzLabel(juzNeeded, false)} left in $daysLeft ${daysLeft == 1 ? "day" : "days"}.';
-    }
-
-    final Color cardBg =
-        isDark ? const Color(0xFF2D1F00) : const Color(0xFFFFF3CD);
-    final Color textClr =
-        isDark ? const Color(0xFFFFD060) : const Color(0xFF7A4F00);
-    final Color iconClr =
-        isDark ? const Color(0xFFFFD060) : const Color(0xFFB07800);
-
+    final bg = isDark ? AppColors.darkCard : AppColors.surfaceVariant;
     return Container(
-      margin: const EdgeInsets.only(bottom: 18),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       decoration: BoxDecoration(
-        color: cardBg,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFE6A817), width: 1.2),
+        color: bg,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.divider),
       ),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Padding(
-            padding: const EdgeInsets.only(top: 2),
-            child: Icon(
-              Icons.warning_amber_rounded,
-              color: iconClr,
-              size: 22,
-            ),
+          _ToggleTab(
+            label: isAr ? '📖 الورد اليومي' : '📖 Daily Wird',
+            isActive: !isMakeupMode,
+            onTap: () => onToggle(false),
           ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment:
-                  isAr ? CrossAxisAlignment.end : CrossAxisAlignment.start,
-              children: [
-                Text(
-                  daysBehindText,
-                  textAlign: isAr ? TextAlign.right : TextAlign.left,
-                  style: TextStyle(
-                    color: textClr,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 13.5,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  adviceText,
-                  textAlign: isAr ? TextAlign.right : TextAlign.left,
-                  style: TextStyle(
-                    color: textClr,
-                    fontSize: 12.5,
-                    height: 1.5,
-                  ),
-                ),
-              ],
-            ),
+          _ToggleTab(
+            label: isAr
+                ? '🔄 ورد القضاء (${_arabicNumerals(missedCount)})'
+                : '🔄 Makeup ($missedCount)',
+            isActive: isMakeupMode,
+            onTap: () => onToggle(true),
           ),
         ],
       ),
     );
   }
 }
+
+class _ToggleTab extends StatelessWidget {
+  final String label;
+  final bool isActive;
+  final VoidCallback onTap;
+
+  const _ToggleTab({
+    required this.label,
+    required this.isActive,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: GestureDetector(
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          padding: const EdgeInsets.symmetric(vertical: 11),
+          decoration: BoxDecoration(
+            color: isActive ? AppColors.primary : Colors.transparent,
+            borderRadius: BorderRadius.circular(11),
+            boxShadow: isActive
+                ? [
+                    BoxShadow(
+                      color: AppColors.primary.withValues(alpha: 0.3),
+                      blurRadius: 6,
+                      offset: const Offset(0, 2),
+                    )
+                  ]
+                : null,
+          ),
+          child: Text(
+            label,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
+              fontSize: 13,
+              color: isActive ? Colors.white : AppColors.textSecondary,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 
 // ── Reminder Card ────────────────────────────────────────────────────────────
 
@@ -1424,122 +1507,67 @@ class _ReminderCard extends StatelessWidget {
       final tod = TimeOfDay(hour: reminderHour!, minute: reminderMinute!);
       timeLabel = _formatTime12h(tod, isAr: isAr);
     } else {
-      timeLabel = isAr ? 'لم يُحدَّد وقت' : 'Not set';
+      timeLabel = isAr ? 'لم يُحدَد وقت' : 'Not set';
     }
+
+    final iconColor =
+        _hasReminder ? AppColors.primary : AppColors.textSecondary;
 
     return Card(
       margin: EdgeInsets.zero,
-      shape:
-          RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      clipBehavior: Clip.hardEdge,
-      elevation: 1.5,
-      child: Column(
-        children: [
-          // ── Gradient header strip ─────────────────────────────────
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(
-                horizontal: 16, vertical: 10),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: _hasReminder
-                    ? const [AppColors.primary, Color(0xFF1A8A58)]
-                    : [Colors.grey.shade600, Colors.grey.shade500],
-                begin: Alignment.centerLeft,
-                end: Alignment.centerRight,
-              ),
-            ),
-            child: Row(children: [
-              const Icon(Icons.notifications_active_outlined,
-                  color: Colors.white, size: 16),
-              const SizedBox(width: 8),
-              Text(
-                isAr ? 'وقت التذكير اليومي' : 'Daily Reminder',
-                style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 13),
-              ),
-              if (_hasReminder) ...[  
-                const Spacer(),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 10, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.22),
-                    borderRadius: BorderRadius.circular(12),
+      elevation: 1,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        child: Row(
+          children: [
+            Icon(Icons.notifications_active_outlined,
+                color: iconColor, size: 22),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    isAr ? 'وقت التذكير اليومي' : 'Daily Reminder',
+                    style: TextStyle(
+                      color: iconColor,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 13,
+                    ),
                   ),
-                  child: Text(
-                    timeLabel,
-                    style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700),
-                  ),
-                ),
-              ],
-            ]),
-          ),
-
-          // ── Body ───────────────────────────────────────────────
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-            child: Row(
-              children: [
-                Container(
-                  width: 44,
-                  height: 44,
-                  decoration: BoxDecoration(
-                    color: _hasReminder
-                        ? AppColors.primary.withValues(alpha: 0.1)
-                        : AppColors.surfaceVariant,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Icon(
-                    Icons.notifications_active_outlined,
-                    color: _hasReminder
-                        ? AppColors.primary
-                        : AppColors.textSecondary,
-                    size: 22,
-                  ),
-                ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Text(
+                  const SizedBox(height: 2),
+                  Text(
                     _hasReminder
-                        ? (isAr
-                            ? 'التذكير مفعّل — سيصلك إشعار يوميًا'
-                            : 'Reminder is active — you’ll get a daily notification')
-                        : (isAr ? 'لم يُحدَد وقت بعد' : 'No reminder set yet'),
-                    style:
-                        Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: AppColors.textSecondary,
-                            ),
+                        ? timeLabel
+                        : (isAr ? 'لم يُحدَد وقت بعد' : 'No reminder set'),
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: AppColors.textSecondary,
+                        ),
                   ),
-                ),
-                const SizedBox(width: 8),
-                OutlinedButton.icon(
-                  onPressed: () => _editReminder(context),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: AppColors.primary,
-                    side: const BorderSide(
-                        color: AppColors.primary, width: 1.2),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10)),
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 12, vertical: 8),
-                  ),
-                  icon: const Icon(Icons.edit_rounded, size: 15),
-                  label: Text(
-                    isAr ? 'تعديل' : 'Edit',
-                    style: const TextStyle(
-                        fontSize: 12, fontWeight: FontWeight.w600),
-                  ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-        ],
+            const SizedBox(width: 8),
+            OutlinedButton.icon(
+              onPressed: () => _editReminder(context),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppColors.primary,
+                side: const BorderSide(color: AppColors.primary, width: 1.2),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10)),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              ),
+              icon: const Icon(Icons.edit_rounded, size: 15),
+              label: Text(
+                isAr ? 'تعديل' : 'Edit',
+                style: const TextStyle(
+                    fontSize: 12, fontWeight: FontWeight.w600),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1561,6 +1589,7 @@ class _ReminderCard extends StatelessWidget {
     }
   }
 }
+
 
 
 class _ProgressHeader extends StatelessWidget {
@@ -1689,6 +1718,7 @@ class _TodayCard extends StatelessWidget {
   final bool isDark;
   final int? lastReadSurah;
   final int? lastReadAyah;
+  final int daysBehind;
 
   const _TodayCard({
     required this.plan,
@@ -1699,6 +1729,7 @@ class _TodayCard extends StatelessWidget {
     required this.isDark,
     this.lastReadSurah,
     this.lastReadAyah,
+    this.daysBehind = 0,
   });
 
   bool get _hasBookmark => lastReadSurah != null && lastReadAyah != null;
@@ -1773,7 +1804,6 @@ class _TodayCard extends StatelessWidget {
           children: [
             // ── Header row ──────────────────────────────────────────────
             Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Container(
                   padding:
@@ -1795,6 +1825,29 @@ class _TodayCard extends StatelessWidget {
                     ),
                   ),
                 ),
+                if (daysBehind > 0 && !isComplete) ...[
+                  const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: Colors.amber.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                          color: Colors.amber.shade700.withValues(alpha: 0.5)),
+                    ),
+                    child: Text(
+                      isAr
+                          ? '${_arabicNumerals(daysBehind)} يوم متأخر'
+                          : '$daysBehind day${daysBehind > 1 ? "s" : ""} behind',
+                      style: TextStyle(
+                        color: Colors.amber.shade800,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 11,
+                      ),
+                    ),
+                  ),
+                ],
+                const Spacer(),
                 if (isComplete)
                   Container(
                     padding: const EdgeInsets.symmetric(
@@ -2416,14 +2469,17 @@ class _MakeupCard extends StatefulWidget {
   final WirdPlan plan;
   final bool isAr;
   final bool isDark;
-  /// The makeup card is only revealed once the user has finished today's wird.
-  final bool todayComplete;
+  final int? makeupBookmarkDay;
+  final int? makeupBookmarkSurah;
+  final int? makeupBookmarkAyah;
 
   const _MakeupCard({
     required this.plan,
     required this.isAr,
     required this.isDark,
-    required this.todayComplete,
+    this.makeupBookmarkDay,
+    this.makeupBookmarkSurah,
+    this.makeupBookmarkAyah,
   });
 
   @override
@@ -2454,9 +2510,6 @@ class _MakeupCardState extends State<_MakeupCard> {
     final isAr = widget.isAr;
     final isDark = widget.isDark;
     final today = plan.currentDay;
-
-    // Only reveal after the user has completed today's wird.
-    if (!widget.todayComplete) return const SizedBox.shrink();
 
     // All past days that are not yet complete, sorted oldest first.
     final List<int> missed = [
@@ -2691,7 +2744,53 @@ class _MakeupCardState extends State<_MakeupCard> {
                     height: 1.5,
                   ),
                 ),
-                const SizedBox(height: 14),
+                const SizedBox(height: 10),
+
+                // ── Bookmark row ──────────────────────────────────────────
+                if (widget.makeupBookmarkDay == day &&
+                    widget.makeupBookmarkSurah != null &&
+                    widget.makeupBookmarkAyah != null) ...[
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: _kOrange.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                          color: _kOrangeBorder.withValues(alpha: 0.3)),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.bookmark_rounded,
+                            color: _kOrange, size: 16),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            isAr
+                                ? 'آخر موضع: ${_surahArabicNames[widget.makeupBookmarkSurah!] ?? "سورة ${widget.makeupBookmarkSurah}"} — آية ${_arabicNumerals(widget.makeupBookmarkAyah!)}'
+                                : 'Last position: Surah ${widget.makeupBookmarkSurah} — ayah ${widget.makeupBookmarkAyah}',
+                            style: TextStyle(
+                              color: _kOrange,
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                        GestureDetector(
+                          onTap: () => context
+                              .read<WirdCubit>()
+                              .clearMakeupBookmark(),
+                          child: Icon(Icons.close_rounded,
+                              color: _kOrange.withValues(alpha: 0.6),
+                              size: 16),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                ],
+
+                const SizedBox(height: 4),
 
                 // Action buttons
                 Row(
@@ -2699,7 +2798,7 @@ class _MakeupCardState extends State<_MakeupCard> {
                     // Read button
                     Expanded(
                       child: ElevatedButton.icon(
-                        onPressed: () => _navigateToRead(context, range),
+                        onPressed: () => _navigateToRead(context, range, day),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: _kOrange,
                           foregroundColor: Colors.white,
@@ -2715,7 +2814,9 @@ class _MakeupCardState extends State<_MakeupCard> {
                           size: 16,
                         ),
                         label: Text(
-                          isAr ? 'اقرأ القضاء' : 'Read Makeup',
+                          (widget.makeupBookmarkDay == day)
+                              ? (isAr ? 'تابع القراءة' : 'Resume Reading')
+                              : (isAr ? 'اقرأ القضاء' : 'Read Makeup'),
                           style: const TextStyle(
                               fontWeight: FontWeight.bold, fontSize: 14),
                         ),
@@ -2757,7 +2858,11 @@ class _MakeupCardState extends State<_MakeupCard> {
     );
   }
 
-  void _navigateToRead(BuildContext context, ReadingRange range) {
+  void _navigateToRead(BuildContext context, ReadingRange range, int day) {
+    // Save bookmark before reading so user can resume
+    context
+        .read<WirdCubit>()
+        .saveMakeupBookmark(day, range.start.surah, range.start.ayah);
     Navigator.push(
       context,
       MaterialPageRoute(

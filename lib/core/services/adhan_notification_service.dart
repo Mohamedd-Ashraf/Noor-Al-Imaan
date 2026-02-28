@@ -9,6 +9,7 @@ import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:timezone/data/latest.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
 
+import '../constants/adhan_sounds.dart';
 import '../constants/prayer_calculation_constants.dart';
 import 'location_service.dart';
 import 'settings_service.dart';
@@ -28,12 +29,30 @@ class AdhanNotificationService {
   // V3: Silent channel. We rely on the native MediaPlayer via MethodChannel for audio.
   // This avoids conflicts/ducking/cutting between notification sound and media player.
   static const String _channelId = 'adhan_prayer_times_v3_silent';
-  
-  // Old channel IDs to clean up
+
+  // Reminder channels — one per prayer so users can customise each independently
+  // in Android → App info → Notifications, and each prayer has its own voice.
+  static const String _reminderChannelFajr    = 'prayer_reminder_fajr_v1';
+  static const String _reminderChannelDhuhr   = 'prayer_reminder_dhuhr_v1';
+  static const String _reminderChannelAsr     = 'prayer_reminder_asr_v1';
+  static const String _reminderChannelMaghrib = 'prayer_reminder_maghrib_v1';
+  static const String _reminderChannelIsha    = 'prayer_reminder_isha_v1';
+  static const String _reminderChannelName        = 'Pre-Prayer Reminder';
+  static const String _reminderChannelDescription = 'Alert N minutes before each prayer.';
+  static const String _iqamaChannelId             = 'iqama_reminder_v1';
+  static const String _iqamaChannelName           = 'Iqama Reminder';
+  static const String _iqamaChannelDescription    = 'Alert N minutes after the prayer call.';
+  static const String _salawatChannelId           = 'salawat_reminder_v1';
+  static const String _salawatChannelName         = 'Salawat Reminder';
+  static const String _salawatChannelDescription  = 'Periodic salawat (blessings on the Prophet ㏺) reminders.';
+
+  // Old channel IDs to clean up on next launch
   static const List<String> _oldChannelIds = [
     'adhan_prayer_times',
     'adhan_prayer_times_custom',
     'adhan_prayer_times_v2',
+    'prayer_reminders_v1', // merged into 3 separate channels
+    'prayer_reminder_v2',   // replaced by 5 prayer-specific channels
   ];
 
   // iOS: expects a bundled sound file (e.g. Runner -> adhan.caf)
@@ -49,8 +68,6 @@ class AdhanNotificationService {
   final List<Timer> _inAppTimers = [];
   // _isAdhanPlaying removed — AdhanPlayerService manages its own concurrency.
   DateTime? _lastAdhanStartedAt;
-  String? _lastInAppScheduleSignature;
-  DateTime? _lastInAppScheduleAt;
 
   AdhanNotificationService(
     this._plugin,
@@ -99,10 +116,21 @@ class AdhanNotificationService {
 
       if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
         final soundId = _settings.getSelectedAdhanSound();
+        final sound = AdhanSounds.findById(soundId);
         // Use the foreground service so audio plays even when the app is in the background.
+        // For online sounds: pass URL so native service can stream it directly without
+        // requiring a pre-downloaded file. If streaming fails, native falls back to
+        // the offline fallback sound (adhan_1).
         final ok = await _androidAdhanPlayerChannel.invokeMethod<bool>(
           'startAdhanService',
-          {'soundName': soundId},
+          {
+            'soundName': soundId,
+            'shortMode': _settings.getAdhanShortMode(),
+            'shortCutoffSeconds': sound.shortDurationSeconds,
+            'onlineUrl': sound.isOnline ? sound.url : null,
+            'fallbackSoundName': AdhanSounds.offlineFallback.id,
+            'useAlarmStream': _settings.getAdhanAudioStream() == 'alarm',
+          },
         );
         if (ok == true) {
           debugPrint('🔊 [Adhan] AdhanPlayerService started: $soundId');
@@ -131,6 +159,7 @@ class AdhanNotificationService {
     if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return;
     try {
       final soundId = _settings.getSelectedAdhanSound();
+      final sound = AdhanSounds.findById(soundId);
       final alarms = preview.map((item) {
         final timeStr = item['time'] as String?;
         if (timeStr == null) return null;
@@ -145,6 +174,11 @@ class AdhanNotificationService {
       await _androidAdhanPlayerChannel.invokeMethod('scheduleAdhanAlarms', {
         'alarms': alarms,
         'soundName': soundId,
+        'shortMode': _settings.getAdhanShortMode(),
+        'shortCutoffSeconds': sound.shortDurationSeconds,
+        'onlineUrl': sound.isOnline ? sound.url : null,
+        'fallbackSoundName': AdhanSounds.offlineFallback.id,
+        'useAlarmStream': _settings.getAdhanAudioStream() == 'alarm',
       });
       debugPrint('🔔 [Adhan] AlarmManager: scheduled ${alarms.length} alarm(s)');
     } catch (e) {
@@ -179,48 +213,6 @@ class AdhanNotificationService {
     _inAppTimers.clear();
   }
 
-  void _scheduleInAppAdhanFromPreview(List<Map<String, dynamic>> preview) {
-    final normalizedTimes = <String>[];
-    for (final item in preview) {
-      final timeIso = item['time'] as String?;
-      if (timeIso != null && timeIso.isNotEmpty) {
-        normalizedTimes.add(timeIso);
-      }
-    }
-    normalizedTimes.sort();
-    final signature = normalizedTimes.join('|');
-    final lastSignature = _lastInAppScheduleSignature;
-    final lastAt = _lastInAppScheduleAt;
-    if (lastSignature == signature && lastAt != null && DateTime.now().difference(lastAt) < const Duration(minutes: 2)) {
-      debugPrint('🔔 [Adhan] In-app timer schedule unchanged, skipping reschedule');
-      return;
-    }
-
-    _lastInAppScheduleSignature = signature;
-    _lastInAppScheduleAt = DateTime.now();
-    _clearInAppTimers();
-
-    final now = DateTime.now();
-    final end = now.add(const Duration(hours: 48));
-
-    for (final item in preview) {
-      final timeIso = item['time'] as String?;
-      if (timeIso == null || timeIso.isEmpty) continue;
-      final dt = DateTime.tryParse(timeIso);
-      if (dt == null) continue;
-      if (!dt.isAfter(now) || dt.isAfter(end)) continue;
-
-      final delay = dt.difference(now);
-      _inAppTimers.add(
-        Timer(delay, () async {
-          await _playFullAdhanAudio();
-        }),
-      );
-    }
-
-    debugPrint('🔔 [Adhan] Scheduled ${_inAppTimers.length} in-app adhan timer(s)');
-  }
-
   Future<void> recreateAndroidChannels() async {
     if (kIsWeb) return;
 
@@ -251,6 +243,72 @@ class AdhanNotificationService {
         // sound: _adhanSound, // DO NOT USE
       ),
     );
+
+    // Reminder channel — text notifications with OS default sound.
+    // Note: createNotificationChannel() is idempotent. We do NOT delete reminder channels
+    // on every launch because Android discards pending notifications when a channel is deleted.
+    final reminderChannels = [
+      // Five prayer-specific reminder channels
+      const AndroidNotificationChannel(
+        _reminderChannelFajr, _reminderChannelName,
+        description: _reminderChannelDescription,
+        importance: Importance.high,
+        playSound: true,
+        sound: RawResourceAndroidNotificationSound('prayer_reminder_fajr'),
+        enableVibration: true,
+      ),
+      const AndroidNotificationChannel(
+        _reminderChannelDhuhr, _reminderChannelName,
+        description: _reminderChannelDescription,
+        importance: Importance.high,
+        playSound: true,
+        sound: RawResourceAndroidNotificationSound('prayer_reminder_dhuhr'),
+        enableVibration: true,
+      ),
+      const AndroidNotificationChannel(
+        _reminderChannelAsr, _reminderChannelName,
+        description: _reminderChannelDescription,
+        importance: Importance.high,
+        playSound: true,
+        sound: RawResourceAndroidNotificationSound('prayer_reminder_asr'),
+        enableVibration: true,
+      ),
+      const AndroidNotificationChannel(
+        _reminderChannelMaghrib, _reminderChannelName,
+        description: _reminderChannelDescription,
+        importance: Importance.high,
+        playSound: true,
+        sound: RawResourceAndroidNotificationSound('prayer_reminder_maghrib'),
+        enableVibration: true,
+      ),
+      const AndroidNotificationChannel(
+        _reminderChannelIsha, _reminderChannelName,
+        description: _reminderChannelDescription,
+        importance: Importance.high,
+        playSound: true,
+        sound: RawResourceAndroidNotificationSound('prayer_reminder_isha'),
+        enableVibration: true,
+      ),
+      const AndroidNotificationChannel(
+        _iqamaChannelId, _iqamaChannelName,
+        description: _iqamaChannelDescription,
+        importance: Importance.high,
+        playSound: true,
+        sound: RawResourceAndroidNotificationSound('iqama_sound'),
+        enableVibration: true,
+      ),
+      const AndroidNotificationChannel(
+        _salawatChannelId, _salawatChannelName,
+        description: _salawatChannelDescription,
+        importance: Importance.high,
+        playSound: true,
+        sound: RawResourceAndroidNotificationSound('salawat_sound'),
+        enableVibration: false,
+      ),
+    ];
+    for (final ch in reminderChannels) {
+      await android.createNotificationChannel(ch);
+    }
   }
 
   Future<bool> requestPermissions() async {
@@ -293,10 +351,13 @@ class AdhanNotificationService {
         await _androidAdhanPlayerChannel.invokeMethod<void>('stopAdhan');
       } catch (_) {}
     }
-    await cancelAll();
-    await _cancelAllNativeAlarms();
+    await cancelAll();               // Cancels ALL pending notifications (adhan, reminders, iqama, salawat)
+    await _cancelAllNativeAlarms();   // Cancels AlarmManager alarms
     // Clear the schedule preview so the UI schedule dialog shows empty, not stale data.
     await _settings.setAdhanSchedulePreview('[]');
+    // صلاة على النبي ﷺ reminders are independent of adhan.
+    // Re-schedule them so they keep working even when adhan is disabled.
+    await _scheduleSalawatNotifications();
   }
 
   /// Stops the currently playing Adhan without disabling future scheduled notifications.
@@ -351,8 +412,8 @@ class AdhanNotificationService {
         return ta.compareTo(tb);
       });
       await _settings.setAdhanSchedulePreview(jsonEncode(preview));
-      _scheduleInAppAdhanFromPreview(preview);
       await _scheduleNativeAlarms(preview);
+      await _scheduleSalawatNotifications();
     } catch (_) {
       // Ignore preview/schedule failures.
     }
@@ -477,34 +538,69 @@ class AdhanNotificationService {
       _PrayerNotifItem(Prayer.isha, 'Isha', prayerTimesMap['isha']!),
     ];
 
+    final reminderEnabled = _settings.getPrayerReminderEnabled();
+    final reminderMinutes = _settings.getPrayerReminderMinutes();
+    final iqamaEnabled    = _settings.getIqamaEnabled();
+    final iqamaMinutes    = _settings.getIqamaMinutes();
+    final schedMode       = await _androidScheduleMode();
+    final now             = tz.TZDateTime.now(tz.local);
+
     final scheduled = <Map<String, dynamic>>[];
     for (final item in items) {
       if (!item.enabled) continue;
 
       final localTime = tz.TZDateTime.from(item.time.toLocal(), tz.local);
       // Don't schedule notifications in the past.
-      if (localTime.isBefore(tz.TZDateTime.now(tz.local))) continue;
+      if (localTime.isBefore(now)) continue;
 
       final id = _notificationId(date, item.prayer);
       final arabicName = arabicNames[item.prayer.name] ?? item.label;
-      final notifTitle = isArabic ? 'حان وقت الصلاة' : 'Prayer Time';
-      final notifBody = isArabic ? 'حان وقت $arabicName' : '${item.label} time';
 
-      await _plugin.zonedSchedule(
-        id,
-        notifTitle,
-        notifBody,
-        localTime,
-        _notificationDetails(),
-        androidScheduleMode: await _androidScheduleMode(),
-      );
-
+      // ── Only add to schedule (drives native alarms + preview UI) ─────────
+      // Audio + foreground notification are handled by AdhanPlayerService.
+      // No additional OS notification here — that caused Doze-delayed double-play.
       scheduled.add({
         'id': id,
         'prayer': item.prayer.name,
         'label': item.label,
         'time': item.time.toLocal().toIso8601String(),
       });
+
+      // ── Pre-prayer reminder ──────────────────────────────────────────────
+      if (reminderEnabled && reminderMinutes > 0) {
+        final reminderTime = localTime.subtract(Duration(minutes: reminderMinutes));
+        if (reminderTime.isAfter(now)) {
+          final remId    = _reminderNotificationId(date, item.prayer);
+          final remTitle = isArabic
+              ? 'تنبيه: $arabicName بعد $reminderMinutes دقيقة'
+              : '${item.label} in $reminderMinutes min';
+          final remBody  = isArabic
+              ? 'استعد لصلاة $arabicName'
+              : 'Prepare for ${item.label} prayer';
+          await _plugin.zonedSchedule(
+            remId, remTitle, remBody,
+            reminderTime,
+            _reminderNotificationDetails(item.prayer),
+            androidScheduleMode: schedMode,
+          );
+        }
+      }
+
+      // ── Iqama reminder ────────────────────────────────────────────────────
+      if (iqamaEnabled && iqamaMinutes > 0) {
+        final iqamaTime  = localTime.add(Duration(minutes: iqamaMinutes));
+        final iqamaId    = _iqamaNotificationId(date, item.prayer);
+        final iqamaTitle = isArabic ? 'إقامة: $arabicName' : 'Iqama: ${item.label}';
+        final iqamaBody  = isArabic
+            ? 'حان وقت الإقامة لصلاة $arabicName'
+            : 'Time to stand for ${item.label} prayer';
+        await _plugin.zonedSchedule(
+          iqamaId, iqamaTitle, iqamaBody,
+          iqamaTime,
+          _iqamaNotificationDetails(),
+          androidScheduleMode: schedMode,
+        );
+      }
     }
 
     return scheduled;
@@ -518,14 +614,11 @@ class AdhanNotificationService {
         channelDescription: _channelDescription,
         importance: Importance.max,
         priority: Priority.max,
-        playSound: false, // SILENT
+        playSound: false, // SILENT — audio via AdhanPlayerService
         enableVibration: true,
-        // sound: _adhanSound, // REMOVED
         category: AndroidNotificationCategory.alarm,
         visibility: NotificationVisibility.public,
-        fullScreenIntent: true,
-        audioAttributesUsage: AudioAttributesUsage.alarm,
-        ongoing: false,
+        // fullScreenIntent removed – it caused wake+play on Doze-delayed delivery
         autoCancel: true,
         icon: '@drawable/ic_notification',
       ),
@@ -559,6 +652,170 @@ class AdhanNotificationService {
     // Deterministic per day+prayer; stable and under int32 range.
     final ymd = day.year * 10000 + day.month * 100 + day.day;
     return (ymd * 10) + prayer.index;
+  }
+
+  /// ID for pre-prayer reminder — offset 300M to avoid collision with main adhan IDs.
+  int _reminderNotificationId(DateTime day, Prayer prayer) {
+    final ymd = day.year * 10000 + day.month * 100 + day.day;
+    return 300000000 + (ymd % 1000000) * 10 + prayer.index;
+  }
+
+  /// ID for iqama reminder — offset 600M.
+  int _iqamaNotificationId(DateTime day, Prayer prayer) {
+    final ymd = day.year * 10000 + day.month * 100 + day.day;
+    return 600000000 + (ymd % 1000000) * 10 + prayer.index;
+  }
+
+  /// Returns the reminder channel ID for a given prayer.
+  String _reminderChannelId(Prayer prayer) {
+    switch (prayer) {
+      case Prayer.fajr:    return _reminderChannelFajr;
+      case Prayer.dhuhr:   return _reminderChannelDhuhr;
+      case Prayer.asr:     return _reminderChannelAsr;
+      case Prayer.maghrib: return _reminderChannelMaghrib;
+      case Prayer.isha:    return _reminderChannelIsha;
+      default:             return _reminderChannelDhuhr;
+    }
+  }
+
+  /// Returns the raw-resource sound file name for a given prayer's reminder.
+  String _reminderSoundFile(Prayer prayer) {
+    switch (prayer) {
+      case Prayer.fajr:    return 'prayer_reminder_fajr';
+      case Prayer.dhuhr:   return 'prayer_reminder_dhuhr';
+      case Prayer.asr:     return 'prayer_reminder_asr';
+      case Prayer.maghrib: return 'prayer_reminder_maghrib';
+      case Prayer.isha:    return 'prayer_reminder_isha';
+      default:             return 'prayer_reminder_dhuhr';
+    }
+  }
+
+  /// Notification details for pre-prayer reminder (prayer-specific Arabic voice).
+  NotificationDetails _reminderNotificationDetails(Prayer prayer) {
+    final channelId  = _reminderChannelId(prayer);
+    final soundFile  = _reminderSoundFile(prayer);
+    return NotificationDetails(
+      android: AndroidNotificationDetails(
+        channelId,
+        _reminderChannelName,
+        channelDescription: _reminderChannelDescription,
+        importance: Importance.high,
+        priority: Priority.high,
+        playSound: true,
+        sound: RawResourceAndroidNotificationSound(soundFile),
+        enableVibration: true,
+        category: AndroidNotificationCategory.reminder,
+        visibility: NotificationVisibility.public,
+        autoCancel: true,
+        icon: '@drawable/ic_notification',
+      ),
+      iOS: const DarwinNotificationDetails(
+        presentAlert: true,
+        presentSound: true,
+        presentBadge: false,
+        interruptionLevel: InterruptionLevel.timeSensitive,
+      ),
+    );
+  }
+
+  /// Notification details for iqama (stands-for-prayer sound).
+  NotificationDetails _iqamaNotificationDetails() {
+    return const NotificationDetails(
+      android: AndroidNotificationDetails(
+        _iqamaChannelId,
+        _iqamaChannelName,
+        channelDescription: _iqamaChannelDescription,
+        importance: Importance.high,
+        priority: Priority.high,
+        playSound: true,
+        sound: RawResourceAndroidNotificationSound('iqama_sound'),
+        enableVibration: true,
+        category: AndroidNotificationCategory.reminder,
+        visibility: NotificationVisibility.public,
+        autoCancel: true,
+        icon: '@drawable/ic_notification',
+      ),
+      iOS: DarwinNotificationDetails(
+        presentAlert: true,
+        presentSound: true,
+        presentBadge: false,
+        interruptionLevel: InterruptionLevel.timeSensitive,
+      ),
+    );
+  }
+
+  /// Notification details for Salawat reminders (soft recitation sound).
+  NotificationDetails _salawatNotificationDetails() {
+    return const NotificationDetails(
+      android: AndroidNotificationDetails(
+        _salawatChannelId,
+        _salawatChannelName,
+        channelDescription: _salawatChannelDescription,
+        importance: Importance.high,
+        priority: Priority.high,
+        playSound: true,
+        sound: RawResourceAndroidNotificationSound('salawat_sound'),
+        enableVibration: false,
+        category: AndroidNotificationCategory.reminder,
+        visibility: NotificationVisibility.public,
+        autoCancel: true,
+        icon: '@drawable/ic_notification',
+      ),
+      iOS: DarwinNotificationDetails(
+        presentAlert: true,
+        presentSound: true,
+        presentBadge: false,
+        interruptionLevel: InterruptionLevel.active,
+      ),
+    );
+  }
+
+  /// Schedules periodic salawat (صلاة على النبي) reminder notifications.
+  /// Up to 100 notifications, each [salawatMinutes] apart.
+  Future<void> _scheduleSalawatNotifications() async {
+    // Cancel any previously scheduled salawat notifications first.
+    for (var i = 0; i < 100; i++) {
+      await _plugin.cancel(700000000 + i);
+    }
+
+    final enabled = _settings.getSalawatEnabled();
+    if (!enabled) return;
+
+    final intervalMinutes = _settings.getSalawatMinutes();
+    if (intervalMinutes <= 0) return;
+
+    final isArabic = _settings.getAppLanguage() == 'ar';
+    final schedMode = await _androidScheduleMode();
+
+    final salawatTexts = [
+      isArabic ? 'اللَّهُمَّ صَلِّ عَلَى مُحَمَّدٍ' : 'O Allah, send blessings upon Muhammad ﷺ',
+      isArabic ? 'صَلَّى اللهُ عَلَيْهِ وَسَلَّمَ' : 'Peace and blessings be upon the Prophet ﷺ',
+      isArabic ? 'اللَّهُمَّ صَلِّ وَسَلِّمْ عَلَى نَبِيِّنَا مُحَمَّدٍ' : 'O Allah, send peace upon our Prophet Muhammad ﷺ',
+    ];
+
+    final now = tz.TZDateTime.now(tz.local);
+    var scheduled = 0;
+
+    for (var i = 0; i < 100; i++) {
+      final triggerTime = now.add(Duration(minutes: intervalMinutes * (i + 1)));
+      final text = salawatTexts[i % salawatTexts.length];
+      try {
+        await _plugin.zonedSchedule(
+          700000000 + i,
+          isArabic ? '🌙 الصلاة على النبي' : '🌙 Salawat Reminder',
+          text,
+          triggerTime,
+          _salawatNotificationDetails(),
+          androidScheduleMode: schedMode,
+        );
+        scheduled++;
+      } catch (_) {
+        // Stop if OS limit reached or permission revoked.
+        break;
+      }
+    }
+
+    debugPrint('🌙 [Salawat] Scheduled $scheduled reminder(s) every ${intervalMinutes}m');
   }
 }
 

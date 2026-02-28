@@ -56,6 +56,10 @@ class WirdService {
   static const String _keyFollowUpIntervalHours = 'wird_followup_interval_hours';
   static const String _keyLastReadSurah = 'wird_last_read_surah';
   static const String _keyLastReadAyah = 'wird_last_read_ayah';
+  // Makeup wird bookmark
+  static const String _keyMakeupDay   = 'wird_makeup_day';
+  static const String _keyMakeupSurah = 'wird_makeup_surah';
+  static const String _keyMakeupAyah  = 'wird_makeup_ayah';
 
   final SharedPreferences _prefs;
 
@@ -152,6 +156,9 @@ class WirdService {
     await _prefs.remove(_keyCompletedDays);
     await _prefs.remove(_keyLastReadSurah);
     await _prefs.remove(_keyLastReadAyah);
+    await _prefs.remove(_keyMakeupDay);
+    await _prefs.remove(_keyMakeupSurah);
+    await _prefs.remove(_keyMakeupAyah);
     // Intentionally keep reminder time — user may want to re-use it.
   }
 
@@ -218,6 +225,32 @@ class WirdService {
   Future<void> clearLastRead() async {
     await _prefs.remove(_keyLastReadSurah);
     await _prefs.remove(_keyLastReadAyah);
+  }
+
+  // ── Makeup wird bookmark ──────────────────────────────────────────────────
+
+  /// The plan-day number saved as the makeup bookmark (which missed day the
+  /// user was working on). Null if no makeup bookmark exists.
+  int? get makeupBookmarkDay   => _prefs.getInt(_keyMakeupDay);
+
+  /// Surah number of the saved makeup position.
+  int? get makeupBookmarkSurah => _prefs.getInt(_keyMakeupSurah);
+
+  /// Ayah number of the saved makeup position.
+  int? get makeupBookmarkAyah  => _prefs.getInt(_keyMakeupAyah);
+
+  /// Saves the user's makeup reading position.
+  Future<void> saveMakeupBookmark(int day, int surah, int ayah) async {
+    await _prefs.setInt(_keyMakeupDay,   day);
+    await _prefs.setInt(_keyMakeupSurah, surah);
+    await _prefs.setInt(_keyMakeupAyah,  ayah);
+  }
+
+  /// Clears the makeup bookmark (call when the makeup day is marked complete).
+  Future<void> clearMakeupBookmark() async {
+    await _prefs.remove(_keyMakeupDay);
+    await _prefs.remove(_keyMakeupSurah);
+    await _prefs.remove(_keyMakeupAyah);
   }
 
   // ── Juz distribution helpers ─────────────────────────────────────────────

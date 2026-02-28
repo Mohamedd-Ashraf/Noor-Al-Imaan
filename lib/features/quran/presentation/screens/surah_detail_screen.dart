@@ -845,52 +845,175 @@ class _SurahDetailScreenState extends State<SurahDetailScreen> {
                                     ],
                                   ),
                                   const SizedBox(height: 16),
-                                  // Arabic Text (tap to play, long-press for tafsir)
-                                  InkWell(
-                                    onTap: () {
-                                      context
-                                          .read<AyahAudioCubit>()
-                                          .togglePlayAyah(
-                                            surahNumber: widget.surahNumber,
-                                            ayahNumber: ayah.numberInSurah,
-                                          );
-                                    },
-                                    onLongPress: () {
-                                      HapticFeedback.mediumImpact();
-                                      Navigator.of(context).push(
-                                        MaterialPageRoute(
-                                          builder: (_) => BlocProvider(
-                                            create: (_) =>
-                                                di.sl<TafsirCubit>(),
-                                            child: TafsirScreen(
-                                              surahNumber: widget.surahNumber,
-                                              ayahNumber: ayah.numberInSurah,
-                                              surahName: surah.name,
-                                              surahEnglishName:
-                                                  surah.englishName,
-                                              arabicAyahText: ayah.text,
-                                            ),
-                                          ),
-                                        ),
-                                      );
-                                    },
-                                    child: Text(
-                                      ayah.text,
-                                      textAlign: TextAlign.right,
-                                      textDirection: TextDirection.rtl,
-                                      style: ArabicTextStyleHelper.quranFontStyle(
+                                  // Arabic text: word-by-word when enabled, full-ayah tap otherwise
+                                  Builder(
+                                    builder: (context) {
+                                      final settings =
+                                          context.watch<AppSettingsCubit>().state;
+                                      final wordByWord = settings.wordByWordAudio;
+                                      final isDark = settings.darkMode;
+                                      final textColor = isDark
+                                          ? const Color(0xFFE8E8E8)
+                                          : AppColors.arabicText;
+                                      final baseStyle =
+                                          ArabicTextStyleHelper.quranFontStyle(
                                         fontKey: quranFont,
                                         fontSize: arabicFontSize,
                                         fontWeight: FontWeight.w500,
-                                        height: 2,
-                                        color: context
-                                                .watch<AppSettingsCubit>()
-                                                .state
-                                                .darkMode
-                                            ? const Color(0xFFE8E8E8)
-                                            : AppColors.arabicText,
-                                      ),
-                                    ),
+                                        height: 2.2,
+                                        color: textColor,
+                                      );
+
+                                      // ── WORD-BY-WORD MODE ──────────────
+                                      if (wordByWord) {
+                                        final audioState =
+                                            context.watch<AyahAudioCubit>().state;
+                                        final words = ayah.text
+                                            .split(' ')
+                                            .where((w) => w.isNotEmpty)
+                                            .toList();
+                                        return Wrap(
+                                          alignment: WrapAlignment.end,
+                                          textDirection: TextDirection.rtl,
+                                          spacing: 4,
+                                          runSpacing: 4,
+                                          children:
+                                              List.generate(words.length, (i) {
+                                            final wordNum = i + 1;
+                                            final isActive =
+                                                audioState.isCurrentWord(
+                                              widget.surahNumber,
+                                              ayah.numberInSurah,
+                                              wordNum,
+                                            );
+                                            final isWordActive = isActive &&
+                                                (audioState.status ==
+                                                        AyahAudioStatus
+                                                            .playing ||
+                                                    audioState.status ==
+                                                        AyahAudioStatus
+                                                            .buffering);
+                                            return GestureDetector(
+                                              onTap: () {
+                                                HapticFeedback.selectionClick();
+                                                context
+                                                    .read<AyahAudioCubit>()
+                                                    .playWord(
+                                                      surahNumber:
+                                                          widget.surahNumber,
+                                                      ayahNumber:
+                                                          ayah.numberInSurah,
+                                                      wordIndex: wordNum,
+                                                    );
+                                              },
+                                              onLongPress: () {
+                                                HapticFeedback.mediumImpact();
+                                                Navigator.of(context).push(
+                                                  MaterialPageRoute(
+                                                    builder: (_) =>
+                                                        BlocProvider(
+                                                      create: (_) =>
+                                                          di.sl<TafsirCubit>(),
+                                                      child: TafsirScreen(
+                                                        surahNumber:
+                                                            widget.surahNumber,
+                                                        ayahNumber:
+                                                            ayah.numberInSurah,
+                                                        surahName: surah.name,
+                                                        surahEnglishName:
+                                                            surah.englishName,
+                                                        arabicAyahText:
+                                                            ayah.text,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                );
+                                              },
+                                              child: AnimatedContainer(
+                                                duration: const Duration(
+                                                    milliseconds: 180),
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                        horizontal: 4,
+                                                        vertical: 2),
+                                                decoration: BoxDecoration(
+                                                  color: isWordActive
+                                                      ? AppColors.secondary
+                                                          .withValues(
+                                                              alpha: 0.22)
+                                                      : Colors.transparent,
+                                                  borderRadius:
+                                                      BorderRadius.circular(8),
+                                                  border: isWordActive
+                                                      ? Border.all(
+                                                          color: AppColors
+                                                              .secondary
+                                                              .withValues(
+                                                                  alpha: 0.55),
+                                                          width: 1,
+                                                        )
+                                                      : null,
+                                                ),
+                                                child: Text(
+                                                  words[i],
+                                                  textDirection:
+                                                      TextDirection.rtl,
+                                                  style: baseStyle.copyWith(
+                                                    color: isWordActive
+                                                        ? AppColors.secondary
+                                                        : textColor,
+                                                    fontWeight: isWordActive
+                                                        ? FontWeight.w700
+                                                        : FontWeight.w500,
+                                                  ),
+                                                ),
+                                              ),
+                                            );
+                                          }),
+                                        );
+                                      }
+
+                                      // ── FULL-AYAH MODE (default) ────────
+                                      return InkWell(
+                                        onTap: () {
+                                          context
+                                              .read<AyahAudioCubit>()
+                                              .togglePlayAyah(
+                                                surahNumber:
+                                                    widget.surahNumber,
+                                                ayahNumber:
+                                                    ayah.numberInSurah,
+                                              );
+                                        },
+                                        onLongPress: () {
+                                          HapticFeedback.mediumImpact();
+                                          Navigator.of(context).push(
+                                            MaterialPageRoute(
+                                              builder: (_) => BlocProvider(
+                                                create: (_) =>
+                                                    di.sl<TafsirCubit>(),
+                                                child: TafsirScreen(
+                                                  surahNumber:
+                                                      widget.surahNumber,
+                                                  ayahNumber:
+                                                      ayah.numberInSurah,
+                                                  surahName: surah.name,
+                                                  surahEnglishName:
+                                                      surah.englishName,
+                                                  arabicAyahText: ayah.text,
+                                                ),
+                                              ),
+                                            ),
+                                          );
+                                        },
+                                        child: Text(
+                                          ayah.text,
+                                          textAlign: TextAlign.right,
+                                          textDirection: TextDirection.rtl,
+                                          style: baseStyle,
+                                        ),
+                                      );
+                                    },
                                   ),
 
                                   if (showTranslation) ...[
