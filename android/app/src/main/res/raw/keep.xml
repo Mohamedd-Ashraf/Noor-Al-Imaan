@@ -7,7 +7,7 @@
 -->
 <resources xmlns:tools="http://schemas.android.com/tools"
     tools:keep="@raw/adhan_1,@raw/wird_reminder,
-               @raw/iqama_sound,
+               @raw/iqama_sound,@raw/iqama_sound_full,
                @raw/short_adhan,
                @raw/prayer_approaching_dhuhr,@raw/prayer_approaching_maghrib,
                @raw/prayer_reminder_fajr,@raw/prayer_reminder_dhuhr,

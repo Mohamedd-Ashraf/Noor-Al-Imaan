@@ -61,9 +61,50 @@ void main() async {
   final wirdNotifService = di.sl<WirdNotificationService>();
   await wirdNotifService.init();
   unawaited(wirdNotifService.requestPermissions());
-  unawaited(wirdNotifService.refreshFollowUps());
+  // scheduleForPlan() re-registers BOTH the main daily reminder AND follow-ups
+  // on every app start (covers device reboots that clear scheduled alarms).
+  unawaited(wirdNotifService.scheduleForPlan());
 
   runApp(const MyApp());
+}
+
+/// Global lifecycle observer that keeps wird notifications alive regardless
+/// of which screen is currently open.
+class _GlobalWirdLifecycleObserver extends StatefulWidget {
+  final Widget child;
+  const _GlobalWirdLifecycleObserver({required this.child});
+
+  @override
+  State<_GlobalWirdLifecycleObserver> createState() =>
+      _GlobalWirdLifecycleObserverState();
+}
+
+class _GlobalWirdLifecycleObserverState
+    extends State<_GlobalWirdLifecycleObserver> with WidgetsBindingObserver {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      // Re-schedule wird notifications every time the app comes to foreground.
+      // This ensures follow-up reminders are refreshed even when the user is
+      // not on the Wird screen.
+      unawaited(di.sl<WirdNotificationService>().scheduleForPlan());
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
 }
 
 class MyApp extends StatelessWidget {
@@ -163,15 +204,17 @@ class MyApp extends StatelessWidget {
               GlobalWidgetsLocalizations.delegate,
               GlobalCupertinoLocalizations.delegate,
             ],
-            home: Builder(
-              builder: (context) {
-                // Check for updates after the app loads
-                WidgetsBinding.instance.addPostFrameCallback((_) async {
-                  print('📲 App loaded, checking for updates...');
-                  _checkForUpdates(context, settings.appLanguageCode);
-                });
-                return const OnboardingGate();
-              },
+            home: _GlobalWirdLifecycleObserver(
+              child: Builder(
+                builder: (context) {
+                  // Check for updates after the app loads
+                  WidgetsBinding.instance.addPostFrameCallback((_) async {
+                    print('📲 App loaded, checking for updates...');
+                    _checkForUpdates(context, settings.appLanguageCode);
+                  });
+                  return const OnboardingGate();
+                },
+              ),
             ),
           );
         },

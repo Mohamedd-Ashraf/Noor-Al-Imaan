@@ -59,6 +59,37 @@ class AdhkarProgressCubit extends Cubit<AdhkarProgressState>
     await _service.saveCategory(categoryId, updated);
   }
 
+  /// Increment the counter for [itemId] by [amount], capped at [maxCount].
+  Future<void> incrementBy(
+      String categoryId, String itemId, int maxCount, int amount) async {
+    final current = state.countFor(categoryId, itemId);
+    if (current >= maxCount) return;
+
+    final newCount = (current + amount).clamp(0, maxCount);
+    final updated = {
+      ...state.categoryCounters(categoryId),
+      itemId: newCount,
+    };
+    final newState = state.copyWithCategory(categoryId, updated);
+    emit(newState);
+    await _service.saveCategory(categoryId, updated);
+  }
+
+  /// Jump the counter for [itemId] directly to [maxCount] (mark as done).
+  Future<void> markDone(
+      String categoryId, String itemId, int maxCount) async {
+    final current = state.countFor(categoryId, itemId);
+    if (current >= maxCount) return;
+
+    final updated = {
+      ...state.categoryCounters(categoryId),
+      itemId: maxCount,
+    };
+    final newState = state.copyWithCategory(categoryId, updated);
+    emit(newState);
+    await _service.saveCategory(categoryId, updated);
+  }
+
   /// Reset the counter for a single item to zero.
   Future<void> resetItem(String categoryId, String itemId) async {
     final updated = Map<String, int>.from(state.categoryCounters(categoryId))

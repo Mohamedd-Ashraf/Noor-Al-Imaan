@@ -73,6 +73,18 @@ class AdhkarListScreen extends StatelessWidget {
               HapticFeedback.mediumImpact();
               cubit.resetItem(category.id, item.id);
             },
+            onIncrement5: () {
+              HapticFeedback.lightImpact();
+              cubit.incrementBy(category.id, item.id, item.repeatCount, 5);
+            },
+            onIncrement10: () {
+              HapticFeedback.lightImpact();
+              cubit.incrementBy(category.id, item.id, item.repeatCount, 10);
+            },
+            onMarkDone: () {
+              HapticFeedback.heavyImpact();
+              cubit.markDone(category.id, item.id, item.repeatCount);
+            },
           );
         },
       ),
@@ -91,6 +103,9 @@ class _AdhkarCard extends StatelessWidget {
   final int index;
   final VoidCallback onTap;
   final VoidCallback onReset;
+  final VoidCallback onIncrement5;
+  final VoidCallback onIncrement10;
+  final VoidCallback onMarkDone;
 
   const _AdhkarCard({
     required this.item,
@@ -102,6 +117,9 @@ class _AdhkarCard extends StatelessWidget {
     required this.index,
     required this.onTap,
     required this.onReset,
+    required this.onIncrement5,
+    required this.onIncrement10,
+    required this.onMarkDone,
   });
 
   @override
@@ -263,49 +281,61 @@ class _AdhkarCard extends StatelessWidget {
 
             const Divider(height: 1),
 
-            // ─── Bottom row: reference + counter ─────────────────────
+            // ─── Reference row ────────────────────────────────────────
             Padding(
-              padding: const EdgeInsets.fromLTRB(14, 8, 14, 12),
+              padding: EdgeInsets.fromLTRB(14, 8, 14, item.repeatCount > 1 ? 4 : 12),
               child: Row(
                 children: [
-                  // Reference
+                  Icon(Icons.bookmark_rounded,
+                      size: 13,
+                      color: AppColors.textSecondary.withValues(alpha: 0.7)),
+                  const SizedBox(width: 4),
                   Expanded(
-                    child: Row(
-                      children: [
-                        Icon(Icons.bookmark_rounded,
-                            size: 13,
-                            color:
-                                AppColors.textSecondary.withValues(alpha: 0.7)),
-                        const SizedBox(width: 4),
-                        Flexible(
-                          child: Text(
-                            item.reference,
-                            style:
-                                Theme.of(context).textTheme.bodySmall?.copyWith(
-                                      fontSize: 11,
-                                      color: AppColors.textSecondary
-                                          .withValues(alpha: 0.8),
-                                    ),
-                            overflow: TextOverflow.ellipsis,
+                    child: Text(
+                      item.reference,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            fontSize: 11,
+                            color: AppColors.textSecondary.withValues(alpha: 0.8),
                           ),
-                        ),
-                      ],
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
-                  const SizedBox(width: 8),
-                  // Counter section
-                  _CounterWidget(
-                    count: count,
-                    maxCount: item.repeatCount,
-                    isDone: isDone,
-                    categoryColor: categoryColor,
-                    isArabicUi: isArabicUi,
-                    onTap: onTap,
-                    onReset: onReset,
-                  ),
+                  if (item.repeatCount == 1) ...[  
+                    const SizedBox(width: 8),
+                    _CounterWidget(
+                      count: count,
+                      maxCount: item.repeatCount,
+                      isDone: isDone,
+                      categoryColor: categoryColor,
+                      isArabicUi: isArabicUi,
+                      onTap: onTap,
+                      onReset: onReset,
+                      onIncrement5: onIncrement5,
+                      onIncrement10: onIncrement10,
+                      onMarkDone: onMarkDone,
+                    ),
+                  ],
                 ],
               ),
             ),
+
+            // ─── Counter row (multi-repeat items only) ────────────────
+            if (item.repeatCount > 1)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(10, 0, 10, 12),
+                child: _CounterWidget(
+                  count: count,
+                  maxCount: item.repeatCount,
+                  isDone: isDone,
+                  categoryColor: categoryColor,
+                  isArabicUi: isArabicUi,
+                  onTap: onTap,
+                  onReset: onReset,
+                  onIncrement5: onIncrement5,
+                  onIncrement10: onIncrement10,
+                  onMarkDone: onMarkDone,
+                ),
+              ),
           ],
         ),
       ),
@@ -322,6 +352,9 @@ class _CounterWidget extends StatelessWidget {
   final bool isArabicUi;
   final VoidCallback onTap;
   final VoidCallback onReset;
+  final VoidCallback onIncrement5;
+  final VoidCallback onIncrement10;
+  final VoidCallback onMarkDone;
 
   const _CounterWidget({
     required this.count,
@@ -331,6 +364,9 @@ class _CounterWidget extends StatelessWidget {
     required this.isArabicUi,
     required this.onTap,
     required this.onReset,
+    required this.onIncrement5,
+    required this.onIncrement10,
+    required this.onMarkDone,
   });
 
   @override
@@ -390,98 +426,198 @@ class _CounterWidget extends StatelessWidget {
       );
     }
 
-    // Multi-repeat counter
-    return Row(
+    // Multi-repeat counter – 2-row layout: big tap area + action strip
+    return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        if (isDone)
-          Tooltip(
-            message: isArabicUi
-                ? 'اضغط لإعادة العد من الصفر'
-                : 'Tap to reset counter to zero',
-            preferBelow: false,
-            child: GestureDetector(
-              onTap: onReset,
-              child: Container(
-                width: 28,
-                height: 28,
-                margin: const EdgeInsets.only(right: 6),
-                decoration: BoxDecoration(
-                  color: AppColors.error.withValues(alpha: 0.1),
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                      color: AppColors.error.withValues(alpha: 0.4)),
-                ),
-                child: Icon(Icons.refresh_rounded,
-                    size: 14, color: AppColors.error),
-              ),
-            ),
-          ),
-        Tooltip(
-          message: isDone
-              ? (isArabicUi
-                  ? 'اكتملت العدد — اضغط ↺ لإعادة البدء'
-                  : 'Count complete — tap ↺ to restart')
-              : (isArabicUi
-                  ? 'اضغط لإحصاء مرة — يكتمل تلقائياً عند بلوغ العدد'
-                  : 'Tap to count once — completes when target is reached'),
-          preferBelow: false,
-          child: GestureDetector(
-            onTap: isDone ? null : onTap,
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 180),
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
-              decoration: BoxDecoration(
-                gradient: isDone
-                    ? null
-                    : LinearGradient(
-                        colors: [
-                          categoryColor,
-                          categoryColor.withValues(alpha: 0.8),
-                        ],
-                      ),
-                color: isDone
-                    ? AppColors.success.withValues(alpha: 0.15)
-                    : null,
-                borderRadius: BorderRadius.circular(20),
-                border: isDone
-                    ? Border.all(
-                        color: AppColors.success.withValues(alpha: 0.5))
-                    : null,
-                boxShadow: isDone
-                    ? null
-                    : [
-                        BoxShadow(
-                          color: categoryColor.withValues(alpha: 0.35),
-                          blurRadius: 8,
-                          offset: const Offset(0, 3),
-                        ),
+        // ── Row 1: full-width main counter button ─────────────────────
+        GestureDetector(
+          onTap: isDone ? null : onTap,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 180),
+            width: double.infinity,
+            height: 52,
+            decoration: BoxDecoration(
+              gradient: isDone
+                  ? null
+                  : LinearGradient(
+                      begin: Alignment.centerLeft,
+                      end: Alignment.centerRight,
+                      colors: [
+                        categoryColor.withValues(alpha: 0.85),
+                        categoryColor,
                       ],
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (!isDone)
-                    const Icon(Icons.add_rounded,
-                        size: 14, color: Colors.white),
-                  if (!isDone) const SizedBox(width: 4),
+                    ),
+              color: isDone ? AppColors.success.withValues(alpha: 0.12) : null,
+              borderRadius: BorderRadius.circular(16),
+              border: isDone
+                  ? Border.all(
+                      color: AppColors.success.withValues(alpha: 0.5),
+                      width: 1.5)
+                  : null,
+              boxShadow: isDone
+                  ? null
+                  : [
+                      BoxShadow(
+                        color: categoryColor.withValues(alpha: 0.35),
+                        blurRadius: 12,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                if (isDone) ...[
+                  Icon(Icons.check_circle_rounded,
+                      size: 20, color: AppColors.success),
+                  const SizedBox(width: 8),
                   Text(
-                    isDone
-                        ? '✓ $maxCount'
-                        : '$count / $maxCount',
+                    '$maxCount / $maxCount',
                     style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                      color: isDone ? AppColors.success : Colors.white,
+                      fontSize: 17,
+                      fontWeight: FontWeight.w800,
+                      color: AppColors.success,
+                    ),
+                  ),
+                ] else ...[
+                  const Icon(Icons.add_rounded, size: 20, color: Colors.white),
+                  const SizedBox(width: 8),
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      '$count / $maxCount',
+                      style: const TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w800,
+                        color: Colors.white,
+                        letterSpacing: 0.5,
+                      ),
                     ),
                   ),
                 ],
-              ),
+              ],
             ),
           ),
         ),
+
+        const SizedBox(height: 8),
+
+        // ── Row 2: action strip (+5 / +10 / اكتمل / ↺) ───────────────
+        Row(
+          children: [
+            // Reset
+            IntrinsicWidth(
+              child: _ActionChip(
+                icon: Icons.refresh_rounded,
+                label: isArabicUi ? 'إعادة' : 'Reset',
+                color: AppColors.error,
+                onTap: onReset,
+              ),
+            ),
+            const SizedBox(width: 6),
+
+            // +5
+            if (!isDone && maxCount >= 5) ...[
+              Expanded(
+                child: _ActionChip(
+                  label: '+5',
+                  color: categoryColor,
+                  onTap: onIncrement5,
+                ),
+              ),
+              const SizedBox(width: 6),
+            ],
+
+            // +10
+            if (!isDone && maxCount >= 10) ...[
+              Expanded(
+                child: _ActionChip(
+                  label: '+10',
+                  color: categoryColor,
+                  onTap: onIncrement10,
+                ),
+              ),
+              const SizedBox(width: 6),
+            ],
+
+            // اكتمل
+            if (!isDone)
+              Expanded(
+                child: _ActionChip(
+                  icon: Icons.done_all_rounded,
+                  label: isArabicUi ? 'اكتمل' : 'Done',
+                  color: AppColors.success,
+                  onTap: onMarkDone,
+                  tooltip: isArabicUi
+                      ? 'أتممت العدد بالمسبحة أو غيرها'
+                      : 'Mark as fully done (external counter)',
+                ),
+              ),
+          ],
+        ),
       ],
     );
+  }
+}
+
+// ─── Action Chip button ───────────────────────────────────────────────────────
+class _ActionChip extends StatelessWidget {
+  final String label;
+  final Color color;
+  final VoidCallback onTap;
+  final IconData? icon;
+  final String? tooltip;
+
+  const _ActionChip({
+    required this.label,
+    required this.color,
+    required this.onTap,
+    this.icon,
+    this.tooltip,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    Widget chip = GestureDetector(
+      onTap: onTap,
+      child: Container(
+        height: 36,
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: color.withValues(alpha: 0.4), width: 1.5),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.max,
+          children: [
+            if (icon != null) ...[
+              Icon(icon, size: 15, color: color),
+              const SizedBox(width: 4),
+            ],
+            Flexible(
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: color,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (tooltip != null) {
+      return Tooltip(message: tooltip!, preferBelow: false, child: chip);
+    }
+    return chip;
   }
 }

@@ -56,6 +56,9 @@ class _AdhanSettingsScreenState extends State<AdhanSettingsScreen>
   int _iqamaMinutes = 15;             // global fallback (kept for backward-compat)
   bool _salawatEnabled = false;
   int _salawatMinutes = 30;
+  bool _salawatSleepEnabled = false;
+  int  _salawatSleepStartH  = 22;   // 22:00 default
+  int  _salawatSleepEndH    = 6;    // 06:00 default
 
   // ── Per-prayer adhan enable ────────────────────────────────────────────
   bool _enableDhuhr   = true;
@@ -155,6 +158,9 @@ class _AdhanSettingsScreenState extends State<AdhanSettingsScreen>
       _iqamaMinutes      = _settings.getIqamaMinutes();
       _salawatEnabled    = _settings.getSalawatEnabled();
       _salawatMinutes    = _settings.getSalawatMinutes();
+      _salawatSleepEnabled = _settings.getSalawatSleepEnabled();
+      _salawatSleepStartH  = _settings.getSalawatSleepStartH();
+      _salawatSleepEndH    = _settings.getSalawatSleepEndH();
       _adhanAudioStream  = _settings.getAdhanAudioStream();
       // Per-prayer adhan enable
       _enableDhuhr   = _settings.getAdhanEnableDhuhr();
@@ -309,6 +315,151 @@ class _AdhanSettingsScreenState extends State<AdhanSettingsScreen>
   }
 
   // ═══════════════════════════════════════════════════════════════════════
+  // Cache helpers (delete)
+  // ═══════════════════════════════════════════════════════════════════════
+
+  /// Delete a locally-cached online adhan file to free storage.
+  Future<void> _deleteCachedSound(AdhanSoundInfo sound) async {
+    try {
+      final f = await _cachedFile(sound);
+      if (await f.exists()) await f.delete();
+      if (mounted) {
+        setState(() {
+          _cacheState[sound.id] = _CacheState.none;
+          _cacheProgress[sound.id] = 0.0;
+          // If the deleted sound was the active selection → fall back to default
+          if (_selectedSoundId == sound.id) {
+            _selectedSoundId = AdhanSounds.defaultId;
+          }
+        });
+        // Persist the new selection immediately (bypass debounce)
+        _save();
+      }
+    } catch (e) {
+      debugPrint('⚠️ [AdhanCache] Cannot delete: $e');
+    }
+  }
+
+  /// Confirm dialog before deleting a cached sound file.
+  Future<void> _showDeleteConfirm(AdhanSoundInfo sound, bool isAr) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(isAr ? 'حذف الصوت المحمَّل' : 'Delete downloaded audio'),
+        content: Text(
+          isAr
+              ? 'سيتم حذف «${sound.nameAr}». لاستخدامه مجدداً ستحتاج لتحميله من الإنترنت.'
+              : 'Delete «${sound.nameEn}» from storage? You will need to re-download it to use it again.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(isAr ? 'إلغاء' : 'Cancel'),
+          ),
+          TextButton(
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(isAr ? 'حذف' : 'Delete'),
+          ),
+        ],
+      ),
+    );
+    if (ok == true && mounted) await _deleteCachedSound(sound);
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // Salawat sleep time picker
+  // ═══════════════════════════════════════════════════════════════════════
+
+  Widget _buildSalawatSleepTimePicker(bool isAr) {
+    String fmt(int h) {
+      final ampm = h < 12 ? (isAr ? 'ص' : 'AM') : (isAr ? 'م' : 'PM');
+      final h12  = h == 0 ? 12 : (h > 12 ? h - 12 : h);
+      return '$h12:00 $ampm';
+    }
+
+    Future<void> pick(bool isStart) async {
+      final initial = TimeOfDay(
+          hour: isStart ? _salawatSleepStartH : _salawatSleepEndH, minute: 0);
+      final picked = await showTimePicker(
+        context: context, initialTime: initial,
+        helpText: isAr
+            ? (isStart ? 'بداية وقت الهدوء' : 'نهاية وقت الهدوء')
+            : (isStart ? 'Sleep start' : 'Wake-up time'),
+        builder: (ctx, child) => Directionality(
+          textDirection: isAr ? TextDirection.rtl : TextDirection.ltr,
+          child: child!,
+        ),
+      );
+      if (picked != null && mounted) {
+        setState(() {
+          if (isStart) _salawatSleepStartH = picked.hour;
+          else         _salawatSleepEndH   = picked.hour;
+        });
+        _autoSave();
+      }
+    }
+
+    const indigo = Color(0xFF5C6BC0);
+    const teal   = Color(0xFF26A69A);
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      child: Row(children: [
+        Expanded(child: GestureDetector(
+          onTap: () => pick(true),
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+            decoration: BoxDecoration(
+              color: indigo.withValues(alpha: 0.09),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: indigo.withValues(alpha: 0.30)),
+            ),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.center, children: [
+              Text(isAr ? 'بداية النوم' : 'Sleep start',
+                style: const TextStyle(fontSize: 10, color: indigo, fontWeight: FontWeight.w600)),
+              const SizedBox(height: 4),
+              Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                const Icon(Icons.bedtime_rounded, size: 14, color: indigo),
+                const SizedBox(width: 4),
+                Text(fmt(_salawatSleepStartH),
+                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: indigo)),
+              ]),
+            ]),
+          ),
+        )),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          child: Text(isAr ? 'حتى' : 'to',
+            style: const TextStyle(fontSize: 13, color: AppColors.textSecondary)),
+        ),
+        Expanded(child: GestureDetector(
+          onTap: () => pick(false),
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+            decoration: BoxDecoration(
+              color: teal.withValues(alpha: 0.09),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: teal.withValues(alpha: 0.30)),
+            ),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.center, children: [
+              Text(isAr ? 'نهاية النوم' : 'Wake up',
+                style: const TextStyle(fontSize: 10, color: teal, fontWeight: FontWeight.w600)),
+              const SizedBox(height: 4),
+              Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                const Icon(Icons.wb_sunny_rounded, size: 14, color: teal),
+                const SizedBox(width: 4),
+                Text(fmt(_salawatSleepEndH),
+                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: teal)),
+              ]),
+            ]),
+          ),
+        )),
+      ]),
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════
   // Preview
   // ═══════════════════════════════════════════════════════════════════════
 
@@ -439,6 +590,9 @@ class _AdhanSettingsScreenState extends State<AdhanSettingsScreen>
       _settings.setIqamaMinutes(_iqamaMinutes),
       _settings.setSalawatEnabled(_salawatEnabled),
       _settings.setSalawatMinutes(_salawatMinutes),
+      _settings.setSalawatSleepEnabled(_salawatSleepEnabled),
+      _settings.setSalawatSleepStartH(_salawatSleepStartH),
+      _settings.setSalawatSleepEndH(_salawatSleepEndH),
       _settings.setAdhanAudioStream(_adhanAudioStream),
       // Per-prayer adhan enable
       _settings.setAdhanEnableDhuhr(_enableDhuhr),
@@ -792,6 +946,21 @@ class _AdhanSettingsScreenState extends State<AdhanSettingsScreen>
                   _autoSave();
                 },
               ),
+                _buildDivider(),
+              _buildSwitchRow(
+                icon: Icons.bedtime_rounded,
+                iconColor: _salawatSleepEnabled ? const Color(0xFF5C6BC0) : Colors.grey,
+                titleAr: 'ساعات الهدوء (وقت النوم)',
+                titleEn: 'Quiet Hours (Sleep Time)',
+                subtitleAr: 'إيقاف التذكير أثناء فترة النوم',
+                subtitleEn: 'Pause reminders during your sleep window',
+                value: _salawatSleepEnabled,
+                onChanged: (v) { setState(() => _salawatSleepEnabled = v); _autoSave(); },
+                isAr: isAr,
+              ),
+              if (_salawatSleepEnabled) ...[                _buildDivider(),
+                _buildSalawatSleepTimePicker(isAr),
+              ],
               _buildDivider(),
               _buildSalawatSoundPicker(isAr),
               _buildDivider(),
@@ -806,6 +975,7 @@ class _AdhanSettingsScreenState extends State<AdhanSettingsScreen>
                 labelAr: 'صوت الصلاة على النبي ﷺ',
                 labelEn: 'Salawat reminder volume',
               ),
+            
             ],
           ],
         ),
@@ -1837,6 +2007,7 @@ class _AdhanSettingsScreenState extends State<AdhanSettingsScreen>
                   onSelect: () => _selectSound(s),
                   onPreview: () => _previewSound(s),
                   onStop: _stopPreview,
+                  onDelete: s.isOnline ? () => _showDeleteConfirm(s, isAr) : null,
                 );
               },
             ),
@@ -2289,11 +2460,13 @@ class _SoundTile extends StatelessWidget {
   final VoidCallback onSelect;
   final VoidCallback onPreview;
   final VoidCallback onStop;
+  final VoidCallback? onDelete;
 
   const _SoundTile({
     required this.sound, required this.isSelected, required this.isPlaying,
     required this.cacheState, required this.cacheProgress, required this.isAr,
     required this.onSelect, required this.onPreview, required this.onStop,
+    this.onDelete,
   });
 
   @override
@@ -2367,6 +2540,15 @@ class _SoundTile extends StatelessWidget {
                 _CacheIndicator(state: cacheState, progress: cacheProgress),
                 const SizedBox(width: 2),
               ],
+              // Delete cached file button (only when fully downloaded)
+              if (sound.isOnline && cacheState == _CacheState.cached && onDelete != null)
+                IconButton(
+                  visualDensity: VisualDensity.compact,
+                  padding: EdgeInsets.zero,
+                  icon: const Icon(Icons.delete_outline_rounded, size: 17, color: Colors.red),
+                  tooltip: isAr ? 'حذف الملف المحمَّل' : 'Delete downloaded file',
+                  onPressed: onDelete,
+                ),
               // Play / Stop button — always enabled (streams if online)
               IconButton(
                 visualDensity: VisualDensity.compact,
@@ -2402,10 +2584,18 @@ class _CacheIndicator extends StatelessWidget {
   Widget build(BuildContext context) {
     switch (state) {
       case _CacheState.caching:
-        return SizedBox(width: 18, height: 18,
-          child: CircularProgressIndicator(
-            value: progress > 0 ? progress : null,
-            strokeWidth: 2, color: AppColors.secondary));
+        return SizedBox(
+          width: 22, height: 22,
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              CircularProgressIndicator(
+                value: progress > 0 ? progress : null,
+                strokeWidth: 2, color: AppColors.secondary),
+              Icon(Icons.download_rounded, size: 9, color: AppColors.secondary),
+            ],
+          ),
+        );
       case _CacheState.cached:
         return const Icon(Icons.check_circle_rounded, size: 18, color: AppColors.secondary);
       case _CacheState.error:

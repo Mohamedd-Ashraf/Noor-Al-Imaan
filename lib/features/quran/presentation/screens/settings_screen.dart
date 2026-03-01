@@ -50,6 +50,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
         return isAr ? 'الإندونيسية' : 'Indonesian';
       case 'fa':
         return isAr ? 'الفارسية' : 'Persian';
+      case 'ru':
+        return isAr ? 'الروسية' : 'Russian';
+      case 'zh':
+        return isAr ? 'الصينية' : 'Chinese';
       default:
         return code;
     }

@@ -35,6 +35,9 @@ class SettingsService {
   static const String _keyIqamaMinutes            = 'iqama_minutes';
   static const String _keySalawatEnabled          = 'salawat_enabled';
   static const String _keySalawatMinutes          = 'salawat_minutes';
+  static const String _keySalawatSleepEnabled     = 'salawat_sleep_enabled';
+  static const String _keySalawatSleepStartH      = 'salawat_sleep_start_h';
+  static const String _keySalawatSleepEndH        = 'salawat_sleep_end_h';
   /// 'ringtone' (default) or 'alarm' — controls which Android audio stream
   /// is used for adhan playback and which system volume is displayed.
   static const String _keyAdhanAudioStream        = 'adhan_audio_stream';
@@ -333,6 +336,14 @@ class SettingsService {
   Future<bool> setSalawatEnabled(bool v) => _prefs.setBool(_keySalawatEnabled, v);
   int getSalawatMinutes() => _prefs.getInt(_keySalawatMinutes) ?? 30;
   Future<bool> setSalawatMinutes(int v) => _prefs.setInt(_keySalawatMinutes, v);
+
+  // ── Salawat quiet hours (sleep) ───────────────────────────────────────────
+  bool getSalawatSleepEnabled() => _prefs.getBool(_keySalawatSleepEnabled) ?? false;
+  Future<bool> setSalawatSleepEnabled(bool v) => _prefs.setBool(_keySalawatSleepEnabled, v);
+  int getSalawatSleepStartH() => _prefs.getInt(_keySalawatSleepStartH) ?? 22;
+  Future<bool> setSalawatSleepStartH(int v) => _prefs.setInt(_keySalawatSleepStartH, v);
+  int getSalawatSleepEndH() => _prefs.getInt(_keySalawatSleepEndH) ?? 6;
+  Future<bool> setSalawatSleepEndH(int v) => _prefs.setInt(_keySalawatSleepEndH, v);
 
   // ── Scroll mode (تصفح المصحف بالسحب من أسفل لأعلى) ──────────────────────
   bool getScrollMode() => _prefs.getBool(_keyScrollMode) ?? false;

@@ -1316,6 +1316,8 @@ class _ReciterCardState extends State<_ReciterCard> {
       case 'fr': return ar ? 'الفرنسية' : 'French';
       case 'id': return ar ? 'الإندونيسية' : 'Indonesian';
       case 'fa': return ar ? 'الفارسية' : 'Persian';
+      case 'ru': return ar ? 'الروسية' : 'Russian';
+      case 'zh': return ar ? 'الصينية' : 'Chinese';
       default: return code;
     }
   }

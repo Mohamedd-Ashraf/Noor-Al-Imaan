@@ -93,8 +93,8 @@ class AudioEditionService {
   static const List<AudioEdition> _extraEditions = [
     AudioEdition(
       identifier: 'ar.alijaber',
-      name: 'علي جابر',
-      englishName: 'Ali Jaber',
+      name: 'علي عبد الله جابر',
+      englishName: 'Ali Abdullah Jaber',
       language: 'ar',
       format: 'audio',
       type: 'versebyverse',

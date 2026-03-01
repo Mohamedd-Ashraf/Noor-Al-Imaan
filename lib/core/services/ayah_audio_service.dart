@@ -34,7 +34,7 @@ const Map<String, String> _everyAyahFolders = {
   'ar.shaatree': 'Abu_Bakr_Ash-Shaatree_128kbps',
   'ar.parhizgar': 'Parhizgar_48kbps',
   // ─── قراء مضافون يدوياً ───────────────────────────────────────────────────
-  'ar.alijaber': 'Ali_Jaber_64kbps',                    // علي جابر
+  'ar.alijaber': 'Ali_Jaber_64kbps',                    // علي عبد الله جابر
 };
 
 class AyahAudioService {

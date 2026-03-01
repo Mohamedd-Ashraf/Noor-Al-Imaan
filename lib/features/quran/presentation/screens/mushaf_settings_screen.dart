@@ -73,7 +73,7 @@ class _MushafSettingsScreenState extends State<MushafSettingsScreen>
     PackageInfo.fromPlatform().then((info) {
       if (mounted) {
         setState(() {
-          _showScrollModeBadge = info.version == '1.0.7';
+          _showScrollModeBadge = info.version == '1.0.8';
           _showWordByWordBadge = info.version == '1.0.8';
         });
       }

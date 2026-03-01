@@ -112,13 +112,11 @@ class WirdCubit extends Cubit<WirdState> {
 
   // ── App lifecycle ─────────────────────────────────────────────
 
-  /// Call when app returns to foreground to refresh today's follow-up notifications.
+  /// Call when app returns to foreground to refresh wird notifications.
+  /// Uses scheduleForPlan() so both the main daily reminder AND follow-ups
+  /// are re-registered (handles device reboots that clear scheduled alarms).
   Future<void> refreshNotificationsIfNeeded() async {
-    final plan = _wirdService.getPlan();
-    if (plan == null) return;
-    if (_wirdService.hasReminder) {
-      await _notifService.refreshFollowUps();
-    }
+    await _notifService.scheduleForPlan();
   }
 
   // ── Plan deletion ─────────────────────────────────────────────

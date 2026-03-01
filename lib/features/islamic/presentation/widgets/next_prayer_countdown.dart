@@ -225,7 +225,15 @@ class _NextPrayerCountdownState extends State<NextPrayerCountdown> {
               ),
               const SizedBox(height: 2),
               Text(
-                '${_nextPrayer!.time.hour.toString().padLeft(2, '0')}:${_nextPrayer!.time.minute.toString().padLeft(2, '0')}',
+                () {
+                  final h = _nextPrayer!.time.hour;
+                  final m = _nextPrayer!.time.minute;
+                  final period = isArabic
+                      ? (h >= 12 ? 'م' : 'ص')
+                      : (h >= 12 ? 'PM' : 'AM');
+                  final hour12 = h % 12 == 0 ? 12 : h % 12;
+                  return '${hour12.toString().padLeft(2, '0')}:${m.toString().padLeft(2, '0')} $period';
+                }(),
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
                       color: AppColors.textSecondary,
                     ),

@@ -41,7 +41,7 @@ class AdhanNotificationService {
   static const String _reminderChannelIsha    = 'prayer_reminder_isha_v1';
   static const String _reminderChannelName        = 'Pre-Prayer Reminder';
   static const String _reminderChannelDescription = 'Alert N minutes before each prayer.';
-  static const String _iqamaChannelId             = 'iqama_reminder_v1';
+  static const String _iqamaChannelId             = 'iqama_reminder_v2'; // v2: full iqama sound
   static const String _iqamaChannelName           = 'Iqama Reminder';
   static const String _iqamaChannelDescription    = 'Alert N minutes after the prayer call.';
   // Salawat: 5 dedicated channels — one per sound option.
@@ -64,6 +64,7 @@ class AdhanNotificationService {
     'prayer_reminder_dhuhr_v1',   // replaced by v2 with approaching sound
     'prayer_reminder_maghrib_v1', // replaced by v2 with approaching sound
     'salawat_reminder_v1',        // replaced by 5 dedicated salawat channels
+    'iqama_reminder_v1',          // replaced by v2 with full iqama sound
   ];
 
   // iOS: expects a bundled sound file (e.g. Runner -> adhan.caf)
@@ -307,7 +308,7 @@ class AdhanNotificationService {
         description: _iqamaChannelDescription,
         importance: Importance.high,
         playSound: true,
-        sound: RawResourceAndroidNotificationSound('iqama_sound'),
+        sound: RawResourceAndroidNotificationSound('iqama_sound_full'),
         enableVibration: true,
       ),
       // Five salawat channels — one per sound option (sounds are baked at channel creation).
@@ -785,7 +786,7 @@ class AdhanNotificationService {
         importance: Importance.high,
         priority: Priority.high,
         playSound: true,
-        sound: RawResourceAndroidNotificationSound('iqama_sound'),
+        sound: RawResourceAndroidNotificationSound('iqama_sound_full'),
         enableVibration: true,
         category: AndroidNotificationCategory.reminder,
         visibility: NotificationVisibility.public,
@@ -856,6 +857,20 @@ class AdhanNotificationService {
     final intervalMinutes = _settings.getSalawatMinutes();
     if (intervalMinutes <= 0) return;
 
+    // Quiet hours — skip notifications scheduled inside the sleep window.
+    final sleepEnabled = _settings.getSalawatSleepEnabled();
+    final sleepStartH  = _settings.getSalawatSleepStartH();
+    final sleepEndH    = _settings.getSalawatSleepEndH();
+
+    bool isInSleep(tz.TZDateTime t) {
+      if (!sleepEnabled) return false;
+      final h = t.hour;
+      // Overnight window (e.g. 22 → 06): wraps past midnight
+      if (sleepStartH > sleepEndH) return h >= sleepStartH || h < sleepEndH;
+      // Same-day window (e.g. 01 → 06)
+      return h >= sleepStartH && h < sleepEndH;
+    }
+
     final isArabic = _settings.getAppLanguage() == 'ar';
     final schedMode = await _androidScheduleMode();
 
@@ -870,6 +885,8 @@ class AdhanNotificationService {
 
     for (var i = 0; i < 100; i++) {
       final triggerTime = now.add(Duration(minutes: intervalMinutes * (i + 1)));
+      // Skip notifications that fall inside the user's quiet hours window.
+      if (isInSleep(triggerTime)) continue;
       final text = salawatTexts[i % salawatTexts.length];
       try {
         await _plugin.zonedSchedule(
