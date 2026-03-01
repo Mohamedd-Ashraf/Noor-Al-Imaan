@@ -33,7 +33,7 @@ class AdhanSettingsScreen extends StatefulWidget {
 }
 
 class _AdhanSettingsScreenState extends State<AdhanSettingsScreen>
-    with WidgetsBindingObserver {
+    with WidgetsBindingObserver, TickerProviderStateMixin {
   static const MethodChannel _adhanChannel = MethodChannel('quraan/adhan_player');
 
   late final SettingsService _settings;
@@ -53,9 +53,30 @@ class _AdhanSettingsScreenState extends State<AdhanSettingsScreen>
   bool _reminderEnabled = false;
   int _reminderMinutes = 10;
   bool _iqamaEnabled = false;
-  int _iqamaMinutes = 15;
+  int _iqamaMinutes = 15;             // global fallback (kept for backward-compat)
   bool _salawatEnabled = false;
   int _salawatMinutes = 30;
+
+  // ── Per-prayer adhan enable ────────────────────────────────────────────
+  bool _enableDhuhr   = true;
+  bool _enableAsr     = true;
+  bool _enableMaghrib = true;
+  bool _enableIsha    = true;
+
+  // ── Per-prayer iqama minutes ───────────────────────────────────────────
+  int _iqamaMinutesFajr    = 20;
+  int _iqamaMinutesDhuhr   = 15;
+  int _iqamaMinutesAsr     = 15;
+  int _iqamaMinutesMaghrib = 10;
+  int _iqamaMinutesIsha    = 15;
+
+  // ── Salawat sound selection ────────────────────────────────────────────
+  String _salawatSoundId = SalawatSounds.defaultId;
+
+  // ── Reminder sound volumes ─────────────────────────────────────────────
+  double _salawatVolume     = 0.8;
+  double _iqamaVolume       = 0.8;
+  double _approachingVolume = 0.8;
 
   // ── Audio stream setting ───────────────────────────────────────────────
   /// 'ringtone' → ring stream (default). 'alarm' → bypasses silent mode.
@@ -81,6 +102,7 @@ class _AdhanSettingsScreenState extends State<AdhanSettingsScreen>
   bool _schedulingTest = false;
   bool _batteryUnrestricted = false;
   Timer? _debounce;
+  late TabController _tabController;
   /// Show the "جديد / New" badge next to Short Adhan only for version 1.0.7.
   bool _showNewBadge = false;
 
@@ -91,6 +113,7 @@ class _AdhanSettingsScreenState extends State<AdhanSettingsScreen>
   @override
   void initState() {
     super.initState();
+    _tabController = TabController(length: 3, vsync: this);
     WidgetsBinding.instance.addObserver(this);
     _settings = di.sl<SettingsService>();
     _adhanService = di.sl<AdhanNotificationService>();
@@ -118,21 +141,38 @@ class _AdhanSettingsScreenState extends State<AdhanSettingsScreen>
 
   void _load() {
     setState(() {
-      _selectedSoundId = _settings.getSelectedAdhanSound();
+      _selectedSoundId  = _settings.getSelectedAdhanSound();
       _selectedMethodId = _settings.getPrayerCalculationMethod();
       _selectedAsrMethod = _settings.getPrayerAsrMethod();
       _notificationsEnabled = _settings.getAdhanNotificationsEnabled();
-      _includeFajr = _settings.getAdhanIncludeFajr();
+      _includeFajr       = _settings.getAdhanIncludeFajr();
       _methodAutoDetected = _settings.getPrayerMethodAutoDetected();
-      _adhanVolume = _settings.getAdhanVolume();
-      _shortMode = _settings.getAdhanShortMode();
-      _reminderEnabled = _settings.getPrayerReminderEnabled();
-      _reminderMinutes = _settings.getPrayerReminderMinutes();
-      _iqamaEnabled = _settings.getIqamaEnabled();
-      _iqamaMinutes = _settings.getIqamaMinutes();
-      _salawatEnabled = _settings.getSalawatEnabled();
-      _salawatMinutes = _settings.getSalawatMinutes();
-      _adhanAudioStream = _settings.getAdhanAudioStream();
+      _adhanVolume       = _settings.getAdhanVolume();
+      _shortMode         = _settings.getAdhanShortMode();
+      _reminderEnabled   = _settings.getPrayerReminderEnabled();
+      _reminderMinutes   = _settings.getPrayerReminderMinutes();
+      _iqamaEnabled      = _settings.getIqamaEnabled();
+      _iqamaMinutes      = _settings.getIqamaMinutes();
+      _salawatEnabled    = _settings.getSalawatEnabled();
+      _salawatMinutes    = _settings.getSalawatMinutes();
+      _adhanAudioStream  = _settings.getAdhanAudioStream();
+      // Per-prayer adhan enable
+      _enableDhuhr   = _settings.getAdhanEnableDhuhr();
+      _enableAsr     = _settings.getAdhanEnableAsr();
+      _enableMaghrib = _settings.getAdhanEnableMaghrib();
+      _enableIsha    = _settings.getAdhanEnableIsha();
+      // Per-prayer iqama minutes
+      _iqamaMinutesFajr    = _settings.getIqamaMinutesFajr();
+      _iqamaMinutesDhuhr   = _settings.getIqamaMinutesDhuhr();
+      _iqamaMinutesAsr     = _settings.getIqamaMinutesAsr();
+      _iqamaMinutesMaghrib = _settings.getIqamaMinutesMaghrib();
+      _iqamaMinutesIsha    = _settings.getIqamaMinutesIsha();
+      // Salawat sound
+      _salawatSoundId = _settings.getSalawatSound();
+      // Reminder volumes
+      _salawatVolume     = _settings.getSalawatVolume();
+      _iqamaVolume       = _settings.getIqamaVolume();
+      _approachingVolume = _settings.getApproachingVolume();
     });
   }
 
@@ -151,6 +191,7 @@ class _AdhanSettingsScreenState extends State<AdhanSettingsScreen>
     WidgetsBinding.instance.removeObserver(this);
     _adhanChannel.setMethodCallHandler(null);
     _stopPreview();
+    _tabController.dispose();
     super.dispose();
   }
 
@@ -197,7 +238,9 @@ class _AdhanSettingsScreenState extends State<AdhanSettingsScreen>
   // ═══════════════════════════════════════════════════════════════════════
 
   Future<Directory> _cacheDir() async {
-    final base = await getApplicationDocumentsDirectory();
+    // Use getApplicationSupportDirectory() which maps to filesDir on Android.
+    // This MUST match the path that AdhanPlayerService.kt reads from (filesDir/adhan_cache).
+    final base = await getApplicationSupportDirectory();
     final dir = Directory('${base.path}/adhan_cache');
     if (!dir.existsSync()) dir.createSync(recursive: true);
     return dir;
@@ -382,7 +425,7 @@ class _AdhanSettingsScreenState extends State<AdhanSettingsScreen>
   Future<void> _save() async {
     if (!mounted) return;
     setState(() => _isSaving = true);
-    await Future.wait([
+    await Future.wait<bool>([
       _settings.setSelectedAdhanSound(_selectedSoundId),
       _settings.setPrayerCalculationMethod(_selectedMethodId),
       _settings.setPrayerAsrMethod(_selectedAsrMethod),
@@ -397,6 +440,23 @@ class _AdhanSettingsScreenState extends State<AdhanSettingsScreen>
       _settings.setSalawatEnabled(_salawatEnabled),
       _settings.setSalawatMinutes(_salawatMinutes),
       _settings.setAdhanAudioStream(_adhanAudioStream),
+      // Per-prayer adhan enable
+      _settings.setAdhanEnableDhuhr(_enableDhuhr),
+      _settings.setAdhanEnableAsr(_enableAsr),
+      _settings.setAdhanEnableMaghrib(_enableMaghrib),
+      _settings.setAdhanEnableIsha(_enableIsha),
+      // Per-prayer iqama minutes
+      _settings.setIqamaMinutesFajr(_iqamaMinutesFajr),
+      _settings.setIqamaMinutesDhuhr(_iqamaMinutesDhuhr),
+      _settings.setIqamaMinutesAsr(_iqamaMinutesAsr),
+      _settings.setIqamaMinutesMaghrib(_iqamaMinutesMaghrib),
+      _settings.setIqamaMinutesIsha(_iqamaMinutesIsha),
+      // Salawat sound
+      _settings.setSalawatSound(_salawatSoundId),
+      // Reminder volumes
+      _settings.setSalawatVolume(_salawatVolume),
+      _settings.setIqamaVolume(_iqamaVolume),
+      _settings.setApproachingVolume(_approachingVolume),
     ]);
     if (_notificationsEnabled) {
       await _adhanService.enableAndSchedule();
@@ -443,254 +503,346 @@ class _AdhanSettingsScreenState extends State<AdhanSettingsScreen>
     final isAr = _isAr;
     return Scaffold(
       backgroundColor: AppColors.background,
-      body: CustomScrollView(
-        slivers: [
-          _buildAppBar(isAr),
-          SliverPadding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 40),
-            sliver: SliverList(
-              delegate: SliverChildListDelegate([
-                // Disabled banner
-                if (!_notificationsEnabled) ...[
-                  const SizedBox(height: 16),
-                  _DisabledBanner(isAr: isAr),
-                ],
+      body: NestedScrollView(
+        headerSliverBuilder: (ctx, innerBoxIsScrolled) => [
+          _buildAppBar(isAr, innerBoxIsScrolled),
+        ],
+        body: TabBarView(
+          controller: _tabController,
+          physics: const ClampingScrollPhysics(),
+          children: [
+            _buildAdhanTab(isAr),
+            _buildRemindersTab(isAr),
+            _buildPrayerTimesTab(isAr),
+          ],
+        ),
+      ),
+    );
+  }
 
-                // Battery warning (prominent, at top)
-                if (!_batteryUnrestricted) ...[
-                  const SizedBox(height: 16),
-                  _BatteryWarningCard(
-                    isAr: isAr,
-                    onTap: () async {
-                      try {
-                        await _adhanChannel.invokeMethod('openBatterySettings');
-                        // Re-check status after user returns
-                        await Future.delayed(const Duration(seconds: 1));
-                        _checkBatteryStatus();
-                      } catch (_) {}
-                    },
+  // ─── Tab 1: الأذان ────────────────────────────────────────────────────────
+
+  Widget _buildAdhanTab(bool isAr) {
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 40),
+      children: [
+        if (!_notificationsEnabled) ...[
+          _DisabledBanner(isAr: isAr),
+          const SizedBox(height: 12),
+        ],
+        if (!_batteryUnrestricted) ...[
+          _BatteryWarningCard(
+            isAr: isAr,
+            onTap: () async {
+              try {
+                await _adhanChannel.invokeMethod('openBatterySettings');
+                await Future.delayed(const Duration(seconds: 1));
+                _checkBatteryStatus();
+              } catch (_) {}
+            },
+          ),
+          const SizedBox(height: 12),
+        ],
+        // الأذان والإشعارات
+        _buildSection(
+          icon: Icons.notifications_active_rounded,
+          titleAr: 'الأذان والإشعارات',
+          titleEn: 'Adhan & Notifications',
+          isAr: isAr,
+          children: [
+            _buildSwitchRow(
+              icon: _notificationsEnabled
+                  ? Icons.notifications_active_rounded
+                  : Icons.notifications_off_rounded,
+              iconColor: _notificationsEnabled ? AppColors.primary : Colors.grey,
+              titleAr: 'تفعيل الأذان',
+              titleEn: 'Enable Adhan',
+              subtitleAr: 'تشغيل الأذان تلقائياً عند كل وقت صلاة',
+              subtitleEn: 'Auto-play adhan at each prayer time',
+              value: _notificationsEnabled,
+              onChanged: (v) {
+                setState(() => _notificationsEnabled = v);
+                _autoSave();
+              },
+              isAr: isAr,
+            ),
+            _buildDivider(),
+            _buildSwitchRow(
+              icon: Icons.compress_rounded,
+              iconColor: _shortMode ? AppColors.secondary : Colors.grey,
+              titleAr: 'الأذان المختصر',
+              titleEn: 'Short Adhan (2 Takbeers)',
+              subtitleAr: 'تكبيرتان فقط بدلاً من الأذان الكامل',
+              subtitleEn: 'Only two Takbeers instead of the full Adhan',
+              value: _shortMode,
+              onChanged: _notificationsEnabled
+                  ? (v) {
+                      setState(() => _shortMode = v);
+                      _autoSave();
+                    }
+                  : null,
+              isAr: isAr,
+              badge: _showNewBadge ? (isAr ? 'جديد' : 'New') : null,
+            ),
+            if (_shortMode) ...[
+              _buildDivider(),
+              _buildShortModeExplanation(isAr),
+            ],
+            _buildDivider(),
+            _buildStreamPickerRow(isAr),
+          ],
+        ),
+        const SizedBox(height: 16),
+        // الصلوات المُفَعَّلة
+        _buildSection(
+          icon: Icons.mosque_rounded,
+          titleAr: 'الصلوات المُفَعَّلة',
+          titleEn: 'Enabled Prayers',
+          isAr: isAr,
+          children: [_buildPerPrayerToggles(isAr)],
+        ),
+        const SizedBox(height: 16),
+        // صوت الأذان
+        _buildSoundSection(isAr),
+        const SizedBox(height: 16),
+        // مستوى الصوت
+        _buildSection(
+          icon: Icons.volume_up_rounded,
+          titleAr: 'مستوى الصوت',
+          titleEn: 'Volume',
+          isAr: isAr,
+          children: [_buildVolumeCard(isAr)],
+        ),
+      ],
+    );
+  }
+
+  // ─── Compact volume slider for reminder sounds ───────────────────────────
+
+  Widget _buildReminderVolumeSlider({
+    required double value,
+    required ValueChanged<double> onChanged,
+    required bool isAr,
+    required Color color,
+    required String labelAr,
+    required String labelEn,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+      child: Row(
+        children: [
+          Icon(Icons.volume_down_rounded, color: color, size: 20),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  isAr ? labelAr : labelEn,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: color,
+                    fontWeight: FontWeight.w600,
                   ),
-                ],
-                const SizedBox(height: 20),
-
-                // 1. Notifications & toggles
-                _buildSection(
-                  icon: Icons.notifications_active_rounded,
-                  titleAr: 'الأذان والإشعارات',
-                  titleEn: 'Adhan & Notifications',
-                  isAr: isAr,
-                  children: [
-                    _buildSwitchRow(
-                      icon: _notificationsEnabled
-                          ? Icons.notifications_active_rounded
-                          : Icons.notifications_off_rounded,
-                      iconColor: _notificationsEnabled ? AppColors.primary : Colors.grey,
-                      titleAr: 'تفعيل الأذان',
-                      titleEn: 'Enable Adhan',
-                      subtitleAr: 'تشغيل الأذان تلقائياً عند كل وقت صلاة',
-                      subtitleEn: 'Auto-play adhan at each prayer time',
-                      value: _notificationsEnabled,
-                      onChanged: (v) {
-                        setState(() => _notificationsEnabled = v);
-                        _autoSave();
-                      },
-                      isAr: isAr,
-                    ),
-                    _buildDivider(),
-                    _buildSwitchRow(
-                      icon: Icons.wb_twilight_rounded,
-                      iconColor: _includeFajr ? AppColors.primary : Colors.grey,
-                      titleAr: 'تضمين أذان الفجر',
-                      titleEn: 'Include Fajr Adhan',
-                      subtitleAr: 'أذان الفجر مختلف — قد تريد تعطيله ليلاً',
-                      subtitleEn: 'Fajr differs — disable at night if needed',
-                      value: _includeFajr,
-                      onChanged: _notificationsEnabled
-                          ? (v) {
-                              setState(() => _includeFajr = v);
-                              _autoSave();
-                            }
-                          : null,
-                      isAr: isAr,
-                    ),
-                    _buildDivider(),
-                    _buildSwitchRow(
-                      icon: Icons.compress_rounded,
-                      iconColor: _shortMode ? AppColors.secondary : Colors.grey,
-                      titleAr: 'الأذان المختصر',
-                      titleEn: 'Short Adhan (2 Takbeers)',
-                      subtitleAr: 'تكبيرتان فقط بدلاً من الأذان الكامل',
-                      subtitleEn: 'Only two Takbeers instead of the full Adhan',
-                      value: _shortMode,
-                      onChanged: _notificationsEnabled
-                          ? (v) {
-                              setState(() => _shortMode = v);
-                              _autoSave();
-                            }
-                          : null,
-                      isAr: isAr,
-                      badge: _showNewBadge ? (isAr ? 'جديد' : 'New') : null,
-                    ),
-                    if (_shortMode) ...[              _buildDivider(),
-                      _buildShortModeExplanation(isAr),
-                    ],
-                    _buildDivider(),
-                    _buildStreamPickerRow(isAr),
-                  ],
                 ),
-                const SizedBox(height: 16),
-
-                // 2. صوت الأذان — pick first, then adjust volume
-                _buildSoundSection(isAr),
-                const SizedBox(height: 16),
-
-                // 3. مستوى الصوت
-                _buildSection(
-                  icon: Icons.volume_up_rounded,
-                  titleAr: 'مستوى الصوت',
-                  titleEn: 'Volume',
-                  isAr: isAr,
-                  children: [_buildVolumeCard(isAr)],
+                SliderTheme(
+                  data: SliderTheme.of(context).copyWith(
+                    activeTrackColor: color,
+                    thumbColor: color,
+                    overlayColor: color.withOpacity(0.18),
+                    inactiveTrackColor: color.withOpacity(0.2),
+                    trackHeight: 3,
+                    thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 8),
+                  ),
+                  child: Slider(
+                    value: value,
+                    min: 0.0,
+                    max: 1.0,
+                    divisions: 10,
+                    label: '${(value * 100).round()}%',
+                    onChanged: onChanged,
+                  ),
                 ),
-                const SizedBox(height: 16),
-
-                // 4. التذكيرات
-                _buildSection(
-                  icon: Icons.alarm_rounded,
-                  titleAr: 'التذكيرات',
-                  titleEn: 'Reminders',
-                  isAr: isAr,
-                  children: [
-                    _buildSwitchRow(
-                      icon: Icons.timer_rounded,
-                      iconColor: _reminderEnabled ? Colors.orange : Colors.grey,
-                      titleAr: 'تذكير قبل موعد الصلاة',
-                      titleEn: 'Pre-Prayer Reminder',
-                      subtitleAr: 'تنبيه قبل وقت الصلاة بعدة دقائق',
-                      subtitleEn: 'Notify you a few minutes before prayer time',
-                      value: _reminderEnabled,
-                      onChanged: _notificationsEnabled
-                          ? (v) {
-                              setState(() => _reminderEnabled = v);
-                              _autoSave();
-                            }
-                          : null,
-                      isAr: isAr,
-                    ),
-                    if (_reminderEnabled) ...[
-                      _buildDivider(),
-                      _buildMinutesPicker(
-                        icon: Icons.timer_outlined,
-                        labelAr: 'وقت التذكير قبل الصلاة',
-                        labelEn: 'Reminder before prayer',
-                        value: _reminderMinutes,
-                        options: const [5, 10, 15, 20, 30],
-                        isAr: isAr,
-                        onChanged: (v) {
-                          setState(() => _reminderMinutes = v);
-                          _autoSave();
-                        },
-                      ),
-                    ],
-                    _buildDivider(),
-                    _buildSwitchRow(
-                      icon: Icons.access_alarm_rounded,
-                      iconColor: _iqamaEnabled ? Colors.teal : Colors.grey,
-                      titleAr: 'تنبيه وقت الإقامة',
-                      titleEn: 'Iqama Notification',
-                      subtitleAr: 'تنبيه عند موعد إقامة الصلاة',
-                      subtitleEn: 'Alert when it\'s time to start the prayer',
-                      value: _iqamaEnabled,
-                      onChanged: _notificationsEnabled
-                          ? (v) {
-                              setState(() => _iqamaEnabled = v);
-                              _autoSave();
-                            }
-                          : null,
-                      isAr: isAr,
-                    ),
-                    if (_iqamaEnabled) ...[
-                      _buildDivider(),
-                      _buildMinutesPicker(
-                        icon: Icons.hourglass_bottom_rounded,
-                        labelAr: 'الإقامة بعد الأذان بـ',
-                        labelEn: 'Iqama after Adhan by',
-                        value: _iqamaMinutes,
-                        options: const [5, 10, 15, 20, 25, 30],
-                        isAr: isAr,
-                        onChanged: (v) {
-                          setState(() => _iqamaMinutes = v);
-                          _autoSave();
-                        },
-                      ),
-                    ],
-                    _buildDivider(),
-                    _buildSwitchRow(
-                      icon: Icons.favorite_rounded,
-                      iconColor: _salawatEnabled ? Colors.pink : Colors.grey,
-                      titleAr: 'الصلاة على النبي ﷺ',
-                      titleEn: 'Salawat / Durood Reminder',
-                      subtitleAr: 'اللهم صلِّ وسلم وبارك على نبينا محمد ﷺ',
-                      subtitleEn: 'Reminder to send blessings on the Prophet ﷺ',
-                      value: _salawatEnabled,
-                      onChanged: (v) {
-                        setState(() => _salawatEnabled = v);
-                        _autoSave();
-                      },
-                      isAr: isAr,
-                    ),
-                    if (_salawatEnabled) ...[
-                      _buildDivider(),
-                      _buildMinutesPicker(
-                        icon: Icons.schedule_rounded,
-                        labelAr: 'كل كم دقيقة؟',
-                        labelEn: 'Every (minutes)',
-                        value: _salawatMinutes,
-                        options: const [15, 30, 60, 120],
-                        isAr: isAr,
-                        onChanged: (v) {
-                          setState(() => _salawatMinutes = v);
-                          _autoSave();
-                        },
-                      ),
-                    ],
-                  ],
-                ),
-                const SizedBox(height: 16),
-
-                // 5. Prayer calculation method
-                _buildSection(
-                  icon: Icons.calculate_rounded,
-                  titleAr: 'طريقة حساب المواقيت',
-                  titleEn: 'Prayer Calculation Method',
-                  isAr: isAr,
-                  children: [_buildMethodCard(isAr)],
-                ),
-                const SizedBox(height: 16),
-
-                // 6. Schedule
-                _buildSection(
-                  icon: Icons.calendar_month_rounded,
-                  titleAr: 'جدول الأذان',
-                  titleEn: 'Adhan Schedule',
-                  isAr: isAr,
-                  children: [_buildScheduleCard(isAr)],
-                ),
-                const SizedBox(height: 16),
-
-                // 7. Test
-                _buildSection(
-                  icon: Icons.science_rounded,
-                  titleAr: 'اختبار الأذان',
-                  titleEn: 'Test Adhan',
-                  isAr: isAr,
-                  children: [_buildTestCard(isAr)],
-                ),
-              ]),
+              ],
             ),
           ),
+          Icon(Icons.volume_up_rounded, color: color, size: 20),
         ],
       ),
+    );
+  }
+
+  // ─── Tab 2: التذكيرات ─────────────────────────────────────────────────────
+
+  Widget _buildRemindersTab(bool isAr) {
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 40),
+      children: [
+        _buildSection(
+          icon: Icons.alarm_rounded,
+          titleAr: 'التذكيرات',
+          titleEn: 'Reminders',
+          isAr: isAr,
+          children: [
+            _buildSwitchRow(
+              icon: Icons.timer_rounded,
+              iconColor: _reminderEnabled ? Colors.orange : Colors.grey,
+              titleAr: 'تذكير قبل موعد الصلاة',
+              titleEn: 'Pre-Prayer Reminder',
+              subtitleAr: 'تنبيه قبل وقت الصلاة بعدة دقائق',
+              subtitleEn: 'Notify you a few minutes before prayer time',
+              value: _reminderEnabled,
+              onChanged: _notificationsEnabled
+                  ? (v) {
+                      setState(() => _reminderEnabled = v);
+                      if (v) _previewRawSound('prayer_reminder_fajr', cutoffSeconds: 5, volume: _approachingVolume);
+                      _autoSave();
+                    }
+                  : null,
+              isAr: isAr,
+            ),
+            if (_reminderEnabled) ...[
+              _buildDivider(),
+              _buildMinutesPicker(
+                icon: Icons.timer_outlined,
+                labelAr: 'وقت التذكير قبل الصلاة',
+                labelEn: 'Reminder before prayer',
+                value: _reminderMinutes,
+                options: const [5, 10, 15, 20, 30],
+                isAr: isAr,
+                onChanged: (v) {
+                  setState(() => _reminderMinutes = v);
+                  _autoSave();
+                },
+              ),
+              _buildDivider(),
+              _buildReminderVolumeSlider(
+                value: _approachingVolume,
+                onChanged: (v) {
+                  setState(() => _approachingVolume = v);
+                  _autoSave();
+                },
+                isAr: isAr,
+                color: Colors.orange,
+                labelAr: 'صوت تذكير اقتراب الصلاة',
+                labelEn: 'Pre-prayer reminder volume',
+              ),
+            ],
+            _buildDivider(),
+            _buildSwitchRow(
+              icon: Icons.access_alarm_rounded,
+              iconColor: _iqamaEnabled ? Colors.teal : Colors.grey,
+              titleAr: 'تنبيه وقت الإقامة',
+              titleEn: 'Iqama Notification',
+              subtitleAr: 'تنبيه عند موعد إقامة الصلاة',
+              subtitleEn: 'Alert when it\'s time to start the prayer',
+              value: _iqamaEnabled,
+              onChanged: _notificationsEnabled
+                  ? (v) {
+                      setState(() => _iqamaEnabled = v);
+                      if (v) _previewRawSound('iqama_sound', cutoffSeconds: 6, volume: _iqamaVolume);
+                      _autoSave();
+                    }
+                  : null,
+              isAr: isAr,
+            ),
+            if (_iqamaEnabled) ...[
+              _buildDivider(),
+              _buildPerPrayerIqamaGrid(isAr),
+              _buildDivider(),
+              _buildReminderVolumeSlider(
+                value: _iqamaVolume,
+                onChanged: (v) {
+                  setState(() => _iqamaVolume = v);
+                  _autoSave();
+                },
+                isAr: isAr,
+                color: Colors.teal,
+                labelAr: 'صوت تنبيه الإقامة',
+                labelEn: 'Iqama notification volume',
+              ),
+            ],
+            _buildDivider(),
+            _buildSwitchRow(
+              icon: Icons.favorite_rounded,
+              iconColor: _salawatEnabled ? Colors.pink : Colors.grey,
+              titleAr: 'الصلاة على النبي ﷺ',
+              titleEn: 'Salawat / Durood Reminder',
+              subtitleAr: 'اللهم صلِّ وسلم وبارك على نبينا محمد ﷺ',
+              subtitleEn: 'Reminder to send blessings on the Prophet ﷺ',
+              value: _salawatEnabled,
+              onChanged: (v) {
+                setState(() => _salawatEnabled = v);
+                if (v) _previewRawSound(_salawatSoundId, cutoffSeconds: 8, volume: _salawatVolume);
+                _autoSave();
+              },
+              isAr: isAr,
+            ),
+            if (_salawatEnabled) ...[
+              _buildDivider(),
+              _buildMinutesPicker(
+                icon: Icons.schedule_rounded,
+                labelAr: 'كل كم دقيقة؟',
+                labelEn: 'Every (minutes)',
+                value: _salawatMinutes,
+                options: const [15, 30, 60, 120],
+                isAr: isAr,
+                onChanged: (v) {
+                  setState(() => _salawatMinutes = v);
+                  _autoSave();
+                },
+              ),
+              _buildDivider(),
+              _buildSalawatSoundPicker(isAr),
+              _buildDivider(),
+              _buildReminderVolumeSlider(
+                value: _salawatVolume,
+                onChanged: (v) {
+                  setState(() => _salawatVolume = v);
+                  _autoSave();
+                },
+                isAr: isAr,
+                color: Colors.pink,
+                labelAr: 'صوت الصلاة على النبي ﷺ',
+                labelEn: 'Salawat reminder volume',
+              ),
+            ],
+          ],
+        ),
+      ],
+    );
+  }
+
+  // ─── Tab 3: المواقيت ──────────────────────────────────────────────────────
+
+  Widget _buildPrayerTimesTab(bool isAr) {
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 40),
+      children: [
+        _buildSection(
+          icon: Icons.calculate_rounded,
+          titleAr: 'طريقة حساب المواقيت',
+          titleEn: 'Prayer Calculation Method',
+          isAr: isAr,
+          children: [_buildMethodCard(isAr)],
+        ),
+        const SizedBox(height: 16),
+        _buildSection(
+          icon: Icons.calendar_month_rounded,
+          titleAr: 'جدول الأذان',
+          titleEn: 'Adhan Schedule',
+          isAr: isAr,
+          children: [_buildScheduleCard(isAr)],
+        ),
+        const SizedBox(height: 16),
+        _buildSection(
+          icon: Icons.science_rounded,
+          titleAr: 'اختبار الأذان',
+          titleEn: 'Test Adhan',
+          isAr: isAr,
+          children: [_buildTestCard(isAr)],
+        ),
+      ],
     );
   }
 
@@ -698,131 +850,125 @@ class _AdhanSettingsScreenState extends State<AdhanSettingsScreen>
   // AppBar
   // ═══════════════════════════════════════════════════════════════════════
 
-  Widget _buildAppBar(bool isAr) {
+  Widget _buildAppBar(bool isAr, bool innerBoxIsScrolled) {
     return SliverAppBar(
-      expandedHeight: 160,
       pinned: true,
-      stretch: true,
-      backgroundColor: AppColors.primary,
-      flexibleSpace: FlexibleSpaceBar(
-        stretchModes: const [
-          StretchMode.zoomBackground,
-          StretchMode.blurBackground,
-        ],
-        background: Container(
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                AppColors.gradientStart,
-                AppColors.gradientMid,
-                AppColors.gradientEnd,
-              ],
+      elevation: 0,
+      forceElevated: innerBoxIsScrolled,
+      // Full gradient fills the toolbar + tabbar area
+      backgroundColor: const Color(0xFF064428),
+      automaticallyImplyLeading: false,
+      toolbarHeight: 60,
+      // ── flexibleSpace: gradient background covering toolbar + tabbar ─
+      flexibleSpace: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              Color(0xFF064428),
+              Color(0xFF0D5E3A),
+              Color(0xFF1B7A4A),
+            ],
+            stops: [0.0, 0.5, 1.0],
+          ),
+        ),
+      ),
+      // ── Toolbar content ───────────────────────────────────────────────
+      title: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            isAr ? 'الأذان والصلاة' : 'Adhan & Prayer',
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 16,
+              fontWeight: FontWeight.w700,
+              height: 1.2,
+              letterSpacing: 0,
             ),
           ),
-          child: Stack(
-            children: [
-              // Positioned(
-              //   right: -30, top: -30,
-              //   child: Container(width: 160, height: 160,
-              //     decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.white.withValues(alpha: 0.06))),
-              // ),
-              // Positioned(
-              //   right: 40, top: 60,
-              //   child: Container(width: 80, height: 80,
-              //     decoration: BoxDecoration(shape: BoxShape.circle, color: AppColors.secondary.withValues(alpha: 0.15))),
-              // ),
-              // Positioned(
-              //   left: -20, bottom: -20,
-              //   child: Container(width: 100, height: 100,
-              //     decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.white.withValues(alpha: 0.04))),
-              // ),
-              // ── Basmala watermark overlay ─────────────────────────────────
-              Positioned.fill(
-                child: IgnorePointer(
-                  child: Opacity(
-                    opacity: 0.06,
-                    child: Center(
-                      child: Text(
-                        '﷽',
-                        textDirection: TextDirection.rtl,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 90,
-                          fontFamily: 'Scheherazade',
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              SafeArea(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: [
-                      Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.all(10),
-                            decoration: BoxDecoration(
-                              color: AppColors.secondary.withValues(alpha: 0.25),
-                              borderRadius: BorderRadius.circular(14),
-                            ),
-                            child: const Icon(Icons.mosque_rounded, color: Colors.white, size: 24),
-                          ),
-                          const SizedBox(width: 14),
-                          // Expanded(
-                          //   child: Column(
-                          //     crossAxisAlignment: CrossAxisAlignment.start,
-                          //     children: [
-                          //       Text(
-                          //         isAr ? 'إعدادات الأذان والصلاة' : 'Adhan & Prayer Settings',
-                          //         style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
-                          //       ),
-                          //       const SizedBox(height: 3),
-                          //       Text(
-                          //         isAr ? 'خصّص تجربة الأذان والإشعارات' : 'Customize your adhan experience',
-                          //         style: TextStyle(color: Colors.white.withValues(alpha: 0.75), fontSize: 12),
-                          //       ),
-                          //     ],
-                          //   ),
-                          // ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
+          Text(
+            isAr ? 'خصّص الأذان والتذكيرات' : 'Customize adhan & reminders',
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: 0.65),
+              fontSize: 11,
+              height: 1.3,
+              fontWeight: FontWeight.w400,
+            ),
           ),
+        ],
+      ),
+      leading: IconButton(
+        icon: Icon(
+          isAr ? Icons.arrow_forward_ios_rounded : Icons.arrow_back_ios_rounded,
+          color: Colors.white,
+          size: 19,
         ),
-        title: Text(
-          isAr ? 'الأذان والصلاة' : 'Adhan & Prayer',
-          style: const TextStyle(color: Colors.white, fontSize: 16),
-        ),
-        titlePadding: const EdgeInsets.only(left: 60, bottom: 16),
-        collapseMode: CollapseMode.parallax,
+        onPressed: () => Navigator.of(context).maybePop(),
       ),
       actions: [
         if (_isSaving)
           const Padding(
             padding: EdgeInsets.all(16),
-            child: SizedBox(width: 20, height: 20,
-              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)),
+            child: SizedBox(
+              width: 20, height: 20,
+              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+            ),
           )
         else
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12),
+            padding: const EdgeInsets.symmetric(horizontal: 14),
             child: Tooltip(
               message: isAr ? 'الحفظ تلقائي' : 'Auto-saved',
-              child: const Icon(Icons.cloud_done_rounded, color: Colors.white70, size: 22),
+              child: const Icon(Icons.cloud_done_rounded, color: Colors.white60, size: 21),
             ),
           ),
       ],
+      // ── Tab bar with pill indicator ───────────────────────────────────
+      bottom: PreferredSize(
+        preferredSize: const Size.fromHeight(48),
+        child: Container(
+          // Match exact AppBar gradient so TabBar blends seamlessly
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                Color(0xFF064428),
+                Color(0xFF0D5E3A),
+                Color(0xFF1B7A4A),
+              ],
+              stops: [0.0, 0.5, 1.0],
+            ),
+          ),
+          child: TabBar(
+            controller: _tabController,
+            dividerColor: Colors.transparent,
+            indicator: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.18),
+              borderRadius: BorderRadius.circular(30),
+              border: Border.all(
+                color: Colors.white.withValues(alpha: 0.25),
+                width: 1.0,
+              ),
+            ),
+            indicatorSize: TabBarIndicatorSize.tab,
+            indicatorPadding: const EdgeInsets.symmetric(horizontal: 6, vertical: 5),
+            splashBorderRadius: BorderRadius.circular(30),
+            labelColor: Colors.white,
+            unselectedLabelColor: Colors.white54,
+            labelStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+            unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w400, fontSize: 13),
+            tabs: [
+              Tab(text: isAr ? '🕌  الأذان' : '🕌  Adhan'),
+              Tab(text: isAr ? '🔔  التذكيرات' : '🔔  Reminders'),
+              Tab(text: isAr ? '🕐  المواقيت' : '🕐  Times'),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
@@ -1261,6 +1407,313 @@ class _AdhanSettingsScreenState extends State<AdhanSettingsScreen>
               )),
             ]),
           ),
+        ],
+      ),
+    );
+  }
+
+  // ─── Preview helper: play any raw-resource sound file ───────────────────
+  /// Preview a raw resource (res/raw) sound file by name — stops after [cutoffSeconds].
+  /// Also auto-stops when the native player signals completion via [_handleNativeCallback].
+  Future<void> _previewRawSound(String rawName, {int cutoffSeconds = 8, double? volume}) async {
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return;
+    if (_isPreviewPlaying) {
+      await _stopPreview();
+      if (_previewingId == 'raw_$rawName') return;
+    }
+    setState(() {
+      _isPreviewPlaying = true;
+      _previewingId = 'raw_$rawName';
+    });
+    try {
+      await _adhanChannel.invokeMethod('playAdhan', {
+        'soundName': rawName,
+        'volume': volume ?? _adhanVolume,
+      });
+      _shortModeTimer?.cancel();
+      _shortModeTimer = Timer(Duration(seconds: cutoffSeconds), _stopPreview);
+    } catch (e) {
+      debugPrint('Raw preview error: $e');
+      if (mounted) setState(() { _isPreviewPlaying = false; _previewingId = null; });
+    }
+  }
+
+  // ─── Per-prayer adhan toggles ─────────────────────────────────────────────
+  Widget _buildPerPrayerToggles(bool isAr) {
+    final prayers = [
+      (nameAr: 'الفجر',  nameEn: 'Fajr',    icon: Icons.wb_twilight_rounded,   color: const Color(0xFF5C8BE8)),
+      (nameAr: 'الظهر',  nameEn: 'Dhuhr',   icon: Icons.wb_sunny_rounded,      color: const Color(0xFFE8A534)),
+      (nameAr: 'العصر',  nameEn: 'Asr',     icon: Icons.wb_cloudy_rounded,     color: const Color(0xFF4CAF50)),
+      (nameAr: 'المغرب', nameEn: 'Maghrib', icon: Icons.nights_stay_rounded,   color: const Color(0xFFFF7043)),
+      (nameAr: 'العشاء', nameEn: 'Isha',    icon: Icons.nightlight_round,      color: const Color(0xFF7B61FF)),
+    ];
+    final enabled = [_includeFajr, _enableDhuhr, _enableAsr, _enableMaghrib, _enableIsha];
+    final setters = [
+      (bool v) { setState(() => _includeFajr   = v); },
+      (bool v) { setState(() => _enableDhuhr   = v); },
+      (bool v) { setState(() => _enableAsr     = v); },
+      (bool v) { setState(() => _enableMaghrib = v); },
+      (bool v) { setState(() => _enableIsha    = v); },
+    ];
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(4, 8, 4, 4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(bottom: 12, left: 4, right: 4),
+            child: Text(
+              isAr
+                  ? 'اختر الصلوات التي تريد أذاناً لكل منها:'
+                  : 'Select prayers you want adhan notifications for:',
+              style: const TextStyle(fontSize: 13, color: AppColors.textSecondary, height: 1.4),
+            ),
+          ),
+          Row(
+            children: List.generate(prayers.length, (i) {
+              final on = enabled[i];
+              final p = prayers[i];
+              return Expanded(
+                child: GestureDetector(
+                  onTap: _notificationsEnabled
+                      ? () {
+                          setters[i](!on);
+                          _autoSave();
+                        }
+                      : null,
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 220),
+                    curve: Curves.easeInOut,
+                    margin: EdgeInsetsDirectional.only(
+                      end: i < prayers.length - 1 ? 8 : 0,
+                    ),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    decoration: BoxDecoration(
+                      color: on
+                          ? p.color.withValues(alpha: 0.13)
+                          : Colors.grey.withValues(alpha: 0.05),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(
+                        color: on
+                            ? p.color.withValues(alpha: 0.7)
+                            : Colors.grey.withValues(alpha: 0.25),
+                        width: on ? 1.8 : 1.0,
+                      ),
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        AnimatedContainer(
+                          duration: const Duration(milliseconds: 220),
+                          padding: const EdgeInsets.all(7),
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: on
+                                ? p.color.withValues(alpha: 0.18)
+                                : Colors.grey.withValues(alpha: 0.10),
+                          ),
+                          child: Icon(
+                            p.icon,
+                            size: 18,
+                            color: on ? p.color : Colors.grey.withValues(alpha: 0.5),
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          isAr ? p.nameAr : p.nameEn,
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: on ? FontWeight.w700 : FontWeight.w400,
+                            color: on ? p.color : Colors.grey,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 4),
+                        Icon(
+                          on ? Icons.check_circle_rounded : Icons.circle_outlined,
+                          size: 13,
+                          color: on ? p.color : Colors.grey.withValues(alpha: 0.4),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            }),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ─── Per-prayer iqama minutes grid ────────────────────────────────────────
+  Widget _buildPerPrayerIqamaGrid(bool isAr) {
+    final rows = [
+      (nameAr: 'فجر',   nameEn: 'Fajr',    icon: Icons.wb_twilight_rounded, color: const Color(0xFF5C8BE8),
+       get: () => _iqamaMinutesFajr,    set: (int v) { setState(() => _iqamaMinutesFajr = v); }),
+      (nameAr: 'ظهر',   nameEn: 'Dhuhr',   icon: Icons.wb_sunny_rounded,    color: const Color(0xFFE8A534),
+       get: () => _iqamaMinutesDhuhr,   set: (int v) { setState(() => _iqamaMinutesDhuhr = v); }),
+      (nameAr: 'عصر',   nameEn: 'Asr',     icon: Icons.wb_cloudy_rounded,   color: const Color(0xFF4CAF50),
+       get: () => _iqamaMinutesAsr,     set: (int v) { setState(() => _iqamaMinutesAsr = v); }),
+      (nameAr: 'مغرب',  nameEn: 'Maghrib', icon: Icons.nights_stay_rounded, color: const Color(0xFFFF7043),
+       get: () => _iqamaMinutesMaghrib, set: (int v) { setState(() => _iqamaMinutesMaghrib = v); }),
+      (nameAr: 'عشاء',  nameEn: 'Isha',    icon: Icons.nightlight_round,    color: const Color(0xFF7B61FF),
+       get: () => _iqamaMinutesIsha,    set: (int v) { setState(() => _iqamaMinutesIsha = v); }),
+    ];
+    const options = [5, 10, 15, 20, 25, 30];
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(bottom: 10, left: 4),
+            child: Text(
+              isAr
+                  ? 'الإقامة بعد الأذان بـ (دقيقة) — لكل صلاة:'
+                  : 'Iqama after adhan (minutes) — per prayer:',
+              style: const TextStyle(fontSize: 13, color: AppColors.textSecondary),
+            ),
+          ),
+          ...rows.map((r) => Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: Row(
+              children: [
+                Icon(r.icon, size: 16, color: r.color),
+                const SizedBox(width: 6),
+                SizedBox(
+                  width: 44,
+                  child: Text(
+                    isAr ? r.nameAr : r.nameEn,
+                    style: TextStyle(fontSize: 13, color: r.color, fontWeight: FontWeight.w600),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Wrap(
+                    spacing: 6,
+                    children: options.map((opt) {
+                      final selected = r.get() == opt;
+                      return GestureDetector(
+                        onTap: () {
+                          r.set(opt);
+                          _autoSave();
+                        },
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 180),
+                          width: 36,
+                          height: 32,
+                          decoration: BoxDecoration(
+                            color: selected ? r.color.withValues(alpha: 0.2) : Colors.transparent,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: selected ? r.color : Colors.grey.withValues(alpha: 0.3),
+                              width: selected ? 1.5 : 1.0,
+                            ),
+                          ),
+                          alignment: Alignment.center,
+                          child: Text(
+                            '$opt',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: selected ? FontWeight.bold : FontWeight.normal,
+                              color: selected ? r.color : AppColors.textSecondary,
+                            ),
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ),
+              ],
+            ),
+          )),
+        ],
+      ),
+    );
+  }
+
+  // ─── Salawat sound picker ─────────────────────────────────────────────────
+  Widget _buildSalawatSoundPicker(bool isAr) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(bottom: 10, left: 4),
+            child: Text(
+              isAr ? 'اختر صوت التذكير:' : 'Choose reminder sound:',
+              style: const TextStyle(fontSize: 13, color: AppColors.textSecondary),
+            ),
+          ),
+          ...SalawatSounds.all.map((s) {
+            final selected = _salawatSoundId == s.id;
+            final isPlaying = _isPreviewPlaying && _previewingId == 'raw_${s.id}';
+            return GestureDetector(
+              onTap: () {
+                setState(() => _salawatSoundId = s.id);
+                _autoSave();
+              },
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 180),
+                margin: const EdgeInsets.only(bottom: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                decoration: BoxDecoration(
+                  color: selected
+                      ? Colors.pink.withValues(alpha: 0.1)
+                      : Colors.transparent,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: selected
+                        ? Colors.pink.withValues(alpha: 0.6)
+                        : Colors.grey.withValues(alpha: 0.25),
+                    width: selected ? 1.5 : 1.0,
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      selected ? Icons.radio_button_on_rounded : Icons.radio_button_off_rounded,
+                      color: selected ? Colors.pink : Colors.grey,
+                      size: 20,
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: isAr
+                            ? CrossAxisAlignment.end
+                            : CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            isAr ? s.nameAr : s.nameEn,
+                            textDirection: isAr ? TextDirection.rtl : TextDirection.ltr,
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+                              color: selected ? Colors.pink : AppColors.textPrimary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    IconButton(
+                      icon: Icon(
+                        isPlaying ? Icons.stop_circle_rounded : Icons.play_circle_outline_rounded,
+                        color: Colors.pink,
+                        size: 26,
+                      ),
+                      onPressed: () => _previewRawSound(s.id, cutoffSeconds: 10, volume: _salawatVolume),
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }),
         ],
       ),
     );

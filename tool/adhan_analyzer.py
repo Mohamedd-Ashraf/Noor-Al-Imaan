@@ -39,6 +39,7 @@ from matplotlib.colors import LogNorm
 import librosa
 import librosa.display
 import sounddevice as sd
+import requests
 
 # ─── Sound definitions ────────────────────────────────────────────────────────
 
@@ -56,110 +57,56 @@ SOUNDS = [
         "id":          "adhan_1",
         "label":       "أذان المسجد الحرام (مكة) — محلي",
         "local":       RAW_DIR / "adhan_1.mp3",
-        "cutoff":      13,
-    },
-    {
-        "id":          "adhan_2",
-        "label":       "أذان محلي 2",
-        "local":       RAW_DIR / "adhan_2.mp3",
-        "cutoff":      13,
-    },
-    {
-        "id":          "adhan_3",
-        "label":       "أذان محلي 3",
-        "local":       RAW_DIR / "adhan_3.mp3",
-        "cutoff":      13,
-    },
-    {
-        "id":          "adhan_4",
-        "label":       "أذان محلي 4",
-        "local":       RAW_DIR / "adhan_4.mp3",
-        "cutoff":      13,
-    },
-    {
-        "id":          "adhan_5",
-        "label":       "أذان محلي 5",
-        "local":       RAW_DIR / "adhan_5.mp3",
-        "cutoff":      13,
-    },
-    {
-        "id":          "adhan_6",
-        "label":       "أذان محلي 6",
-        "local":       RAW_DIR / "adhan_6.mp3",
-        "cutoff":      13,
-    },
-    {
-        "id":          "adhan_7",
-        "label":       "أذان محلي 7",
-        "local":       RAW_DIR / "adhan_7.mp3",
-        "cutoff":      13,
-    },
-    {
-        "id":          "adhan_8",
-        "label":       "أذان محلي 8",
-        "local":       RAW_DIR / "adhan_8.mp3",
-        "cutoff":      13,
-    },
-    {
-        "id":          "adhan_9",
-        "label":       "أذان محلي 9",
-        "local":       RAW_DIR / "adhan_9.mp3",
-        "cutoff":      13,
-    },
-    {
-        "id":          "adhan_10",
-        "label":       "أذان محلي 10",
-        "local":       RAW_DIR / "adhan_10.mp3",
-        "cutoff":      13,
+        "cutoff":      6,
     },
     # ── online ─────────────────────────────────────────────────────────────────
     {
         "id":          "online_ahmed_imadi",
         "label":       "Ahmed Al-Imadi — Qatar",
         "url":         BASE_URL + "Ahmed_al_Imadi_Adhan.mp3",
-        "cutoff":      13,
+        "cutoff":      5,
     },
     {
         "id":          "online_majed_hamathani",
         "label":       "Majed Al-Hamathani — Saudi Arabia",
         "url":         BASE_URL + "Majed_al_Hamathani_Adhan.mp3",
-        "cutoff":      12,
+        "cutoff":      9,
     },
     {
         "id":          "online_afasy_fajr",
         "label":       "Mishary Al-Afasy (Fajr) — Kuwait",
         "url":         BASE_URL + "Mishary_Rashid_al_Afasy_Fajr_Adhan.mp3",
-        "cutoff":      15,
+        "cutoff":      5,
     },
     {
         "id":          "online_mokhtar_slimane",
         "label":       "Mokhtar Hadj Slimane — Algeria",
         "url":         BASE_URL + "Mokhtar_Hadj_Slimane_Adhan.mp3",
-        "cutoff":      13,
+        "cutoff":      16,
     },
     {
         "id":          "online_nasser_qatami",
         "label":       "Nasser Al-Qatami Adhan",
         "url":         BASE_URL + "Nasser_al_Qatami_Adhan.mp3",
-        "cutoff":      13,
+        "cutoff":      13,  # not yet measured — re-test after re-download
     },
     {
         "id":          "online_ahmed_imadi_dua",
         "label":       "Ahmed Al-Imadi Adhan + Dua",
         "url":         BASE_URL + "Ahmed_al_Imadi_Adhan_with_Dua.mp3",
-        "cutoff":      14,
+        "cutoff":      5,
     },
     {
         "id":          "online_majed_hamathani_dua",
         "label":       "Majed Al-Hamathani Adhan + Dua",
         "url":         BASE_URL + "Majed_al_Hamathani_Adhan_with_Dua.mp3",
-        "cutoff":      13,
+        "cutoff":      9,
     },
     {
         "id":          "online_nasser_qatami_dua",
         "label":       "Nasser Al-Qatami Adhan + Dua",
         "url":         BASE_URL + "Nasser_al_Qatami_Adhan_with_Dua.mp3",
-        "cutoff":      14,
+        "cutoff":      13,
     },
 ]
 
@@ -173,21 +120,54 @@ def resolve_path(sound: dict) -> pathlib.Path:
         if not p.exists():
             raise FileNotFoundError(f"Local sound not found: {p}")
         return p
-    # Online → download once to cache
+    # Online → download once to cache using requests (handles redirects + binary correctly)
     cache_path = DOWNLOAD_DIR / f"{sound['id']}.mp3"
     if not cache_path.exists():
         url = sound["url"]
         print(f"  Downloading {url}…")
-        with urllib.request.urlopen(url, timeout=30) as r, open(cache_path, "wb") as f:
-            shutil.copyfileobj(r, f)
-        print(f"  Saved to {cache_path}")
+        r = requests.get(url, stream=True,
+                         headers={"User-Agent": "Mozilla/5.0"},
+                         timeout=90)
+        r.raise_for_status()
+        with open(cache_path, "wb") as f:
+            for chunk in r.iter_content(65536):
+                f.write(chunk)
+        size_kb = cache_path.stat().st_size / 1024
+        print(f"  Saved to {cache_path}  ({size_kb:.1f} KB)")
     return cache_path
 
 
 def load_audio(path: pathlib.Path):
-    """Return (y, sr) — mono, native sample rate."""
-    y, sr = librosa.load(str(path), sr=None, mono=True)
-    return y, sr
+    """Return (y, sr) — mono, native sample rate.
+    Falls back to ffmpeg (via imageio-ffmpeg) for formats soundfile can't handle (e.g. m4a, aac).
+    """
+    import warnings
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            y, sr = librosa.load(str(path), sr=None, mono=True)
+        return y, sr
+    except Exception as primary_err:
+        # Try converting via ffmpeg to a temp wav, then load that
+        try:
+            import imageio_ffmpeg, subprocess, tempfile
+            ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
+            tmp = pathlib.Path(tempfile.mktemp(suffix=".wav"))
+            result = subprocess.run(
+                [ffmpeg_exe, "-y", "-i", str(path), "-ac", "1", "-ar", "22050", str(tmp)],
+                capture_output=True, timeout=120
+            )
+            if result.returncode != 0 or not tmp.exists():
+                raise RuntimeError(f"ffmpeg failed: {result.stderr.decode()}")
+            y, sr = librosa.load(str(tmp), sr=None, mono=True)
+            tmp.unlink(missing_ok=True)
+            return y, sr
+        except Exception as ffmpeg_err:
+            raise RuntimeError(
+                f"Could not load {path.name}.\n"
+                f"  Primary error: {primary_err}\n"
+                f"  ffmpeg fallback error: {ffmpeg_err}"
+            ) from None
 
 # ─── Playback ────────────────────────────────────────────────────────────────
 
@@ -378,9 +358,21 @@ def print_menu():
 
 def main():
     if len(sys.argv) > 1:
-        sid = sys.argv[1]
+        arg = sys.argv[1]
+        # If the argument is an existing file path, open it directly
+        p = pathlib.Path(arg)
+        if p.exists() and p.is_file():
+            custom = {
+                "id":     p.stem,
+                "label":  p.name,
+                "local":  str(p),
+                "cutoff": int(sys.argv[2]) if len(sys.argv) > 2 else 10,
+            }
+            open_analyzer(custom)
+            return
+        sid = arg
         if sid not in SOUND_BY_ID:
-            print(f"Unknown sound id: {sid}")
+            print(f"Unknown sound id or file not found: {sid}")
             print("Available:", ", ".join(SOUND_BY_ID))
             sys.exit(1)
         open_analyzer(SOUND_BY_ID[sid])

@@ -53,6 +53,8 @@ class AudioEdition {
             : identifier;
 
     if (best == identifier) return identifier;
+    // In Arabic UI, the Arabic name alone is sufficient — skip the identifier suffix.
+    if (isArabicUi) return best;
     return '$best ($identifier)';
   }
 

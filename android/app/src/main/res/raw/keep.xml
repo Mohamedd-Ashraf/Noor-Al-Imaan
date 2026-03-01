@@ -6,4 +6,10 @@
   in release builds because they appear "unreferenced".
 -->
 <resources xmlns:tools="http://schemas.android.com/tools"
-    tools:keep="@raw/adhan,@raw/adhan_1,@raw/adhan_2,@raw/adhan_3,@raw/adhan_4,@raw/adhan_5,@raw/adhan_6,@raw/adhan_7,@raw/adhan_8,@raw/adhan_9,@raw/adhan_10,@raw/wird_reminder" />
+    tools:keep="@raw/adhan_1,@raw/wird_reminder,
+               @raw/iqama_sound,
+               @raw/short_adhan,
+               @raw/prayer_approaching_dhuhr,@raw/prayer_approaching_maghrib,
+               @raw/prayer_reminder_fajr,@raw/prayer_reminder_dhuhr,
+               @raw/prayer_reminder_asr,@raw/prayer_reminder_maghrib,@raw/prayer_reminder_isha,
+               @raw/salawat_1,@raw/salawat_2,@raw/salawat_3,@raw/salawat_4,@raw/salawat_5" />

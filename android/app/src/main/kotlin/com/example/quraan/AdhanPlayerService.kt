@@ -67,6 +67,8 @@ class AdhanPlayerService : Service() {
         const val EXTRA_SHORT_CUTOFF_SECONDS = "shortCutoffSeconds"
         /** True → use STREAM_ALARM (alarm volume). False → STREAM_RING (ring volume, default). */
         const val EXTRA_USE_ALARM_STREAM     = "useAlarmStream"
+        /** For online sounds: direct streaming URL used if cache file is missing. */
+        const val EXTRA_ONLINE_URL           = "onlineUrl"
         const val ACTION_STOP               = "com.example.quraan.STOP_ADHAN"
         private const val TAG               = "AdhanPlayerService"
         /** Default fallback cutoff when none provided (≈ 2 takbeers). */
@@ -98,6 +100,7 @@ class AdhanPlayerService : Service() {
         val shortCutoffSeconds = intent?.getIntExtra(EXTRA_SHORT_CUTOFF_SECONDS, DEFAULT_SHORT_CUTOFF_SECONDS)
                                    ?: DEFAULT_SHORT_CUTOFF_SECONDS
         val useAlarmStream     = intent?.getBooleanExtra(EXTRA_USE_ALARM_STREAM, false) ?: false
+        val onlineUrl          = intent?.getStringExtra(EXTRA_ONLINE_URL)?.takeIf { it.isNotBlank() }
 
         // Guard: if already playing, stop first (e.g. AlarmManager + in-app both fire).
         if (isPlaying) {
@@ -106,7 +109,7 @@ class AdhanPlayerService : Service() {
 
         // Must call startForeground() within 5 s of startForegroundService()
         startForeground(NOTIF_ID, buildNotification())
-        playAdhan(soundName, isShortMode, shortCutoffSeconds, useAlarmStream)
+        playAdhan(soundName, isShortMode, shortCutoffSeconds, useAlarmStream, onlineUrl)
         return START_NOT_STICKY
     }
 
@@ -193,7 +196,7 @@ class AdhanPlayerService : Service() {
         shortModeRunnable = null
     }
 
-    private fun playAdhan(soundName: String, shortMode: Boolean = false, shortCutoffSeconds: Int = DEFAULT_SHORT_CUTOFF_SECONDS, useAlarmStream: Boolean = false) {
+    private fun playAdhan(soundName: String, shortMode: Boolean = false, shortCutoffSeconds: Int = DEFAULT_SHORT_CUTOFF_SECONDS, useAlarmStream: Boolean = false, onlineUrl: String? = null) {
         cancelShortModeTimer()
         stopAdhan()
         try {
@@ -225,17 +228,26 @@ class AdhanPlayerService : Service() {
             player.setAudioAttributes(audioAttrs)
 
             // ── Resolve audio source ───────────────────────────────────────────
-            // Online sounds are cached locally. If the cached file exists, use it.
-            // If not found (cache cleared / storage pressure), fall back to adhan_1.
+            // Priority order for online sounds:
+            //  1. Cached local file (→ instant, no network needed)
+            //  2. Direct URL streaming (→ needs network, no cache required)
+            //  3. Offline fallback adhan_1 (→ used only when URL is also absent)
             var sourceLoaded = false
+            var isStreamingFromUrl = false
             if (soundName.startsWith("online_")) {
                 val cachedFile = File("${filesDir.absolutePath}/adhan_cache/${soundName}.mp3")
                 if (cachedFile.exists() && cachedFile.length() > 1024) {
                     player.setDataSource(cachedFile.absolutePath)
                     sourceLoaded = true
-                    Log.d(TAG, "Adhan: playing cached online file: ${cachedFile.name}")
+                    Log.d(TAG, "Adhan: playing cached file: ${cachedFile.name}")
+                } else if (!onlineUrl.isNullOrBlank()) {
+                    // Stream directly from URL — works even without a pre-downloaded cache.
+                    player.setDataSource(onlineUrl)
+                    sourceLoaded = true
+                    isStreamingFromUrl = true
+                    Log.d(TAG, "Adhan: streaming from URL (no cache): $onlineUrl")
                 } else {
-                    Log.w(TAG, "Adhan: cached file missing for '$soundName' — falling back to adhan_1")
+                    Log.w(TAG, "Adhan: no cache and no URL for '$soundName' — falling back to adhan_1")
                 }
             }
 
@@ -271,43 +283,58 @@ class AdhanPlayerService : Service() {
                 true
             }
 
-            player.prepare()
-
-            // Request audio focus BEFORE starting playback.
-            // If focus is denied (e.g. ongoing call), abort gracefully.
-            if (!requestAudioFocus(audioAttrs)) {
-                Log.w(TAG, "Audio focus denied — aborting adhan playback")
-                player.release()
-                releaseWakeLock()
-                stopSelf()
-                return
-            }
-
             val prefs  = getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
             // Flutter stores doubles as Strings in SharedPreferences on Android.
             val volume = prefs.getString("flutter.adhan_volume", null)
                 ?.toFloatOrNull()
                 ?.coerceIn(0.0f, 1.0f)
                 ?: 1.0f
-            player.setVolume(volume, volume)
-            player.start()
-            mediaPlayer = player
-            isPlaying = true
-            registerVolumeReceiver()
-            Log.d(TAG, "Adhan playing: $soundName (shortMode=$shortMode, cutoff=${shortCutoffSeconds}s)")
 
-            // Short mode: auto-stop after the per-sound cutoff (approx. 2 takbeers).
-            if (shortMode) {
-                val cutoffMs = shortCutoffSeconds * 1000L
-                val handler  = Handler(Looper.getMainLooper())
-                val runnable = Runnable {
-                    Log.d(TAG, "Short mode: auto-stopping adhan after ${shortCutoffSeconds}s")
-                    stopAdhan()
-                    stopSelf()
+            /** Common post-prepare: set volume, start, register receiver, set short-mode timer. */
+            fun startPlayback(mp: MediaPlayer) {
+                mp.setVolume(volume, volume)
+                mp.start()
+                mediaPlayer = mp
+                isPlaying = true
+                registerVolumeReceiver()
+                Log.d(TAG, "Adhan playing: $soundName (shortMode=$shortMode, cutoff=${shortCutoffSeconds}s, streaming=$isStreamingFromUrl)")
+                if (shortMode) {
+                    val cutoffMs = shortCutoffSeconds * 1000L
+                    val handler  = Handler(Looper.getMainLooper())
+                    val runnable = Runnable {
+                        Log.d(TAG, "Short mode: auto-stopping adhan after ${shortCutoffSeconds}s")
+                        stopAdhan()
+                        stopSelf()
+                    }
+                    handler.postDelayed(runnable, cutoffMs)
+                    shortModeHandler  = handler
+                    shortModeRunnable = runnable
                 }
-                handler.postDelayed(runnable, cutoffMs)
-                shortModeHandler  = handler
-                shortModeRunnable = runnable
+            }
+
+            if (isStreamingFromUrl) {
+                // Network source: prepareAsync() avoids blocking; start inside OnPreparedListener.
+                player.setOnPreparedListener { mp ->
+                    if (!requestAudioFocus(audioAttrs)) {
+                        Log.w(TAG, "Audio focus denied (streaming) — aborting")
+                        mp.release()
+                        releaseWakeLock()
+                        stopSelf()
+                        return@setOnPreparedListener
+                    }
+                    startPlayback(mp)
+                }
+                player.prepareAsync()
+            } else {
+                player.prepare()
+                if (!requestAudioFocus(audioAttrs)) {
+                    Log.w(TAG, "Audio focus denied — aborting adhan playback")
+                    player.release()
+                    releaseWakeLock()
+                    stopSelf()
+                    return
+                }
+                startPlayback(player)
             }
         } catch (e: Exception) {
             Log.e(TAG, "Playback failed: $soundName", e)

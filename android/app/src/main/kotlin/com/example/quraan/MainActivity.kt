@@ -47,7 +47,15 @@ class MainActivity : FlutterActivity() {
                         val shortMode          = call.argument<Boolean>("shortMode") ?: false
                         val shortCutoffSeconds = call.argument<Int>("shortCutoffSeconds") ?: 15
                         val useAlarmStream     = call.argument<Boolean>("useAlarmStream") ?: false
-                        startAdhanService(soundName, shortMode, shortCutoffSeconds, useAlarmStream)
+                        val onlineUrl          = call.argument<String>("onlineUrl")
+                        // Persist shortMode immediately so AlarmReceiver reads the latest value
+                        // even if Flutter's own SharedPreferences haven’t flushed yet.
+                        getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
+                            .edit()
+                            .putBoolean("flutter.adhan_short_mode", shortMode)
+                            .putString("flutter.adhan_online_url", onlineUrl ?: "")
+                            .apply()
+                        startAdhanService(soundName, shortMode, shortCutoffSeconds, useAlarmStream, onlineUrl)
                         result.success(true)
                     }
 
@@ -63,13 +71,17 @@ class MainActivity : FlutterActivity() {
                         @Suppress("UNCHECKED_CAST")
                         val alarms             = call.argument<List<Map<String, Any>>>("alarms") ?: emptyList()
                         val soundName          = call.argument<String>("soundName") ?: "adhan_1"
+                        val shortMode          = call.argument<Boolean>("shortMode") ?: false
                         val shortCutoffSeconds = call.argument<Int>("shortCutoffSeconds") ?: 15
                         val useAlarmStream     = call.argument<Boolean>("useAlarmStream") ?: false
-                        // Persist both settings so AdhanAlarmReceiver can use them after the app is killed.
+                        val onlineUrl          = call.argument<String>("onlineUrl") ?: ""
+                        // Persist ALL settings so AdhanAlarmReceiver can use them after the app is killed.
                         getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
                             .edit()
+                            .putBoolean("flutter.adhan_short_mode", shortMode)
                             .putInt("flutter.adhan_short_cutoff_seconds", shortCutoffSeconds)
                             .putString("flutter.adhan_audio_stream", if (useAlarmStream) "alarm" else "ringtone")
+                            .putString("flutter.adhan_online_url", onlineUrl)
                             .apply()
                         AdhanAlarmReceiver.scheduleAlarms(this, alarms, soundName)
                         result.success(null)
@@ -212,12 +224,13 @@ class MainActivity : FlutterActivity() {
 
     // ── Full adhan via foreground service ─────────────────────────────────────
 
-    private fun startAdhanService(soundName: String, shortMode: Boolean = false, shortCutoffSeconds: Int = 15, useAlarmStream: Boolean = false) {
+    private fun startAdhanService(soundName: String, shortMode: Boolean = false, shortCutoffSeconds: Int = 15, useAlarmStream: Boolean = false, onlineUrl: String? = null) {
         val intent = Intent(this, AdhanPlayerService::class.java).apply {
             putExtra(AdhanPlayerService.EXTRA_SOUND, soundName)
             putExtra(AdhanPlayerService.EXTRA_SHORT_MODE, shortMode)
             putExtra(AdhanPlayerService.EXTRA_SHORT_CUTOFF_SECONDS, shortCutoffSeconds)
             putExtra(AdhanPlayerService.EXTRA_USE_ALARM_STREAM, useAlarmStream)
+            if (!onlineUrl.isNullOrBlank()) putExtra(AdhanPlayerService.EXTRA_ONLINE_URL, onlineUrl)
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             startForegroundService(intent)

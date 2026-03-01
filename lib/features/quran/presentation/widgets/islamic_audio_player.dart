@@ -211,7 +211,7 @@ class _IslamicAudioPlayerState extends State<IslamicAudioPlayer> {
                     ),
 
                     Padding(
-                      padding: const EdgeInsets.fromLTRB(12, 8, 12, 6),
+                      padding: const EdgeInsets.fromLTRB(12, 14, 12, 12),
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [

@@ -112,6 +112,20 @@ class AdhanSounds {
       // Makkah style: 2 Takbeers phrase ends around 6s
       shortDurationSeconds: 6,
     ),
+    // ── Short adhan — shown only when Short Mode is enabled ──────────────
+    // short_adhan.mp3 is a brief single Allahu Akbar × 2 recording.
+    // shortDurationSeconds is irrelevant here (sound itself is fully short).
+    AdhanSoundInfo(
+      id: 'short_adhan',
+      nameAr: 'أذان مختصر',
+      nameEn: 'Short Adhan (2 Takbeers only)',
+      muezzinAr: '',
+      muezzinEn: '',
+      mosqueAr: 'تكبيرتان فقط',
+      mosqueEn: 'Two Takbeers only',
+      isOfflineFallback: false,
+      shortDurationSeconds: 99, // plays fully — sound itself is short
+    ),
   ];
 
   // ─── Online sounds (streamed then auto-cached) ────────────────────────────
@@ -131,8 +145,8 @@ class AdhanSounds {
       mosqueEn: 'Qatar',
       isOnline: true,
       url: '${_base}Ahmed_al_Imadi_Adhan.mp3',
-      // visual waveform analysis: silence after 2nd Takbeer at ~13s
-      shortDurationSeconds: 13,
+      // measured via adhan_analyzer.py: silence after 2nd Takbeer at 5.30s
+      shortDurationSeconds: 5,
     ),
     AdhanSoundInfo(
       id: 'online_majed_hamathani',
@@ -144,8 +158,8 @@ class AdhanSounds {
       mosqueEn: 'Saudi Arabia',
       isOnline: true,
       url: '${_base}Majed_al_Hamathani_Adhan.mp3',
-      // visual waveform analysis: silence after 2nd Takbeer at ~12s
-      shortDurationSeconds: 12,
+      // measured via adhan_analyzer.py: silence after 2nd Takbeer at 8.83s
+      shortDurationSeconds: 9,
     ),
     AdhanSoundInfo(
       id: 'online_afasy_fajr',
@@ -157,8 +171,8 @@ class AdhanSounds {
       mosqueEn: 'Kuwait',
       isOnline: true,
       url: '${_base}Mishary_Rashid_al_Afasy_Fajr_Adhan.mp3',
-      // visual waveform analysis: Fajr Adhan has longer phrases, silence at ~15s
-      shortDurationSeconds: 15,
+      // measured via adhan_analyzer.py: silence after 2nd Takbeer at 5.20s
+      shortDurationSeconds: 5,
     ),
     AdhanSoundInfo(
       id: 'online_mokhtar_slimane',
@@ -170,8 +184,8 @@ class AdhanSounds {
       mosqueEn: 'Algeria',
       isOnline: true,
       url: '${_base}Mokhtar_Hadj_Slimane_Adhan.mp3',
-      // visual waveform analysis: silence after 2nd Takbeer at ~13s
-      shortDurationSeconds: 13,
+      // measured via adhan_analyzer.py: silence after 2nd Takbeer at 15.70s
+      shortDurationSeconds: 16,
     ),
     AdhanSoundInfo(
       id: 'online_nasser_qatami',
@@ -198,8 +212,8 @@ class AdhanSounds {
       mosqueEn: 'Qatar',
       isOnline: true,
       url: '${_base}Ahmed_al_Imadi_Adhan_with_Dua.mp3',
-      // visual waveform analysis: silence after 2nd Takbeer at ~14s
-      shortDurationSeconds: 14,
+      // measured via adhan_analyzer.py: silence after 2nd Takbeer at 5.40s
+      shortDurationSeconds: 5,
     ),
     AdhanSoundInfo(
       id: 'online_majed_hamathani_dua',
@@ -211,8 +225,8 @@ class AdhanSounds {
       mosqueEn: 'Saudi Arabia',
       isOnline: true,
       url: '${_base}Majed_al_Hamathani_Adhan_with_Dua.mp3',
-      // visual waveform analysis: silence after 2nd Takbeer at ~13s
-      shortDurationSeconds: 13,
+      // measured via adhan_analyzer.py: silence after 2nd Takbeer at 9.20s
+      shortDurationSeconds: 9,
     ),
     AdhanSoundInfo(
       id: 'online_nasser_qatami_dua',
@@ -225,8 +239,8 @@ class AdhanSounds {
       mosqueEn: '',
       isOnline: true,
       url: '${_base}Nasser_al_Qatami_Adhan_with_Dua.mp3',
-      // visual waveform analysis: silence after 2nd Takbeer at ~14s
-      shortDurationSeconds: 14,
+      // measured via adhan_analyzer.py: silence after 2nd Takbeer at 13.40s
+      shortDurationSeconds: 13,
     ),
   ];
 
@@ -234,8 +248,66 @@ class AdhanSounds {
   static AdhanSoundInfo get offlineFallback =>
       local.firstWhere((s) => s.isOfflineFallback, orElse: () => local.first);
 
+  /// Offline sounds visible to the user (excludes short_adhan unless shortMode active).
+  static List<AdhanSoundInfo> visibleLocal({bool shortMode = false}) =>
+      shortMode ? local : local.where((s) => s.id != 'short_adhan').toList();
+
   static List<AdhanSoundInfo> get all => [...local, ...online];
 
   static AdhanSoundInfo findById(String id) =>
       all.firstWhere((s) => s.id == id, orElse: () => local.first);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SalawatSound — data model for a single Salawat reminder sound.
+// ─────────────────────────────────────────────────────────────────────────────
+
+class SalawatSound {
+  final String id;
+  final String nameAr;
+  final String nameEn;
+  const SalawatSound({
+    required this.id,
+    required this.nameAr,
+    required this.nameEn,
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SalawatSounds — complete catalogue of salawat reminder sounds.
+// All files are bundled in android/app/src/main/res/raw/
+// ─────────────────────────────────────────────────────────────────────────────
+class SalawatSounds {
+  static const String defaultId = 'salawat_1';
+
+  static const List<SalawatSound> all = [
+    SalawatSound(
+      id: 'salawat_1',
+      nameAr: 'صلِّ على محمد ﷺ',
+      nameEn: 'Salli Ala Muhammad',
+    ),
+    SalawatSound(
+      id: 'salawat_2',
+      nameAr: 'اللهم صلِّ على محمد ﷺ',
+      nameEn: 'Allahumma Salli Ala Muhammad',
+    ),
+    SalawatSound(
+      id: 'salawat_3',
+      nameAr: 'الصلاة على النبي ﷺ (رواية ١)',
+      nameEn: 'Salat Ala Al-Nabi (version 1)',
+    ),
+    SalawatSound(
+      id: 'salawat_4',
+      nameAr: 'الصلاة على النبي ﷺ (رواية ٢)',
+      nameEn: 'Salat Ala Al-Nabi (version 2)',
+    ),
+    SalawatSound(
+      id: 'salawat_5',
+      nameAr: 'الصلاة على النبي ﷺ (رواية ٣)',
+      nameEn: 'Salat Ala Al-Nabi (version 3)',
+    ),
+  ];
+
+  static SalawatSound findById(String id) =>
+      all.firstWhere((s) => s.id == id, orElse: () => all.first);
 }

@@ -32,6 +32,7 @@ class AdhanAlarmReceiver : BroadcastReceiver() {
         private const val KEY_SHORT_MODE     = "flutter.adhan_short_mode"
         private const val KEY_SHORT_CUTOFF   = "flutter.adhan_short_cutoff_seconds"
         private const val KEY_AUDIO_STREAM   = "flutter.adhan_audio_stream"
+        private const val KEY_ONLINE_URL     = "flutter.adhan_online_url"
 
         /**
          * Schedule a list of alarms via AlarmManager.
@@ -142,12 +143,14 @@ class AdhanAlarmReceiver : BroadcastReceiver() {
         val shortMode   = prefs.getBoolean(KEY_SHORT_MODE, false)
         val shortCutoff = prefs.getInt(KEY_SHORT_CUTOFF, 15)
         val useAlarm    = prefs.getString(KEY_AUDIO_STREAM, "ringtone") == "alarm"
-        Log.d(TAG, "Adhan alarm fired: $soundName (shortMode=$shortMode, cutoff=${shortCutoff}s, alarmStream=$useAlarm)")
+        val onlineUrl   = prefs.getString(KEY_ONLINE_URL, "")?.takeIf { it.isNotBlank() }
+        Log.d(TAG, "Adhan alarm fired: $soundName (shortMode=$shortMode, cutoff=${shortCutoff}s, alarmStream=$useAlarm, hasUrl=${onlineUrl != null})")
         val serviceIntent = Intent(context, AdhanPlayerService::class.java).apply {
             putExtra(AdhanPlayerService.EXTRA_SOUND, soundName)
             putExtra(AdhanPlayerService.EXTRA_SHORT_MODE, shortMode)
             putExtra(AdhanPlayerService.EXTRA_SHORT_CUTOFF_SECONDS, shortCutoff)
             putExtra(AdhanPlayerService.EXTRA_USE_ALARM_STREAM, useAlarm)
+            if (onlineUrl != null) putExtra(AdhanPlayerService.EXTRA_ONLINE_URL, onlineUrl)
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             context.startForegroundService(serviceIntent)

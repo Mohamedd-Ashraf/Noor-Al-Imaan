@@ -32,27 +32,38 @@ class AdhanNotificationService {
 
   // Reminder channels — one per prayer so users can customise each independently
   // in Android → App info → Notifications, and each prayer has its own voice.
+  // v1 channels kept for fajr/asr/isha (sounds unchanged).
+  // v2 channels for dhuhr/maghrib (updated to approaching sounds).
   static const String _reminderChannelFajr    = 'prayer_reminder_fajr_v1';
-  static const String _reminderChannelDhuhr   = 'prayer_reminder_dhuhr_v1';
+  static const String _reminderChannelDhuhr   = 'prayer_reminder_dhuhr_v2'; // v2: approaching sound
   static const String _reminderChannelAsr     = 'prayer_reminder_asr_v1';
-  static const String _reminderChannelMaghrib = 'prayer_reminder_maghrib_v1';
+  static const String _reminderChannelMaghrib = 'prayer_reminder_maghrib_v2'; // v2: approaching sound
   static const String _reminderChannelIsha    = 'prayer_reminder_isha_v1';
   static const String _reminderChannelName        = 'Pre-Prayer Reminder';
   static const String _reminderChannelDescription = 'Alert N minutes before each prayer.';
   static const String _iqamaChannelId             = 'iqama_reminder_v1';
   static const String _iqamaChannelName           = 'Iqama Reminder';
   static const String _iqamaChannelDescription    = 'Alert N minutes after the prayer call.';
-  static const String _salawatChannelId           = 'salawat_reminder_v1';
+  // Salawat: 5 dedicated channels — one per sound option.
+  // Channels are immutable after creation, so each sound needs its own channel.
+  static const String _salawatChannelId1    = 'salawat_1_v1';
+  static const String _salawatChannelId2    = 'salawat_2_v1';
+  static const String _salawatChannelId3    = 'salawat_3_v1';
+  static const String _salawatChannelId4    = 'salawat_4_v1';
+  static const String _salawatChannelId5    = 'salawat_5_v1';
   static const String _salawatChannelName         = 'Salawat Reminder';
-  static const String _salawatChannelDescription  = 'Periodic salawat (blessings on the Prophet ㏺) reminders.';
+  static const String _salawatChannelDescription  = 'Periodic salawat (blessings on the Prophet \u33ba) reminders.';
 
   // Old channel IDs to clean up on next launch
   static const List<String> _oldChannelIds = [
     'adhan_prayer_times',
     'adhan_prayer_times_custom',
     'adhan_prayer_times_v2',
-    'prayer_reminders_v1', // merged into 3 separate channels
-    'prayer_reminder_v2',   // replaced by 5 prayer-specific channels
+    'prayer_reminders_v1',        // merged into 3 separate channels
+    'prayer_reminder_v2',          // replaced by 5 prayer-specific channels
+    'prayer_reminder_dhuhr_v1',   // replaced by v2 with approaching sound
+    'prayer_reminder_maghrib_v1', // replaced by v2 with approaching sound
+    'salawat_reminder_v1',        // replaced by 5 dedicated salawat channels
   ];
 
   // iOS: expects a bundled sound file (e.g. Runner -> adhan.caf)
@@ -248,7 +259,9 @@ class AdhanNotificationService {
     // Note: createNotificationChannel() is idempotent. We do NOT delete reminder channels
     // on every launch because Android discards pending notifications when a channel is deleted.
     final reminderChannels = [
-      // Five prayer-specific reminder channels
+      // Five prayer-specific reminder channels.
+      // Fajr/Asr/Isha: original voice files (v1 unchanged).
+      // Dhuhr/Maghrib: approaching-prayer sounds (v2 — new channels).
       const AndroidNotificationChannel(
         _reminderChannelFajr, _reminderChannelName,
         description: _reminderChannelDescription,
@@ -262,7 +275,7 @@ class AdhanNotificationService {
         description: _reminderChannelDescription,
         importance: Importance.high,
         playSound: true,
-        sound: RawResourceAndroidNotificationSound('prayer_reminder_dhuhr'),
+        sound: RawResourceAndroidNotificationSound('prayer_approaching_dhuhr'),
         enableVibration: true,
       ),
       const AndroidNotificationChannel(
@@ -278,7 +291,7 @@ class AdhanNotificationService {
         description: _reminderChannelDescription,
         importance: Importance.high,
         playSound: true,
-        sound: RawResourceAndroidNotificationSound('prayer_reminder_maghrib'),
+        sound: RawResourceAndroidNotificationSound('prayer_approaching_maghrib'),
         enableVibration: true,
       ),
       const AndroidNotificationChannel(
@@ -297,12 +310,45 @@ class AdhanNotificationService {
         sound: RawResourceAndroidNotificationSound('iqama_sound'),
         enableVibration: true,
       ),
+      // Five salawat channels — one per sound option (sounds are baked at channel creation).
       const AndroidNotificationChannel(
-        _salawatChannelId, _salawatChannelName,
+        _salawatChannelId1, _salawatChannelName,
         description: _salawatChannelDescription,
         importance: Importance.high,
         playSound: true,
-        sound: RawResourceAndroidNotificationSound('salawat_sound'),
+        sound: RawResourceAndroidNotificationSound('salawat_1'),
+        enableVibration: false,
+      ),
+      const AndroidNotificationChannel(
+        _salawatChannelId2, _salawatChannelName,
+        description: _salawatChannelDescription,
+        importance: Importance.high,
+        playSound: true,
+        sound: RawResourceAndroidNotificationSound('salawat_2'),
+        enableVibration: false,
+      ),
+      const AndroidNotificationChannel(
+        _salawatChannelId3, _salawatChannelName,
+        description: _salawatChannelDescription,
+        importance: Importance.high,
+        playSound: true,
+        sound: RawResourceAndroidNotificationSound('salawat_3'),
+        enableVibration: false,
+      ),
+      const AndroidNotificationChannel(
+        _salawatChannelId4, _salawatChannelName,
+        description: _salawatChannelDescription,
+        importance: Importance.high,
+        playSound: true,
+        sound: RawResourceAndroidNotificationSound('salawat_4'),
+        enableVibration: false,
+      ),
+      const AndroidNotificationChannel(
+        _salawatChannelId5, _salawatChannelName,
+        description: _salawatChannelDescription,
+        importance: Importance.high,
+        playSound: true,
+        sound: RawResourceAndroidNotificationSound('salawat_5'),
         enableVibration: false,
       ),
     ];
@@ -519,7 +565,6 @@ class AdhanNotificationService {
       };
     }
 
-    final includeFajr = _settings.getAdhanIncludeFajr();
     final isArabic = _settings.getAppLanguage() == 'ar';
 
     const arabicNames = {
@@ -530,18 +575,18 @@ class AdhanNotificationService {
       'isha': 'العشاء',
     };
 
+    // Per-prayer enabled flags.
     final items = <_PrayerNotifItem>[
-      _PrayerNotifItem(Prayer.fajr, 'Fajr', prayerTimesMap['fajr']!, enabled: includeFajr),
-      _PrayerNotifItem(Prayer.dhuhr, 'Dhuhr', prayerTimesMap['dhuhr']!),
-      _PrayerNotifItem(Prayer.asr, 'Asr', prayerTimesMap['asr']!),
-      _PrayerNotifItem(Prayer.maghrib, 'Maghrib', prayerTimesMap['maghrib']!),
-      _PrayerNotifItem(Prayer.isha, 'Isha', prayerTimesMap['isha']!),
+      _PrayerNotifItem(Prayer.fajr,    'Fajr',    prayerTimesMap['fajr']!,    enabled: _settings.getAdhanIncludeFajr()),
+      _PrayerNotifItem(Prayer.dhuhr,   'Dhuhr',   prayerTimesMap['dhuhr']!,   enabled: _settings.getAdhanEnableDhuhr()),
+      _PrayerNotifItem(Prayer.asr,     'Asr',     prayerTimesMap['asr']!,     enabled: _settings.getAdhanEnableAsr()),
+      _PrayerNotifItem(Prayer.maghrib, 'Maghrib', prayerTimesMap['maghrib']!, enabled: _settings.getAdhanEnableMaghrib()),
+      _PrayerNotifItem(Prayer.isha,    'Isha',    prayerTimesMap['isha']!,    enabled: _settings.getAdhanEnableIsha()),
     ];
 
     final reminderEnabled = _settings.getPrayerReminderEnabled();
     final reminderMinutes = _settings.getPrayerReminderMinutes();
     final iqamaEnabled    = _settings.getIqamaEnabled();
-    final iqamaMinutes    = _settings.getIqamaMinutes();
     final schedMode       = await _androidScheduleMode();
     final now             = tz.TZDateTime.now(tz.local);
 
@@ -587,19 +632,30 @@ class AdhanNotificationService {
       }
 
       // ── Iqama reminder ────────────────────────────────────────────────────
-      if (iqamaEnabled && iqamaMinutes > 0) {
+      if (iqamaEnabled) {
+        // Per-prayer iqama minutes (different defaults per prayer).
+        final iqamaMinutes = switch (item.prayer) {
+          Prayer.fajr    => _settings.getIqamaMinutesFajr(),
+          Prayer.dhuhr   => _settings.getIqamaMinutesDhuhr(),
+          Prayer.asr     => _settings.getIqamaMinutesAsr(),
+          Prayer.maghrib => _settings.getIqamaMinutesMaghrib(),
+          Prayer.isha    => _settings.getIqamaMinutesIsha(),
+          _              => _settings.getIqamaMinutes(), // fallback
+        };
         final iqamaTime  = localTime.add(Duration(minutes: iqamaMinutes));
         final iqamaId    = _iqamaNotificationId(date, item.prayer);
         final iqamaTitle = isArabic ? 'إقامة: $arabicName' : 'Iqama: ${item.label}';
         final iqamaBody  = isArabic
             ? 'حان وقت الإقامة لصلاة $arabicName'
             : 'Time to stand for ${item.label} prayer';
-        await _plugin.zonedSchedule(
-          iqamaId, iqamaTitle, iqamaBody,
-          iqamaTime,
-          _iqamaNotificationDetails(),
-          androidScheduleMode: schedMode,
-        );
+        if (iqamaMinutes > 0) {
+          await _plugin.zonedSchedule(
+            iqamaId, iqamaTitle, iqamaBody,
+            iqamaTime,
+            _iqamaNotificationDetails(),
+            androidScheduleMode: schedMode,
+          );
+        }
       }
     }
 
@@ -679,14 +735,15 @@ class AdhanNotificationService {
   }
 
   /// Returns the raw-resource sound file name for a given prayer's reminder.
+  /// Dhuhr and Maghrib use dedicated approaching-prayer sounds.
   String _reminderSoundFile(Prayer prayer) {
     switch (prayer) {
       case Prayer.fajr:    return 'prayer_reminder_fajr';
-      case Prayer.dhuhr:   return 'prayer_reminder_dhuhr';
+      case Prayer.dhuhr:   return 'prayer_approaching_dhuhr';   // replaced with approaching sound
       case Prayer.asr:     return 'prayer_reminder_asr';
-      case Prayer.maghrib: return 'prayer_reminder_maghrib';
+      case Prayer.maghrib: return 'prayer_approaching_maghrib'; // replaced with approaching sound
       case Prayer.isha:    return 'prayer_reminder_isha';
-      default:             return 'prayer_reminder_dhuhr';
+      default:             return 'prayer_approaching_dhuhr';
     }
   }
 
@@ -744,24 +801,39 @@ class AdhanNotificationService {
     );
   }
 
-  /// Notification details for Salawat reminders (soft recitation sound).
+  /// Returns the channel ID for the currently selected salawat sound.
+  String _salawatChannelId() {
+    final soundId = _settings.getSalawatSound();
+    switch (soundId) {
+      case 'salawat_2': return _salawatChannelId2;
+      case 'salawat_3': return _salawatChannelId3;
+      case 'salawat_4': return _salawatChannelId4;
+      case 'salawat_5': return _salawatChannelId5;
+      default:          return _salawatChannelId1; // salawat_1 or any unknown value
+    }
+  }
+
+  /// Notification details for Salawat reminders.
+  /// Uses the channel matching the currently selected salawat sound.
   NotificationDetails _salawatNotificationDetails() {
-    return const NotificationDetails(
+    final channelId = _salawatChannelId();
+    final soundId   = _settings.getSalawatSound();
+    return NotificationDetails(
       android: AndroidNotificationDetails(
-        _salawatChannelId,
+        channelId,
         _salawatChannelName,
         channelDescription: _salawatChannelDescription,
         importance: Importance.high,
         priority: Priority.high,
         playSound: true,
-        sound: RawResourceAndroidNotificationSound('salawat_sound'),
+        sound: RawResourceAndroidNotificationSound(soundId),
         enableVibration: false,
         category: AndroidNotificationCategory.reminder,
         visibility: NotificationVisibility.public,
         autoCancel: true,
         icon: '@drawable/ic_notification',
       ),
-      iOS: DarwinNotificationDetails(
+      iOS: const DarwinNotificationDetails(
         presentAlert: true,
         presentSound: true,
         presentBadge: false,

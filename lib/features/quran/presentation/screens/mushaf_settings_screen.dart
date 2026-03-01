@@ -29,6 +29,9 @@ class _MushafSettingsScreenState extends State<MushafSettingsScreen>
   /// Show the "جديد / New" badge only while the app is on version 1.0.7.
   bool _showScrollModeBadge = false;
 
+  /// Show the "جديد / New" badge on word-by-word toggle only for version 1.0.8.
+  bool _showWordByWordBadge = false;
+
   // Groupings for editions – key = group label, value = list of edition ids
   static const _editionGroups = <String, List<String>>{
     'uthmani': [
@@ -66,10 +69,13 @@ class _MushafSettingsScreenState extends State<MushafSettingsScreen>
     if (_editionGroups['special']!.contains(currentId)) tabIndex = 2;
     _tabController.index = tabIndex;
 
-    // Show the "جديد" badge only for version 1.0.7
+    // Show the "جديد" badge only for the relevant versions
     PackageInfo.fromPlatform().then((info) {
       if (mounted) {
-        setState(() => _showScrollModeBadge = info.version == '1.0.7');
+        setState(() {
+          _showScrollModeBadge = info.version == '1.0.7';
+          _showWordByWordBadge = info.version == '1.0.8';
+        });
       }
     });
   }
@@ -215,6 +221,7 @@ class _MushafSettingsScreenState extends State<MushafSettingsScreen>
                   isAr: isAr,
                   settings: settings,
                   showScrollModeBadge: _showScrollModeBadge,
+                  showWordByWordBadge: _showWordByWordBadge,
                 ),
                 const SizedBox(height: 20),
 
@@ -398,11 +405,13 @@ class _DisplayModeCard extends StatelessWidget {
   final bool isAr;
   final AppSettingsState settings;
   final bool showScrollModeBadge;
+  final bool showWordByWordBadge;
 
   const _DisplayModeCard({
     required this.isAr,
     required this.settings,
     this.showScrollModeBadge = false,
+    this.showWordByWordBadge = false,
   });
 
   @override
@@ -530,10 +539,36 @@ class _DisplayModeCard extends StatelessWidget {
               child: const Icon(Icons.touch_app_rounded,
                   color: AppColors.primary, size: 20),
             ),
-            title: Text(
-              isAr ? 'تشغيل كلمة بكلمة' : 'Word-by-Word Audio',
-              style: const TextStyle(
-                  fontWeight: FontWeight.w700, fontSize: 14),
+            title: Row(
+              children: [
+                Flexible(
+                  child: Text(
+                    isAr ? 'تشغيل كلمة بكلمة' : 'Word-by-Word Audio',
+                    style: const TextStyle(
+                        fontWeight: FontWeight.w700, fontSize: 14),
+                  ),
+                ),
+                if (showWordByWordBadge) ...[
+                  const SizedBox(width: 6),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 7, vertical: 2),
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [AppColors.secondary, Color(0xFFF4D03F)],
+                      ),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      isAr ? 'جديد' : 'New',
+                      style: const TextStyle(
+                          fontSize: 10,
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ],
+              ],
             ),
             subtitle: Column(
               crossAxisAlignment: CrossAxisAlignment.start,

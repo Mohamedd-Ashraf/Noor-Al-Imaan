@@ -38,6 +38,28 @@ class SettingsService {
   /// 'ringtone' (default) or 'alarm' — controls which Android audio stream
   /// is used for adhan playback and which system volume is displayed.
   static const String _keyAdhanAudioStream        = 'adhan_audio_stream';
+
+  // ── Salawat sound selection ────────────────────────────────────────────────
+  static const String _keySalawatSound        = 'salawat_sound';
+
+  // ── Reminder / notification volumes (0.0 – 1.0) ──────────────────────────
+  static const String _keySalawatVolume      = 'salawat_volume';
+  static const String _keyIqamaVolume        = 'iqama_volume';
+  static const String _keyApproachingVolume  = 'approaching_volume';
+
+  // ── Per-prayer adhan enable (dhuhr/asr/maghrib/isha — fajr uses _keyAdhanIncludeFajr) ─
+  static const String _keyAdhanEnableDhuhr    = 'adhan_enable_dhuhr';
+  static const String _keyAdhanEnableAsr      = 'adhan_enable_asr';
+  static const String _keyAdhanEnableMaghrib  = 'adhan_enable_maghrib';
+  static const String _keyAdhanEnableIsha     = 'adhan_enable_isha';
+
+  // ── Per-prayer iqama minutes ──────────────────────────────────────────────
+  static const String _keyIqamaMinutesFajr    = 'iqama_minutes_fajr';
+  static const String _keyIqamaMinutesDhuhr   = 'iqama_minutes_dhuhr';
+  static const String _keyIqamaMinutesAsr     = 'iqama_minutes_asr';
+  static const String _keyIqamaMinutesMaghrib = 'iqama_minutes_maghrib';
+  static const String _keyIqamaMinutesIsha    = 'iqama_minutes_isha';
+
   static const String _keyQuranEdition = 'quran_edition';
   static const String _keyQuranFont = 'quran_font';
   static const String _keyFontSizeMigratedV18 = 'font_size_migrated_v18';
@@ -319,4 +341,38 @@ class SettingsService {
   // ── Word-by-word audio (اضغط كلمة لتسمعها) ─────────────────────────────
   bool getWordByWordAudio() => _prefs.getBool(_keyWordByWordAudio) ?? false;
   Future<bool> setWordByWordAudio(bool v) => _prefs.setBool(_keyWordByWordAudio, v);
+
+  // ── Salawat sound selection ────────────────────────────────────────────────
+  String getSalawatSound() => _prefs.getString(_keySalawatSound) ?? 'salawat_1';
+  Future<bool> setSalawatSound(String v) => _prefs.setString(_keySalawatSound, v);
+
+  // ── Reminder / notification volumes ──────────────────────────────────────
+  double getSalawatVolume()     => _prefs.getDouble(_keySalawatVolume)     ?? 0.8;
+  double getIqamaVolume()       => _prefs.getDouble(_keyIqamaVolume)       ?? 0.8;
+  double getApproachingVolume() => _prefs.getDouble(_keyApproachingVolume) ?? 0.8;
+  Future<bool> setSalawatVolume(double v)     => _prefs.setDouble(_keySalawatVolume, v);
+  Future<bool> setIqamaVolume(double v)       => _prefs.setDouble(_keyIqamaVolume, v);
+  Future<bool> setApproachingVolume(double v) => _prefs.setDouble(_keyApproachingVolume, v);
+
+  // ── Per-prayer adhan enabled ──────────────────────────────────────────────
+  bool getAdhanEnableDhuhr()   => _prefs.getBool(_keyAdhanEnableDhuhr)   ?? true;
+  bool getAdhanEnableAsr()     => _prefs.getBool(_keyAdhanEnableAsr)     ?? true;
+  bool getAdhanEnableMaghrib() => _prefs.getBool(_keyAdhanEnableMaghrib) ?? true;
+  bool getAdhanEnableIsha()    => _prefs.getBool(_keyAdhanEnableIsha)    ?? true;
+  Future<bool> setAdhanEnableDhuhr(bool v)   => _prefs.setBool(_keyAdhanEnableDhuhr, v);
+  Future<bool> setAdhanEnableAsr(bool v)     => _prefs.setBool(_keyAdhanEnableAsr, v);
+  Future<bool> setAdhanEnableMaghrib(bool v) => _prefs.setBool(_keyAdhanEnableMaghrib, v);
+  Future<bool> setAdhanEnableIsha(bool v)    => _prefs.setBool(_keyAdhanEnableIsha, v);
+
+  // ── Per-prayer iqama minutes (different defaults per prayer) ──────────────
+  int getIqamaMinutesFajr()    => _prefs.getInt(_keyIqamaMinutesFajr)    ?? 20;
+  int getIqamaMinutesDhuhr()   => _prefs.getInt(_keyIqamaMinutesDhuhr)   ?? 15;
+  int getIqamaMinutesAsr()     => _prefs.getInt(_keyIqamaMinutesAsr)     ?? 15;
+  int getIqamaMinutesMaghrib() => _prefs.getInt(_keyIqamaMinutesMaghrib) ?? 10;
+  int getIqamaMinutesIsha()    => _prefs.getInt(_keyIqamaMinutesIsha)    ?? 15;
+  Future<bool> setIqamaMinutesFajr(int v)    => _prefs.setInt(_keyIqamaMinutesFajr, v);
+  Future<bool> setIqamaMinutesDhuhr(int v)   => _prefs.setInt(_keyIqamaMinutesDhuhr, v);
+  Future<bool> setIqamaMinutesAsr(int v)     => _prefs.setInt(_keyIqamaMinutesAsr, v);
+  Future<bool> setIqamaMinutesMaghrib(int v) => _prefs.setInt(_keyIqamaMinutesMaghrib, v);
+  Future<bool> setIqamaMinutesIsha(int v)    => _prefs.setInt(_keyIqamaMinutesIsha, v);
 }

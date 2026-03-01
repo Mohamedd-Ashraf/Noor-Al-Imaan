@@ -134,6 +134,111 @@ const Map<String, List<_WhatsNewEntry>> _changelog = {
     ),
     
   ],
+
+  // ─── v1.0.8 ──────────────────────────────────────────────────────────────
+  '1.0.8': [
+    // 1 ── البحث (أبرز ميزة جديدة)
+    _WhatsNewEntry(
+      icon: Icons.search_rounded,
+      titleAr: 'البحث في القرآن الكريم',
+      titleEn: 'Quran Search',
+      descAr: 'ابحث عن أي كلمة أو آية في القرآن الكريم كاملاً بسرعة ودقة.',
+      descEn: 'Search for any word or verse across the entire Quran instantly.',
+      color: const Color(0xFF00838F),
+    ),
+    // 2 ── تفسير ابن كثير
+    _WhatsNewEntry(
+      icon: Icons.menu_book_rounded,
+      titleAr: 'تفسير ابن كثير',
+      titleEn: 'Ibn Kathir Tafsir',
+      descAr: 'اضغط مطوّلاً على أي آية لفتح تفسير ابن كثير الشامل — متاح بالكامل بدون إنترنت.',
+      descEn: 'Long-press any verse to open the full Ibn Kathir tafsir — completely offline.',
+      color: const Color(0xFF6A1B9A),
+    ),
+    // 3 ── تلاوة الشيخ عبدالله كامل
+    _WhatsNewEntry(
+      icon: Icons.record_voice_over_rounded,
+      titleAr: 'تلاوة الشيخ عبدالله كامل',
+      titleEn: 'Sheikh Abdullah Kamel Recitation',
+      descAr: 'استمع لتلاوة الشيخ عبدالله كامل وحمّل السور للاستماع بدون إنترنت.',
+      descEn: 'Listen to Sheikh Abdullah Kamel and download surahs for offline playback.',
+      color: const Color(0xFF0277BD),
+    ),
+    // 4 ── تلاوة كلمة بكلمة
+    _WhatsNewEntry(
+      icon: Icons.text_fields_rounded,
+      titleAr: 'تلاوة كلمة بكلمة',
+      titleEn: 'Word-by-Word Playback',
+      descAr: 'شغّل القرآن الكريم كلمةً بكلمة مع تظليل كل كلمة أثناء التلاوة.',
+      descEn: 'Play the Quran word by word with each word highlighted as it is recited.',
+      color: AppColors.primary,
+    ),
+    // 5 ── تشغيل القرآن كاملاً من المزيد
+    _WhatsNewEntry(
+      icon: Icons.queue_music_rounded,
+      titleAr: 'تشغيل القرآن كاملاً من صفحة المزيد',
+      titleEn: 'Full Quran Playback from More',
+      descAr: 'يمكنك الآن تشغيل القرآن الكريم كاملاً من صفحة المزيد بضغطة واحدة.',
+      descEn: 'Play the entire Quran from the More page with a single tap.',
+      color: const Color(0xFF2E7D32),
+    ),
+        _WhatsNewEntry(
+      icon: Icons.favorite_rounded,
+      titleAr: 'تذكير بالصلاة على النبي ﷺ',
+      titleEn: 'Salah upon the Prophet ﷺ',
+      descAr: 'تذكير يومي بالصلاة على سيدنا محمد ﷺ لا ينقطع في أي وقت من اليوم.',
+      descEn: 'A daily reminder to send blessings upon the Prophet Muhammad ﷺ throughout your day.',
+      color: const Color(0xFFAD1457),
+    ),
+      // 8 ── ورد القضاء والورد اليومي
+    _WhatsNewEntry(
+      icon: Icons.bookmark_add_rounded,
+      titleAr: 'ورد القضاء وتحسين الورد اليومي',
+      titleEn: 'Qada Wird & Enhanced Daily Wird',
+      descAr: 'احفظ موضع ورد القضاء، وإشعارات الورد اليومي تُجدَّد تلقائياً كل يوم جديد.',
+      descEn: 'Bookmark your Qada wird position and get daily wird reminders that reset automatically.',
+      color: AppColors.secondary,
+    ),
+    // 7 ── التمرير العمودي للمصحف
+    _WhatsNewEntry(
+      icon: Icons.swipe_vertical_rounded,
+      titleAr: 'تمرير عمودي لصفحات المصحف',
+      titleEn: 'Vertical Mushaf Scrolling',
+      descAr: 'تصفّح صفحات المصحف الشريف بالتمرير العمودي لتجربة قراءة أكثر طبيعية.',
+      descEn: 'Browse Mushaf pages with vertical scroll for a more natural reading experience.',
+      color: const Color(0xFF00695C),
+    ),
+  
+    // 9 ── تخصيصات الأذان
+    _WhatsNewEntry(
+      icon: Icons.tune_rounded,
+      titleAr: 'تخصيصات الأذان والأذان المصغر',
+      titleEn: 'Adhan Customization & Mini Adhan',
+      descAr: 'خصّص صوت كل أذان باستقلالية، واختر الأذان المصغر لتنبيه أخف.',
+      descEn: 'Customize each prayer adhan independently and choose the mini adhan for a subtle alert.',
+      color: const Color(0xFF37474F),
+    ),
+    // 6 ── تحسين مشغّل الصوت
+    _WhatsNewEntry(
+      icon: Icons.play_circle_rounded,
+      titleAr: 'تحسين مشغّل الصوت',
+      titleEn: 'Improved Audio Player',
+      descAr: 'مشغّل صوتي أسرع وأبسط مع شريط تقدم دقيق يعمل مع السور الطويلة.',
+      descEn: 'Faster and cleaner audio player with accurate progress even for long surahs.',
+      color: const Color(0xFF1565C0),
+    ),
+    // 10 ── تذكير باقتراب الصلاة والإقامة
+    _WhatsNewEntry(
+      icon: Icons.alarm_rounded,
+      titleAr: 'تذكير باقتراب الصلاة والإقامة',
+      titleEn: 'Pre-Prayer & Iqama Reminders',
+      descAr: 'استلم تنبيهاً قبل الأذان بـ 10 دقائق، وتنبيهاً آخر عند وقت الإقامة.',
+      descEn: 'Get notified 10 minutes before the adhan and again at iqama time.',
+      color: const Color(0xFFE65100),
+    ),
+    // 11 ── الصلاة على النبي ﷺ
+
+  ],
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -157,8 +262,8 @@ class WhatsNewScreen extends StatefulWidget {
 
 class _WhatsNewScreenState extends State<WhatsNewScreen>
     with SingleTickerProviderStateMixin {
-  // Total = 300ms base + 10 cards × 100ms stagger + 500ms card window = 2300ms
-  static const int _totalMs = 2300;
+  // Total = 300ms base + 11 cards × 100ms stagger + 500ms card window = 2500ms (v1.0.8)
+  static const int _totalMs = 2500;
 
   late final AnimationController _animController;
 
