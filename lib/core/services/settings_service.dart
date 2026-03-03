@@ -108,6 +108,11 @@ class SettingsService {
     return _prefs.getBool(_keyDarkMode) ?? false;
   }
 
+  /// Returns true if the user (or the first-launch initialiser) has ever
+  /// explicitly written a value for dark mode.  When false the cubit will
+  /// inherit the device system theme instead of defaulting to light.
+  bool hasDarkModeBeenSet() => _prefs.containsKey(_keyDarkMode);
+
   // Show Translation
   Future<bool> setShowTranslation(bool enabled) async {
     return await _prefs.setBool(_keyShowTranslation, enabled);
@@ -386,4 +391,10 @@ class SettingsService {
   Future<bool> setIqamaMinutesAsr(int v)     => _prefs.setInt(_keyIqamaMinutesAsr, v);
   Future<bool> setIqamaMinutesMaghrib(int v) => _prefs.setInt(_keyIqamaMinutesMaghrib, v);
   Future<bool> setIqamaMinutesIsha(int v)    => _prefs.setInt(_keyIqamaMinutesIsha, v);
+
+  // ── Native alarm ID caches (Android only — for cancellation) ─────────────
+  String? getApproachingAlarmIds() => _prefs.getString('approaching_alarm_ids');
+  Future<bool> setApproachingAlarmIds(String json) => _prefs.setString('approaching_alarm_ids', json);
+  String? getSalawatAlarmIds() => _prefs.getString('salawat_alarm_ids');
+  Future<bool> setSalawatAlarmIds(String json) => _prefs.setString('salawat_alarm_ids', json);
 }

@@ -94,6 +94,102 @@ class MainActivity : FlutterActivity() {
                         result.success(null)
                     }
 
+                    // ── Iqama AlarmManager scheduling ────────────────────────────────
+                    "scheduleIqamaAlarms" -> {
+                        @Suppress("UNCHECKED_CAST")
+                        val alarms = call.argument<List<Map<String, Any>>>("alarms") ?: emptyList()
+                        val enabled = call.argument<Boolean>("enabled") ?: false
+                        // Persist iqama enabled flag and schedule for boot reschedule.
+                        val scheduleJson = org.json.JSONArray().also { arr ->
+                            alarms.forEach { a ->
+                                arr.put(org.json.JSONObject().apply {
+                                    put("id",     (a["id"]     as? Number)?.toInt()  ?: 0)
+                                    put("timeMs", (a["timeMs"] as? Number)?.toLong() ?: 0L)
+                                    put("title",  a["title"]  as? String ?: "")
+                                    put("body",   a["body"]   as? String ?: "")
+                                })
+                            }
+                        }.toString()
+                        getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
+                            .edit()
+                            .putBoolean("flutter.iqama_enabled", enabled)
+                            .putString("flutter.iqama_schedule_json", scheduleJson)
+                            .apply()
+                        IqamaAlarmReceiver.scheduleAlarms(this, alarms)
+                        result.success(null)
+                    }
+
+                    "cancelIqamaAlarms" -> {
+                        @Suppress("UNCHECKED_CAST")
+                        val ids = call.argument<List<Int>>("ids") ?: emptyList()
+                        IqamaAlarmReceiver.cancelAlarms(this, ids)
+                        result.success(null)
+                    }
+
+                    // ── Approaching-reminder AlarmManager scheduling ─────────────────────
+                    "scheduleApproachingAlarms" -> {
+                        @Suppress("UNCHECKED_CAST")
+                        val alarms  = call.argument<List<Map<String, Any>>>("alarms") ?: emptyList()
+                        val enabled = call.argument<Boolean>("enabled") ?: false
+                        val scheduleJson = org.json.JSONArray().also { arr ->
+                            alarms.forEach { a ->
+                                arr.put(org.json.JSONObject().apply {
+                                    put("id",     (a["id"]     as? Number)?.toInt()  ?: 0)
+                                    put("timeMs", (a["timeMs"] as? Number)?.toLong() ?: 0L)
+                                    put("title",  a["title"]  as? String ?: "")
+                                    put("body",   a["body"]   as? String ?: "")
+                                    put("sound",  a["sound"]  as? String ?: "prayer_reminder_fajr")
+                                })
+                            }
+                        }.toString()
+                        getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
+                            .edit()
+                            .putBoolean("flutter.approaching_enabled", enabled)
+                            .putString("flutter.approaching_schedule_json", scheduleJson)
+                            .apply()
+                        ApproachingAlarmReceiver.scheduleAlarms(this, alarms)
+                        result.success(null)
+                    }
+
+                    "cancelApproachingAlarms" -> {
+                        @Suppress("UNCHECKED_CAST")
+                        val ids = call.argument<List<Int>>("ids") ?: emptyList()
+                        ApproachingAlarmReceiver.cancelAlarms(this, ids)
+                        result.success(null)
+                    }
+
+                    // ── Salawat AlarmManager scheduling ──────────────────────────────────
+                    "scheduleSalawatAlarms" -> {
+                        @Suppress("UNCHECKED_CAST")
+                        val alarms  = call.argument<List<Map<String, Any>>>("alarms") ?: emptyList()
+                        val enabled = call.argument<Boolean>("enabled") ?: false
+                        val scheduleJson = org.json.JSONArray().also { arr ->
+                            alarms.forEach { a ->
+                                arr.put(org.json.JSONObject().apply {
+                                    put("id",     (a["id"]     as? Number)?.toInt()  ?: 0)
+                                    put("timeMs", (a["timeMs"] as? Number)?.toLong() ?: 0L)
+                                    put("title",  a["title"]  as? String ?: "")
+                                    put("body",   a["body"]   as? String ?: "")
+                                    put("sound",  a["sound"]  as? String ?: "salawat_1")
+                                })
+                            }
+                        }.toString()
+                        getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
+                            .edit()
+                            .putBoolean("flutter.salawat_enabled", enabled)
+                            .putString("flutter.salawat_schedule_json", scheduleJson)
+                            .apply()
+                        SalawatAlarmReceiver.scheduleAlarms(this, alarms)
+                        result.success(null)
+                    }
+
+                    "cancelSalawatAlarms" -> {
+                        @Suppress("UNCHECKED_CAST")
+                        val ids = call.argument<List<Int>>("ids") ?: emptyList()
+                        SalawatAlarmReceiver.cancelAlarms(this, ids)
+                        result.success(null)
+                    }
+
                     // ── Battery optimization ───────────────────────────────────
                     "openBatterySettings" -> {
                         openBatterySettings()

@@ -1,3 +1,5 @@
+import 'dart:ui' show Brightness, PlatformDispatcher;
+
 import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
@@ -107,6 +109,16 @@ class AppSettingsCubit extends Cubit<AppSettingsState> {
       _service.setArabicFontSize(18.0);
       emit(state.copyWith(arabicFontSize: 18.0));
       _service.setFontSizeMigratedV18();
+    }
+
+    // First-launch: mirror the device system theme so the app never starts
+    // in the "wrong" mode.  Once the user flips the switch manually the saved
+    // value is respected on every subsequent launch (hasDarkModeBeenSet == true).
+    if (!_service.hasDarkModeBeenSet()) {
+      final systemDark =
+          PlatformDispatcher.instance.platformBrightness == Brightness.dark;
+      _service.setDarkMode(systemDark);
+      emit(state.copyWith(darkMode: systemDark));
     }
   }
 

@@ -70,7 +70,10 @@ class AdhanNotificationService {
   // iOS: expects a bundled sound file (e.g. Runner -> adhan.caf)
   static const String _iosAdhanSoundName = 'adhan.caf';
 
-  static const int _daysToScheduleAhead = 30;
+  // Maximum days we'll ever schedule (hard ceiling so we never cross 60 days).
+  static const int _maxDaysToSchedule = 60;
+  // Minimum days to guarantee reliability even with many reminders enabled.
+  static const int _minDaysToSchedule = 14;
 
   final FlutterLocalNotificationsPlugin _plugin;
   final SettingsService _settings;
@@ -99,13 +102,23 @@ class AdhanNotificationService {
 
     const androidInit = AndroidInitializationSettings('@drawable/ic_notification');
     const iosInit = DarwinInitializationSettings();
+    const windowsInit = WindowsInitializationSettings(
+      appName: 'Quraan',
+      appUserModelId: 'com.example.quraan',
+      guid: 'a8d4b6e2-3f1c-4a7d-9e2b-5c0f8a1d3e6b',
+    );
 
     const initSettings = InitializationSettings(
       android: androidInit,
       iOS: iosInit,
+      windows: windowsInit,
     );
 
-    await _plugin.initialize(initSettings);
+    try {
+      await _plugin.initialize(initSettings);
+    } catch (e) {
+      debugPrint('[Adhan] Notification plugin init failed (non-fatal): $e');
+    }
 
     await recreateAndroidChannels();
     await _initAdhanPlayer();
@@ -202,17 +215,58 @@ class AdhanNotificationService {
   Future<void> _cancelAllNativeAlarms() async {
     if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return;
     try {
+      // Cancel adhan alarms.
       final raw = _settings.getAdhanSchedulePreview();
-      if (raw == null || raw.isEmpty) return;
-      final list = jsonDecode(raw) as List;
-      final ids = list
-          .whereType<Map>()
-          .map((e) => e['id'])
-          .whereType<int>()
-          .toList();
-      if (ids.isEmpty) return;
-      await _androidAdhanPlayerChannel.invokeMethod('cancelAdhanAlarms', {'ids': ids});
-      debugPrint('🔔 [Adhan] AlarmManager: cancelled ${ids.length} alarm(s)');
+      if (raw != null && raw.isNotEmpty) {
+        final list = jsonDecode(raw) as List;
+        final ids = list
+            .whereType<Map>()
+            .map((e) => e['id'])
+            .whereType<int>()
+            .toList();
+        if (ids.isNotEmpty) {
+          await _androidAdhanPlayerChannel.invokeMethod('cancelAdhanAlarms', {'ids': ids});
+          debugPrint('🔔 [Adhan] AlarmManager: cancelled ${ids.length} alarm(s)');
+        }
+      }
+      // Cancel iqama alarms — same IDs as adhan, native side adds +50000 offset.
+      try {
+        final raw2 = _settings.getAdhanSchedulePreview();
+        if (raw2 != null && raw2.isNotEmpty) {
+          final list2 = jsonDecode(raw2) as List;
+          final ids2 = list2
+              .whereType<Map>()
+              .map((e) => e['id'])
+              .whereType<int>()
+              .toList();
+          if (ids2.isNotEmpty) {
+            await _androidAdhanPlayerChannel.invokeMethod('cancelIqamaAlarms', {'ids': ids2});
+            debugPrint('🔔 [Iqama] AlarmManager: cancelled ${ids2.length} alarm(s)');
+          }
+        }
+      } catch (_) {}
+      // Cancel approaching-reminder alarms.
+      try {
+        final raw3 = _settings.getApproachingAlarmIds();
+        if (raw3 != null && raw3.isNotEmpty) {
+          final ids3 = (jsonDecode(raw3) as List).whereType<int>().toList();
+          if (ids3.isNotEmpty) {
+            await _androidAdhanPlayerChannel.invokeMethod('cancelApproachingAlarms', {'ids': ids3});
+            debugPrint('🔔 [Approaching] AlarmManager: cancelled ${ids3.length} alarm(s)');
+          }
+        }
+      } catch (_) {}
+      // Cancel salawat alarms.
+      try {
+        final raw4 = _settings.getSalawatAlarmIds();
+        if (raw4 != null && raw4.isNotEmpty) {
+          final ids4 = (jsonDecode(raw4) as List).whereType<int>().toList();
+          if (ids4.isNotEmpty) {
+            await _androidAdhanPlayerChannel.invokeMethod('cancelSalawatAlarms', {'ids': ids4});
+            debugPrint('🌙 [Salawat] AlarmManager: cancelled ${ids4.length} alarm(s)');
+          }
+        }
+      } catch (_) {}
     } catch (e) {
       debugPrint('Native alarm cancel error: $e');
     }
@@ -439,9 +493,11 @@ class AdhanNotificationService {
     final now = tz.TZDateTime.now(tz.local);
     final today = DateTime(now.year, now.month, now.day);
 
-    await cancelAll();
+    await cancelAll();             // clear flutter_local_notifications alarms (including from older app versions)
+    await _cancelAllNativeAlarms(); // cancel existing native AlarmManager alarms before re-registering
+    final days = computeDaysAhead();
     final preview = <Map<String, dynamic>>[];
-    for (var i = 0; i < _daysToScheduleAhead; i++) {
+    for (var i = 0; i < days; i++) {
       final items = await _scheduleForDate(coords, today.add(Duration(days: i)));
       for (final it in items) {
         preview.add(it);
@@ -464,6 +520,39 @@ class AdhanNotificationService {
     } catch (_) {
       // Ignore preview/schedule failures.
     }
+  }
+
+  /// Dynamically computes the optimal number of days to schedule ahead,
+  /// keeping total AlarmManager registrations safely under Android's 500-alarm limit.
+  ///
+  /// Budget: 500 limit - 30 (salawat if on) - 20 (safety) ÷ (prayers × types)
+  /// Clamped to [14 .. 60] days.
+  int computeDaysAhead() {
+    const int limit   = 500;
+    const int buffer  = 20;
+    const int salawatCap = 30; // matches _scheduleSalawatNotifications
+
+    final enabledPrayers = [
+      _settings.getAdhanIncludeFajr(),
+      _settings.getAdhanEnableDhuhr(),
+      _settings.getAdhanEnableAsr(),
+      _settings.getAdhanEnableMaghrib(),
+      _settings.getAdhanEnableIsha(),
+    ].where((e) => e).length;
+
+    if (enabledPrayers == 0) return _maxDaysToSchedule;
+
+    // Alarm types per prayer per day
+    int typesPerPrayer = 1; // adhan always
+    if (_settings.getIqamaEnabled()) typesPerPrayer++;
+    if (_settings.getPrayerReminderEnabled() &&
+        _settings.getPrayerReminderMinutes() > 0) typesPerPrayer++;
+
+    final salawatBudget = _settings.getSalawatEnabled() ? salawatCap : 0;
+    final available = limit - salawatBudget - buffer;
+    final perDay    = enabledPrayers * typesPerPrayer;
+
+    return (available / perDay).floor().clamp(_minDaysToSchedule, _maxDaysToSchedule);
   }
 
   Future<void> testNow() async {
@@ -590,6 +679,11 @@ class AdhanNotificationService {
     final iqamaEnabled    = _settings.getIqamaEnabled();
     final schedMode       = await _androidScheduleMode();
     final now             = tz.TZDateTime.now(tz.local);
+    final isAndroid       = !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
+
+    // Native alarms (Android only) — collected then bulk-scheduled after the loop.
+    final iqamaNativeAlarms       = <Map<String, dynamic>>[];
+    final approachingNativeAlarms = <Map<String, dynamic>>[];
 
     final scheduled = <Map<String, dynamic>>[];
     for (final item in items) {
@@ -623,12 +717,25 @@ class AdhanNotificationService {
           final remBody  = isArabic
               ? 'استعد لصلاة $arabicName'
               : 'Prepare for ${item.label} prayer';
-          await _plugin.zonedSchedule(
-            remId, remTitle, remBody,
-            reminderTime,
-            _reminderNotificationDetails(item.prayer),
-            androidScheduleMode: schedMode,
-          );
+          if (isAndroid) {
+            // Android: route through ApproachingAlarmReceiver → AdhanPlayerService
+            // so the app volume slider (approaching_volume) actually controls the level.
+            approachingNativeAlarms.add({
+              'id':     remId,
+              'timeMs': reminderTime.millisecondsSinceEpoch,
+              'title':  remTitle,
+              'body':   remBody,
+              'sound':  _reminderSoundFile(item.prayer),
+            });
+          } else {
+            // iOS: flutter_local_notifications handles it
+            await _plugin.zonedSchedule(
+              remId, remTitle, remBody,
+              reminderTime,
+              _reminderNotificationDetails(item.prayer),
+              androidScheduleMode: schedMode,
+            );
+          }
         }
       }
 
@@ -650,13 +757,55 @@ class AdhanNotificationService {
             ? 'حان وقت الإقامة لصلاة $arabicName'
             : 'Time to stand for ${item.label} prayer';
         if (iqamaMinutes > 0) {
-          await _plugin.zonedSchedule(
-            iqamaId, iqamaTitle, iqamaBody,
-            iqamaTime,
-            _iqamaNotificationDetails(),
-            androidScheduleMode: schedMode,
-          );
+          if (isAndroid) {
+            // Android: route through IqamaAlarmReceiver → AdhanPlayerService
+            // so the full iqama sound is never cut off by the 30s OS limit.
+            iqamaNativeAlarms.add({
+              'id':     iqamaId,
+              'timeMs': iqamaTime.millisecondsSinceEpoch,
+              'title':  iqamaTitle,
+              'body':   iqamaBody,
+            });
+          } else {
+            // iOS: flutter_local_notifications handles it
+            await _plugin.zonedSchedule(
+              iqamaId, iqamaTitle, iqamaBody,
+              iqamaTime,
+              _iqamaNotificationDetails(),
+              androidScheduleMode: schedMode,
+            );
+          }
         }
+      }
+    }
+
+    // ── Schedule all iqama alarms natively on Android ───────────────────────────
+    if (isAndroid && iqamaNativeAlarms.isNotEmpty) {
+      try {
+        await _androidAdhanPlayerChannel.invokeMethod('scheduleIqamaAlarms', {
+          'alarms':  iqamaNativeAlarms,
+          'enabled': iqamaEnabled,
+        });
+        debugPrint('🔔 [Iqama] Native: scheduled ${iqamaNativeAlarms.length} alarm(s)');
+      } catch (e) {
+        debugPrint('🔔 [Iqama] Native scheduling error: $e');
+      }
+    }
+
+    // ── Schedule all approaching-reminder alarms natively on Android ─────────────
+    if (isAndroid) {
+      try {
+        final approachingEnabled = reminderEnabled && reminderMinutes > 0;
+        await _androidAdhanPlayerChannel.invokeMethod('scheduleApproachingAlarms', {
+          'alarms':  approachingNativeAlarms,
+          'enabled': approachingEnabled,
+        });
+        // Persist IDs so _cancelAllNativeAlarms can cancel them later.
+        await _settings.setApproachingAlarmIds(
+            jsonEncode(approachingNativeAlarms.map((a) => a['id']).toList()));
+        debugPrint('🔔 [Approaching] Native: scheduled ${approachingNativeAlarms.length} alarm(s)');
+      } catch (e) {
+        debugPrint('🔔 [Approaching] Native scheduling error: $e');
       }
     }
 
@@ -846,18 +995,91 @@ class AdhanNotificationService {
   /// Schedules periodic salawat (صلاة على النبي) reminder notifications.
   /// Up to 100 notifications, each [salawatMinutes] apart.
   Future<void> _scheduleSalawatNotifications() async {
-    // Cancel any previously scheduled salawat notifications first.
+    // Always cancel old flutter_local_notifications salawat slots (migration + refresh).
     for (var i = 0; i < 100; i++) {
       await _plugin.cancel(700000000 + i);
     }
 
     final enabled = _settings.getSalawatEnabled();
+    final isAndroid = !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
+
+    if (isAndroid) {
+      // ── Android: native AlarmManager → AdhanPlayerService ─────────────────
+      // Cancel any previously scheduled native alarms first.
+      try {
+        final storedIds = _settings.getSalawatAlarmIds();
+        if (storedIds != null && storedIds.isNotEmpty) {
+          final ids = (jsonDecode(storedIds) as List).whereType<int>().toList();
+          if (ids.isNotEmpty) {
+            await _androidAdhanPlayerChannel.invokeMethod('cancelSalawatAlarms', {'ids': ids});
+          }
+        }
+      } catch (_) {}
+
+      if (!enabled) {
+        await _settings.setSalawatAlarmIds('[]');
+        return;
+      }
+
+      final intervalMinutes = _settings.getSalawatMinutes();
+      if (intervalMinutes <= 0) return;
+
+      final sleepEnabled = _settings.getSalawatSleepEnabled();
+      final sleepStartH  = _settings.getSalawatSleepStartH();
+      final sleepEndH    = _settings.getSalawatSleepEndH();
+
+      bool isInSleep(tz.TZDateTime t) {
+        if (!sleepEnabled) return false;
+        final h = t.hour;
+        if (sleepStartH > sleepEndH) return h >= sleepStartH || h < sleepEndH;
+        return h >= sleepStartH && h < sleepEndH;
+      }
+
+      final isArabic  = _settings.getAppLanguage() == 'ar';
+      final soundName = _settings.getSalawatSound();
+
+      final salawatTexts = [
+        isArabic ? 'اللَّهُمَّ صَلِّ عَلَى مُحَمَّدٍ' : 'O Allah, send blessings upon Muhammad ﷺ',
+        isArabic ? 'صَلَّى اللهُ عَلَيْهِ وَسَلَّمَ' : 'Peace and blessings be upon the Prophet ﷺ',
+        isArabic ? 'اللَّهُمَّ صَلِّ وَسَلِّمْ عَلَى نَبِيِّنَا مُحَمَّدٍ' : 'O Allah, send peace upon our Prophet Muhammad ﷺ',
+      ];
+
+      final now = tz.TZDateTime.now(tz.local);
+      final nativeAlarms = <Map<String, dynamic>>[];
+
+      for (var i = 0; i < 30; i++) {
+        final triggerTime = now.add(Duration(minutes: intervalMinutes * (i + 1)));
+        if (isInSleep(triggerTime)) continue;
+        final text = salawatTexts[i % salawatTexts.length];
+        nativeAlarms.add({
+          'id':     700000000 + i,
+          'timeMs': triggerTime.millisecondsSinceEpoch,
+          'title':  isArabic ? '🌙 الصلاة على النبي' : '🌙 Salawat Reminder',
+          'body':   text,
+          'sound':  soundName,
+        });
+      }
+
+      try {
+        await _androidAdhanPlayerChannel.invokeMethod('scheduleSalawatAlarms', {
+          'alarms':  nativeAlarms,
+          'enabled': enabled,
+        });
+        await _settings.setSalawatAlarmIds(
+            jsonEncode(nativeAlarms.map((a) => a['id']).toList()));
+        debugPrint('🌙 [Salawat] Native: scheduled ${nativeAlarms.length} alarm(s) every ${intervalMinutes}m');
+      } catch (e) {
+        debugPrint('🌙 [Salawat] Native scheduling error: $e');
+      }
+      return;
+    }
+
+    // ── iOS: flutter_local_notifications ────────────────────────────────────
     if (!enabled) return;
 
     final intervalMinutes = _settings.getSalawatMinutes();
     if (intervalMinutes <= 0) return;
 
-    // Quiet hours — skip notifications scheduled inside the sleep window.
     final sleepEnabled = _settings.getSalawatSleepEnabled();
     final sleepStartH  = _settings.getSalawatSleepStartH();
     final sleepEndH    = _settings.getSalawatSleepEndH();
@@ -865,9 +1087,7 @@ class AdhanNotificationService {
     bool isInSleep(tz.TZDateTime t) {
       if (!sleepEnabled) return false;
       final h = t.hour;
-      // Overnight window (e.g. 22 → 06): wraps past midnight
       if (sleepStartH > sleepEndH) return h >= sleepStartH || h < sleepEndH;
-      // Same-day window (e.g. 01 → 06)
       return h >= sleepStartH && h < sleepEndH;
     }
 
@@ -883,9 +1103,8 @@ class AdhanNotificationService {
     final now = tz.TZDateTime.now(tz.local);
     var scheduled = 0;
 
-    for (var i = 0; i < 100; i++) {
+    for (var i = 0; i < 30; i++) {
       final triggerTime = now.add(Duration(minutes: intervalMinutes * (i + 1)));
-      // Skip notifications that fall inside the user's quiet hours window.
       if (isInSleep(triggerTime)) continue;
       final text = salawatTexts[i % salawatTexts.length];
       try {
@@ -899,7 +1118,6 @@ class AdhanNotificationService {
         );
         scheduled++;
       } catch (_) {
-        // Stop if OS limit reached or permission revoked.
         break;
       }
     }

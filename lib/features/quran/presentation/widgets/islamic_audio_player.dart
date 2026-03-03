@@ -106,6 +106,7 @@ class _IslamicAudioPlayerState extends State<IslamicAudioPlayer> {
         final cubit = context.read<AyahAudioCubit>();
         final playingSurahNumber = audioState.surahNumber;
         final playingAyahNumber = audioState.ayahNumber;
+        final isDark = Theme.of(context).brightness == Brightness.dark;
 
         // RTL-aware icons:
         // Flutter Row auto-reverses child ORDER in RTL so positions are correct,
@@ -156,11 +157,17 @@ class _IslamicAudioPlayerState extends State<IslamicAudioPlayer> {
                 gradient: LinearGradient(
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
-                  colors: [
-                    const Color(0xFFF7F3E9),
-                    const Color(0xFFF3EFE3),
-                    const Color(0xFFEDF2EC),
-                  ],
+                  colors: isDark
+                      ? [
+                          const Color(0xFF0F1419),
+                          const Color(0xFF1A1F25),
+                          const Color(0xFF1C2530),
+                        ]
+                      : [
+                          const Color(0xFFF7F3E9),
+                          const Color(0xFFF3EFE3),
+                          const Color(0xFFEDF2EC),
+                        ],
                   stops: const [0.0, 0.55, 1.0],
                 ),
                 boxShadow: [
@@ -188,7 +195,7 @@ class _IslamicAudioPlayerState extends State<IslamicAudioPlayer> {
                       ),
                     ),
 
-                    // Soft top-edge white vignette
+                    // Soft top-edge vignette
                     Positioned(
                       top: 0,
                       left: 0,
@@ -201,7 +208,8 @@ class _IslamicAudioPlayerState extends State<IslamicAudioPlayer> {
                               begin: Alignment.topCenter,
                               end: Alignment.bottomCenter,
                               colors: [
-                                Colors.white.withValues(alpha: 0.22),
+                                (isDark ? Colors.white : Colors.white)
+                                    .withValues(alpha: isDark ? 0.06 : 0.22),
                                 Colors.transparent,
                               ],
                             ),
@@ -847,13 +855,16 @@ class _TimeLabel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(4),
-        color: AppColors.primary.withValues(alpha: 0.06),
+        color: isDark
+            ? AppColors.primary.withValues(alpha: 0.18)
+            : AppColors.primary.withValues(alpha: 0.06),
         border: Border.all(
-          color: AppColors.secondary.withValues(alpha: 0.18),
+          color: AppColors.secondary.withValues(alpha: isDark ? 0.30 : 0.18),
           width: 0.6,
         ),
       ),
@@ -862,7 +873,9 @@ class _TimeLabel extends StatelessWidget {
         style: TextStyle(
           fontSize: 9.5,
           fontWeight: FontWeight.w700,
-          color: AppColors.primary.withValues(alpha: 0.58),
+          color: isDark
+              ? AppColors.secondary.withValues(alpha: 0.85)
+              : AppColors.primary.withValues(alpha: 0.58),
           letterSpacing: 0.5,
         ),
       ),

@@ -894,7 +894,7 @@ class _AdhanSettingsScreenState extends State<AdhanSettingsScreen>
               onChanged: _notificationsEnabled
                   ? (v) {
                       setState(() => _iqamaEnabled = v);
-                      if (v) _previewRawSound('iqama_sound', cutoffSeconds: 6, volume: _iqamaVolume);
+                      if (v) _previewRawSound('iqama_sound_new', cutoffSeconds: 9, volume: _iqamaVolume);
                       _autoSave();
                     }
                   : null,
@@ -2089,6 +2089,7 @@ class _AdhanSettingsScreenState extends State<AdhanSettingsScreen>
   // ─── Schedule card ───────────────────────────────────────────────────────
 
   Widget _buildScheduleCard(bool isAr) {
+    final days = _adhanService.computeDaysAhead();
     return Padding(
       padding: const EdgeInsets.all(16),
       child: Column(children: [
@@ -2102,15 +2103,15 @@ class _AdhanSettingsScreenState extends State<AdhanSettingsScreen>
             child: Row(mainAxisSize: MainAxisSize.min, children: [
               const Icon(Icons.event_available_rounded, size: 14, color: Colors.white),
               const SizedBox(width: 5),
-              Text(isAr ? 'مُجدوَل: ٣٠ يوماً قادمة' : '30 days scheduled ahead',
+              Text(isAr ? 'مُجدوَل: $days يوماً قادمة' : '$days days scheduled ahead',
                   style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white)),
             ]),
           ),
         ]),
         const SizedBox(height: 10),
         Text(
-          isAr ? 'بمجرد الحفظ، يُجدَّل الأذان تلقائياً لـ ٣٠ يوماً.\nيعمل حتى عند إغلاق التطبيق.'
-              : 'Once saved, adhan is scheduled for 30 days.\nWorks even when the app is closed.',
+          isAr ? 'يُجدَّل الأذان تلقائياً لـ $days يوماً حسب التذكيرات المُفعَّلة.\nيعمل حتى عند إغلاق التطبيق.'
+              : 'Adhan auto-schedules $days days based on your active reminders.\nWorks even when the app is closed.',
           style: const TextStyle(fontSize: 12, color: AppColors.textSecondary, height: 1.6),
         ),
         const SizedBox(height: 14),
@@ -2120,7 +2121,7 @@ class _AdhanSettingsScreenState extends State<AdhanSettingsScreen>
             onPressed: () async {
               final raw = _settings.getAdhanSchedulePreview();
               if (!context.mounted) return;
-              await _showScheduleDialog(isAr: isAr, raw: raw, notificationsEnabled: _notificationsEnabled);
+              await _showScheduleDialog(isAr: isAr, raw: raw, days: days, notificationsEnabled: _notificationsEnabled);
             },
             style: OutlinedButton.styleFrom(
               foregroundColor: AppColors.primary,
@@ -2233,6 +2234,7 @@ class _AdhanSettingsScreenState extends State<AdhanSettingsScreen>
   Future<void> _showScheduleDialog({
     required bool isAr,
     String? raw,
+    int days = 21,
     bool notificationsEnabled = true,
   }) async {
     List<Map<String, dynamic>> items = [];
@@ -2322,7 +2324,7 @@ class _AdhanSettingsScreenState extends State<AdhanSettingsScreen>
             Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Text(isAr ? 'جدول الأذان' : 'Adhan Schedule',
                   style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-              Text('${parsed.length} ${isAr ? "صلاة · ٣٠ يوماً" : "prayers · 30 days"}',
+              Text('${parsed.length} ${isAr ? "صلاة · $days يوماً" : "prayers · $days days"}',
                   style: const TextStyle(fontSize: 12, color: AppColors.textSecondary, fontWeight: FontWeight.normal)),
             ]),
           ]),

@@ -229,24 +229,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
           ),
 
-          // Page Flip Direction
-          _SettingsCard(
-            child: SwitchListTile(
-              secondary: const Icon(Icons.import_contacts_rounded,
-                  color: AppColors.primary),
-              title: _TileTitle(isAr
-                  ? 'قلب الصفحات من اليمين'
-                  : 'Right-to-Left Page Flip'),
-              subtitle: _TileSubtitle(isAr
-                  ? 'كالكتب الورقية — يمين ← يسار'
-                  : 'Like physical books — right → left'),
-              value: settings.pageFlipRightToLeft,
-              activeColor: AppColors.primary,
-              onChanged: (v) =>
-                  context.read<AppSettingsCubit>().setPageFlipRightToLeft(v),
-            ),
-          ),
-
           // Diacritics Color
           _SettingsCard(
             child: Padding(

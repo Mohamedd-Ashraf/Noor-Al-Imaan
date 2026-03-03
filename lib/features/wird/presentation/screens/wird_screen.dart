@@ -2121,96 +2121,109 @@ class _TodayCard extends StatelessWidget {
   // ── Bookmark / progress dialog ──────────────────────────────────────────
 
   void _showBookmarkDialog(BuildContext context) {
-    // Determine default selection: bookmark if set, else range start.
-    int selectedSurah = _hasBookmark ? lastReadSurah! : range.start.surah;
-    int enteredAyah   = _hasBookmark ? lastReadAyah!  : range.start.ayah;
+    // Clamp initial selection to the day's range.
+    final startS = range.start.surah;
+    final endS   = range.end.surah;
+    int selectedSurah = (_hasBookmark && lastReadSurah! >= startS && lastReadSurah! <= endS)
+        ? lastReadSurah!
+        : startS;
+    int enteredAyah = (_hasBookmark && lastReadSurah! == selectedSurah)
+        ? lastReadAyah!
+        : range.start.ayah;
     final cubit = context.read<WirdCubit>();
+
+    // Ayah limits for a given surah within this day's range.
+    int minAyahFor(int s) => s == startS ? range.start.ayah : 1;
+    int maxAyahFor(int s) =>
+        s == endS ? range.end.ayah : kSurahAyahCounts[s - 1];
 
     showDialog(
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDialogState) {
-          final maxAyah = kSurahAyahCounts[selectedSurah - 1];
-          // Clamp entered ayah whenever surah changes.
+          final minAyah = minAyahFor(selectedSurah);
+          final maxAyah = maxAyahFor(selectedSurah);
+          // Clamp whenever surah changes.
+          if (enteredAyah < minAyah) enteredAyah = minAyah;
           if (enteredAyah > maxAyah) enteredAyah = maxAyah;
-          final ayahCtrl = TextEditingController(
-              text: enteredAyah.toString());
+          final ayahCtrl = TextEditingController(text: enteredAyah.toString());
 
           return AlertDialog(
             title: Text(isAr ? 'حدّث موضعك في القراءة' : 'Update Reading Position'),
             content: SingleChildScrollView(
               child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: isAr
-                  ? CrossAxisAlignment.end
-                  : CrossAxisAlignment.start,
-              children: [
-                Text(
-                  isAr ? 'السورة:' : 'Surah:',
-                  style: const TextStyle(
-                      fontWeight: FontWeight.bold, fontSize: 13),
-                ),
-                const SizedBox(height: 6),
-                DropdownButtonFormField<int>(
-                  initialValue: selectedSurah,
-                  isExpanded: true,
-                  decoration: InputDecoration(
-                    border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10)),
-                    contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 12, vertical: 8),
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: isAr
+                    ? CrossAxisAlignment.end
+                    : CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    isAr ? 'السورة:' : 'Surah:',
+                    style: const TextStyle(
+                        fontWeight: FontWeight.bold, fontSize: 13),
                   ),
-                  items: List.generate(114, (i) {
-                    final n = i + 1;
-                    return DropdownMenuItem(
-                      value: n,
-                      child: Text(
-                        isAr
-                            ? '${_arabicNumerals(n)}. ${_surahArabicNames[n] ?? n.toString()}'
-                            : '$n. Surah $n',
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    );
-                  }),
-                  onChanged: (v) {
-                    if (v != null) {
-                      setDialogState(() {
-                        selectedSurah = v;
-                        enteredAyah = 1;
-                      });
-                    }
-                  },
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  isAr
-                      ? 'رقم الآية (١ – ${_arabicNumerals(maxAyah)}):'
-                      : 'Ayah number (1–$maxAyah):',
-                  style: const TextStyle(
-                      fontWeight: FontWeight.bold, fontSize: 13),
-                ),
-                const SizedBox(height: 6),
-                TextFormField(
-                  controller: ayahCtrl,
-                  keyboardType: TextInputType.number,
-                  textAlign: TextAlign.center,
-                  decoration: InputDecoration(
-                    border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10)),
-                    contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 12, vertical: 8),
-                    hintText: '1 – $maxAyah',
+                  const SizedBox(height: 6),
+                  // Only surahs within today's range
+                  DropdownButtonFormField<int>(
+                    value: selectedSurah,
+                    isExpanded: true,
+                    decoration: InputDecoration(
+                      border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10)),
+                      contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 8),
+                    ),
+                    items: List.generate(endS - startS + 1, (i) {
+                      final n = startS + i;
+                      return DropdownMenuItem(
+                        value: n,
+                        child: Text(
+                          isAr
+                              ? '${_arabicNumerals(n)}. ${_surahArabicNames[n] ?? n.toString()}'
+                              : '$n. Surah $n',
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      );
+                    }),
+                    onChanged: (v) {
+                      if (v != null) {
+                        setDialogState(() {
+                          selectedSurah = v;
+                          enteredAyah = minAyahFor(v);
+                        });
+                      }
+                    },
                   ),
-                  onChanged: (v) {
-                    final n = int.tryParse(v);
-                    if (n != null && n >= 1 && n <= maxAyah) {
-                      enteredAyah = n;
-                    }
-                  },
-                ),
-              ],
+                  const SizedBox(height: 12),
+                  Text(
+                    isAr
+                        ? 'رقم الآية (${_arabicNumerals(minAyah)} – ${_arabicNumerals(maxAyah)}):'
+                        : 'Ayah number ($minAyah–$maxAyah):',
+                    style: const TextStyle(
+                        fontWeight: FontWeight.bold, fontSize: 13),
+                  ),
+                  const SizedBox(height: 6),
+                  TextFormField(
+                    controller: ayahCtrl,
+                    keyboardType: TextInputType.number,
+                    textAlign: TextAlign.center,
+                    decoration: InputDecoration(
+                      border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10)),
+                      contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 8),
+                      hintText: '$minAyah – $maxAyah',
+                    ),
+                    onChanged: (v) {
+                      final n = int.tryParse(v);
+                      if (n != null && n >= minAyah && n <= maxAyah) {
+                        enteredAyah = n;
+                      }
+                    },
+                  ),
+                ],
+              ),
             ),
-          ),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(ctx),
@@ -2222,9 +2235,7 @@ class _TodayCard extends StatelessWidget {
                     foregroundColor: Colors.white),
                 onPressed: () {
                   final n = int.tryParse(ayahCtrl.text);
-                  final ayah = (n != null &&
-                          n >= 1 &&
-                          n <= maxAyah)
+                  final ayah = (n != null && n >= minAyah && n <= maxAyah)
                       ? n
                       : enteredAyah;
                   cubit.saveLastRead(selectedSurah, ayah);
@@ -2823,6 +2834,26 @@ class _MakeupCardState extends State<_MakeupCard> {
                       ),
                     ),
                     const SizedBox(width: 8),
+                    // Update bookmark button
+                    ElevatedButton(
+                      onPressed: () =>
+                          _showMakeupBookmarkDialog(context, range, day),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor:
+                            _kOrange.withValues(alpha: 0.12),
+                        foregroundColor: _kOrange,
+                        elevation: 0,
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 13),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          side: BorderSide(
+                              color: _kOrangeBorder.withValues(alpha: 0.4)),
+                        ),
+                      ),
+                      child: const Icon(Icons.bookmark_add_rounded, size: 20),
+                    ),
+                    const SizedBox(width: 8),
                     // Mark done button
                     ElevatedButton.icon(
                       onPressed: () =>
@@ -2858,18 +2889,170 @@ class _MakeupCardState extends State<_MakeupCard> {
     );
   }
 
+  void _showMakeupBookmarkDialog(BuildContext context, ReadingRange range, int day) {
+    final isAr = widget.isAr;
+    final startS = range.start.surah;
+    final endS   = range.end.surah;
+    final hasBookmark = widget.makeupBookmarkDay == day &&
+        widget.makeupBookmarkSurah != null &&
+        widget.makeupBookmarkAyah != null;
+
+    // Clamp initial selection within this day's range.
+    int selectedSurah = (hasBookmark &&
+            widget.makeupBookmarkSurah! >= startS &&
+            widget.makeupBookmarkSurah! <= endS)
+        ? widget.makeupBookmarkSurah!
+        : startS;
+    int enteredAyah = (hasBookmark && widget.makeupBookmarkSurah == selectedSurah)
+        ? widget.makeupBookmarkAyah!
+        : range.start.ayah;
+    final cubit = context.read<WirdCubit>();
+
+    // Ayah limits for a given surah within this day's range.
+    int minAyahFor(int s) => s == startS ? range.start.ayah : 1;
+    int maxAyahFor(int s) =>
+        s == endS ? range.end.ayah : kSurahAyahCounts[s - 1];
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) {
+          final minAyah = minAyahFor(selectedSurah);
+          final maxAyah = maxAyahFor(selectedSurah);
+          if (enteredAyah < minAyah) enteredAyah = minAyah;
+          if (enteredAyah > maxAyah) enteredAyah = maxAyah;
+          final ayahCtrl =
+              TextEditingController(text: enteredAyah.toString());
+
+          return AlertDialog(
+            title: Text(
+                isAr ? 'حدّث موضعك في القضاء' : 'Update Makeup Position'),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: isAr
+                    ? CrossAxisAlignment.end
+                    : CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    isAr ? 'السورة:' : 'Surah:',
+                    style: const TextStyle(
+                        fontWeight: FontWeight.bold, fontSize: 13),
+                  ),
+                  const SizedBox(height: 6),
+                  // Only surahs within this day's range
+                  DropdownButtonFormField<int>(
+                    value: selectedSurah,
+                    isExpanded: true,
+                    decoration: InputDecoration(
+                      border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10)),
+                      contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 8),
+                    ),
+                    items: List.generate(endS - startS + 1, (i) {
+                      final n = startS + i;
+                      return DropdownMenuItem(
+                        value: n,
+                        child: Text(
+                          isAr
+                              ? '${_arabicNumerals(n)}. ${_surahArabicNames[n] ?? n.toString()}'
+                              : '$n. Surah $n',
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      );
+                    }),
+                    onChanged: (v) {
+                      if (v != null) {
+                        setDialogState(() {
+                          selectedSurah = v;
+                          enteredAyah = minAyahFor(v);
+                        });
+                      }
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    isAr
+                        ? 'رقم الآية (${_arabicNumerals(minAyah)} – ${_arabicNumerals(maxAyah)}):'
+                        : 'Ayah number ($minAyah–$maxAyah):',
+                    style: const TextStyle(
+                        fontWeight: FontWeight.bold, fontSize: 13),
+                  ),
+                  const SizedBox(height: 6),
+                  TextFormField(
+                    controller: ayahCtrl,
+                    keyboardType: TextInputType.number,
+                    textAlign: TextAlign.center,
+                    decoration: InputDecoration(
+                      border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10)),
+                      contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 8),
+                      hintText: '$minAyah – $maxAyah',
+                    ),
+                    onChanged: (v) {
+                      final n = int.tryParse(v);
+                      if (n != null && n >= minAyah && n <= maxAyah) {
+                        enteredAyah = n;
+                      }
+                    },
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: Text(isAr ? 'إلغاء' : 'Cancel'),
+              ),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                    backgroundColor: _kOrange,
+                    foregroundColor: Colors.white),
+                onPressed: () {
+                  final n = int.tryParse(ayahCtrl.text);
+                  final ayah = (n != null && n >= minAyah && n <= maxAyah)
+                      ? n
+                      : enteredAyah;
+                  cubit.saveMakeupBookmark(day, selectedSurah, ayah);
+                  Navigator.pop(ctx);
+                },
+                child: Text(isAr ? 'حفظ' : 'Save'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
   void _navigateToRead(BuildContext context, ReadingRange range, int day) {
-    // Save bookmark before reading so user can resume
-    context
-        .read<WirdCubit>()
-        .saveMakeupBookmark(day, range.start.surah, range.start.ayah);
+    // If a bookmark already exists for this day, resume from it;
+    // otherwise save range.start as the initial bookmark.
+    final hasBookmark = widget.makeupBookmarkDay == day &&
+        widget.makeupBookmarkSurah != null &&
+        widget.makeupBookmarkAyah != null;
+
+    final int targetSurah =
+        hasBookmark ? widget.makeupBookmarkSurah! : range.start.surah;
+    final int targetAyah =
+        hasBookmark ? widget.makeupBookmarkAyah! : range.start.ayah;
+
+    if (!hasBookmark) {
+      // Save starting position only when no bookmark exists yet
+      context
+          .read<WirdCubit>()
+          .saveMakeupBookmark(day, range.start.surah, range.start.ayah);
+    }
+
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (_) => SurahDetailScreen(
-          surahNumber: range.start.surah,
-          surahName: _surahName(context, range.start.surah),
-          initialAyahNumber: range.start.ayah,
+          surahNumber: targetSurah,
+          surahName: _surahName(context, targetSurah),
+          initialAyahNumber: targetAyah,
         ),
       ),
     );

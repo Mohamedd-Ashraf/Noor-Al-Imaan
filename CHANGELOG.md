@@ -2,6 +2,38 @@
 
 ---
 
+## [1.0.8] – 2026-03-01
+
+### عربي
+- **البحث في القرآن الكريم:** ابحث عن أي كلمة أو آية في القرآن الكريم كاملاً بسرعة ودقة.
+- **تفسير ابن كثير:** اضغط مطوّلاً على أي آية لفتح تفسير ابن كثير الشامل — متاح بالكامل بدون إنترنت.
+- **تلاوة الشيخ عبدالله كامل:** استمع لتلاوة الشيخ عبدالله كامل وحمّل السور للاستماع بدون إنترنت.
+- **تلاوة كلمة بكلمة:** شغّل القرآن الكريم كلمةً بكلمة مع تظليل كل كلمة أثناء التلاوة.
+- **تشغيل القرآن كاملاً من المزيد:** يمكنك الآن تشغيل القرآن الكريم كاملاً من صفحة المزيد بضغطة واحدة.
+- **تحسين مشغّل الصوت:** مشغّل صوتي أسرع وأبسط مع شريط تقدم دقيق يعمل مع السور الطويلة.
+- **تمرير عمودي لصفحات المصحف:** تصفّح صفحات المصحف الشريف بالتمرير العمودي لتجربة قراءة أكثر طبيعية.
+- **ورد القضاء وتحسين الورد اليومي:** احفظ موضع ورد القضاء، وإشعارات الورد اليومي تُجدَّد تلقائياً كل يوم جديد.
+- **تخصيصات الأذان والأذان المصغر:** خصّص صوت كل أذان باستقلالية، واختر الأذان المصغر لتنبيه أخف.
+- **تذكير باقتراب الصلاة والإقامة:** استلم تنبيهاً قبل الأذان بـ 10 دقائق، وتنبيهاً آخر عند وقت الإقامة.
+- **تذكير بالصلاة على النبي ﷺ:** تذكير يومي بالصلاة على سيدنا محمد ﷺ لا ينقطع في أي وقت من اليوم.
+- تحديث رقم الإصدار إلى **1.0.8**.
+
+### English
+- **Quran Search:** Search for any word or verse across the entire Quran instantly and accurately.
+- **Ibn Kathir Tafsir:** Long-press any verse to open the full Ibn Kathir tafsir — completely offline.
+- **Sheikh Abdullah Kamel Recitation:** Listen to Sheikh Abdullah Kamel and download surahs for offline playback.
+- **Word-by-Word Playback:** Play the Quran word by word with each word highlighted as it is recited.
+- **Full Quran Playback from More:** Play the entire Quran from the More page with a single tap.
+- **Improved Audio Player:** Faster and cleaner audio player with accurate progress even for long surahs.
+- **Vertical Mushaf Scrolling:** Browse Mushaf pages with vertical scroll for a more natural reading experience.
+- **Qada Wird & Enhanced Daily Wird:** Bookmark your Qada wird position and get daily wird reminders that reset automatically each new day.
+- **Adhan Customization & Mini Adhan:** Customize each prayer adhan independently and choose the mini adhan for a subtle alert.
+- **Pre-Prayer & Iqama Reminders:** Get notified 10 minutes before the adhan and again at iqama time.
+- **Salah upon the Prophet ﷺ:** A daily reminder to send blessings upon the Prophet Muhammad ﷺ throughout your day.
+- Version bumped to **1.0.8**.
+
+---
+
 ## [1.0.5] – 2026-02-24
 
 ### عربي

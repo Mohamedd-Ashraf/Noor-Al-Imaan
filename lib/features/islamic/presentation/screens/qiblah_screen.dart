@@ -1,16 +1,1581 @@
+import 'dart:async';
+import 'dart:math' as math;
+
+import 'package:adhan/adhan.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter_compass/flutter_compass.dart';
+import 'package:google_fonts/google_fonts.dart';
 
-import '../../../../core/widgets/coming_soon_screen.dart';
+import '../../../../core/constants/app_colors.dart';
+import '../../../../core/di/injection_container.dart' as di;
+import '../../../../core/services/location_service.dart';
+import '../../../../core/services/settings_service.dart';
+import '../../../../core/settings/app_settings_cubit.dart';
 
-class QiblahScreen extends StatelessWidget {
+// ─────────────────────────────────────────────────────────────────────────────
+//  SCREEN
+// ─────────────────────────────────────────────────────────────────────────────
+
+class QiblahScreen extends StatefulWidget {
   const QiblahScreen({super.key});
 
   @override
+  State<QiblahScreen> createState() => _QiblahScreenState();
+}
+
+class _QiblahScreenState extends State<QiblahScreen>
+    with SingleTickerProviderStateMixin {
+  // ── Location state ─────────────────────────────────────────────────────────
+  bool _loading = true;
+  String? _error;
+  double? _qiblahAngle; // Calculated Qibla direction from North (degrees)
+  double? _lat;
+  double? _lng;
+  bool _locationFromCache = false;
+  bool _updatingLocation = false;
+
+  // ── Compass sensor state ───────────────────────────────────────────────────
+  double _heading = 0; // Current phone heading from North (degrees, 0–360)
+  double? _compassAccuracy; // Lower is better (degrees)
+  bool _hasCompass = true; // false if device has no magnetometer
+  StreamSubscription<CompassEvent>? _compassSub;
+
+  // Circular smoothing buffer for heading values
+  final List<double> _headingHistory = [];
+  static const int _smoothWindow = 6;
+
+  // ── Location-choice gate ────────────────────────────────────────────────────
+  /// true while we're waiting for the user to choose cached vs. fresh GPS.
+  bool _showingLocationChoice = false;
+
+  // ── Alignment state ────────────────────────────────────────────────────────
+  bool _aligned = false;
+  bool _vibratedOnce = false;
+
+  // ── Glow animation ─────────────────────────────────────────────────────────
+  late AnimationController _glowCtrl;
+  late Animation<double> _glowAnim;
+
+  final LocationService _location = const LocationService();
+
+  // ─── Lifecycle ─────────────────────────────────────────────────────────────
+
+  @override
+  void initState() {
+    super.initState();
+    _glowCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
+    )..repeat(reverse: true);
+    _glowAnim = Tween<double>(begin: 0.55, end: 1.0).animate(
+      CurvedAnimation(parent: _glowCtrl, curve: Curves.easeInOut),
+    );
+
+    _startCompass();
+    _loadLocation();
+  }
+
+  @override
+  void dispose() {
+    _glowCtrl.dispose();
+    _compassSub?.cancel();
+    super.dispose();
+  }
+
+  // ─── Compass ───────────────────────────────────────────────────────────────
+
+  void _startCompass() {
+    final stream = FlutterCompass.events;
+    if (stream == null) {
+      // Device has no magnetometer sensor
+      if (mounted) setState(() => _hasCompass = false);
+      return;
+    }
+    _compassSub = stream.listen((event) {
+      if (!mounted) return;
+      if (event.heading == null) return;
+      final smoothed = _circularSmooth(event.heading!);
+      setState(() {
+        _heading = smoothed;
+        _compassAccuracy = event.accuracy;
+      });
+      _checkAlignment(smoothed);
+    });
+  }
+
+  /// Circular (angular) mean for smooth heading without wraparound jumps.
+  double _circularSmooth(double raw) {
+    _headingHistory.add(raw);
+    if (_headingHistory.length > _smoothWindow) _headingHistory.removeAt(0);
+
+    double sinSum = 0, cosSum = 0;
+    for (final h in _headingHistory) {
+      final r = h * math.pi / 180;
+      sinSum += math.sin(r);
+      cosSum += math.cos(r);
+    }
+    final n = _headingHistory.length;
+    final avg =
+        math.atan2(sinSum / n, cosSum / n) * 180 / math.pi;
+    return avg < 0 ? avg + 360 : avg;
+  }
+
+  void _checkAlignment(double heading) {
+    if (_qiblahAngle == null) return;
+    final diff = _signedAngleDiff(heading, _qiblahAngle!).abs();
+    final aligned = diff <= 5.0;
+
+    if (aligned && !_vibratedOnce) {
+      HapticFeedback.vibrate();
+      _vibratedOnce = true;
+    }
+    if (!aligned) _vibratedOnce = false;
+    if (_aligned != aligned && mounted) setState(() => _aligned = aligned);
+  }
+
+  /// Returns signed difference in [-180, 180].
+  static double _signedAngleDiff(double a, double b) {
+    double d = (a - b) % 360;
+    if (d > 180) d -= 360;
+    if (d < -180) d += 360;
+    return d;
+  }
+
+  // ─── Location & Qibla calculation ─────────────────────────────────────────
+
+  Future<void> _loadLocation() async {
+    final settings = di.sl<SettingsService>();
+    final cached = settings.getLastKnownCoordinates();
+    if (cached != null) {
+      // Ask the user: reuse saved coordinates or grab fresh GPS?
+      setState(() {
+        _loading = false;
+        _showingLocationChoice = true;
+      });
+      return;
+    }
+    // No cached coordinates – go straight to GPS
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    await _fetchFreshLocation();
+  }
+
+  /// User chose to keep the last saved location.
+  void _useCachedLocation() {
+    final cached = di.sl<SettingsService>().getLastKnownCoordinates()!;
+    setState(() => _showingLocationChoice = false);
+    _computeQibla(cached, fromCache: true);
+  }
+
+  /// User chose to acquire a fresh GPS fix.
+  Future<void> _requestFreshLocation() async {
+    setState(() => _showingLocationChoice = false);
+    await _fetchFreshLocation();
+  }
+
+  Future<void> _fetchFreshLocation() async {
+    if (!mounted) return;
+    setState(() {
+      _loading = true;
+      _error = null;
+      _updatingLocation = true;
+    });
+
+    final permission = await _location.ensurePermission();
+    if (!mounted) return;
+
+    if (permission != LocationPermissionState.granted) {
+      setState(() {
+        _loading = false;
+        _updatingLocation = false;
+        _error = _permissionMessage(permission);
+      });
+      return;
+    }
+
+    try {
+      final pos = await _location.getPosition();
+      await di.sl<SettingsService>().setLastKnownCoordinates(
+        pos.latitude,
+        pos.longitude,
+      );
+      if (!mounted) return;
+      _computeQibla(
+        Coordinates(pos.latitude, pos.longitude),
+        fromCache: false,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _updatingLocation = false;
+        _error = e is TimeoutException
+            ? 'Timed out getting GPS fix. Move to an open area and try again.'
+            : e.toString();
+      });
+    }
+  }
+
+  void _computeQibla(Coordinates coords, {required bool fromCache}) {
+    final qibla = Qibla(coords);
+    setState(() {
+      _loading = false;
+      _updatingLocation = false;
+      _qiblahAngle = qibla.direction;
+      _lat = coords.latitude;
+      _lng = coords.longitude;
+      _locationFromCache = fromCache;
+    });
+  }
+
+  String _permissionMessage(LocationPermissionState s) {
+    switch (s) {
+      case LocationPermissionState.serviceDisabled:
+        return 'Location services are disabled. Please enable them.';
+      case LocationPermissionState.denied:
+        return 'Location permission was denied.';
+      case LocationPermissionState.deniedForever:
+        return 'Location permission permanently denied. Open app settings to grant it.';
+      case LocationPermissionState.granted:
+        return '';
+    }
+  }
+
+  String _cardinalLabel(double deg) {
+    const dirs = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
+    return dirs[((deg + 22.5) / 45).floor() % 8];
+  }
+
+  // ─── Build ─────────────────────────────────────────────────────────────────
+
+  @override
   Widget build(BuildContext context) {
-    return const ComingSoonScreen(
-      titleEn: 'Qiblah',
-      titleAr: 'القبلة',
-      icon: Icons.compass_calibration_rounded,
+    final isAr = context
+        .watch<AppSettingsCubit>()
+        .state
+        .appLanguageCode
+        .toLowerCase()
+        .startsWith('ar');
+
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(isAr ? 'القِبلة' : 'Qiblah'),
+        centerTitle: true,
+        flexibleSpace: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                AppColors.gradientStart,
+                AppColors.gradientMid,
+                AppColors.gradientEnd,
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          if (_updatingLocation)
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 14),
+              child: SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: Colors.white,
+                ),
+              ),
+            )
+          else
+            IconButton(
+              icon: const Icon(Icons.my_location_rounded),
+              tooltip: isAr ? 'تحديث الموقع' : 'Update Location',
+              onPressed: _fetchFreshLocation,
+            ),
+        ],
+      ),
+      body: _showingLocationChoice
+          ? _buildLocationChoice(isAr)
+          : _loading
+              ? _buildLoading(isAr)
+              : _error != null
+                  ? _buildError(isAr)
+                  : _buildCompassBody(isAr),
+    );
+  }
+
+  // ── Location choice gate ──────────────────────────────────────────────────
+
+  Widget _buildLocationChoice(bool isAr) {
+    final cached = di.sl<SettingsService>().getLastKnownCoordinates();
+    final latStr = cached?.latitude.toStringAsFixed(4) ?? '';
+    final lngStr = cached?.longitude.toStringAsFixed(4) ?? '';
+
+    return _DarkGradientBackground(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 40),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            // Icon
+            Container(
+              width: 88,
+              height: 88,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: const LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [AppColors.secondary, AppColors.accent],
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.secondary.withValues(alpha: 0.35),
+                    blurRadius: 22,
+                    spreadRadius: 4,
+                  ),
+                ],
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Image.asset(
+                  'assets/logo/files/transparent/main_logo_transparent.png',
+                  color: Colors.white,
+                ),
+              ),
+            ),
+            const SizedBox(height: 32),
+            Text(
+              isAr ? 'اختر الموقع' : 'Choose Location',
+              style: GoogleFonts.cinzel(
+                fontSize: 22,
+                fontWeight: FontWeight.w700,
+                color: AppColors.secondary,
+              ),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              isAr
+                  ? 'لديك موقع محفوظ مسبقًا. هل تريد استخدامه أم أخذ موقع جديد من GPS؟'
+                  : 'You have a saved location. Use it or get a fresh GPS fix?',
+              style: const TextStyle(color: Colors.white60, fontSize: 14, height: 1.5),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 36),
+
+            // ── Option A: Use saved ────────────────────────────────────────
+            _LocationChoiceButton(
+              icon: Icons.history_rounded,
+              title: isAr ? 'استخدام الموقع المحفوظ' : 'Use Saved Location',
+              subtitle: '$latStr°,  $lngStr°',
+              isPrimary: true,
+              onTap: _useCachedLocation,
+            ),
+            const SizedBox(height: 14),
+
+            // ── Option B: Fresh GPS ────────────────────────────────────────
+            _LocationChoiceButton(
+              icon: Icons.my_location_rounded,
+              title: isAr ? 'تحديد موقع جديد (GPS)' : 'Get Fresh GPS Fix',
+              subtitle: isAr ? 'أدق · يستغرق بضع ثوانٍ' : 'More accurate · takes a few seconds',
+              isPrimary: false,
+              onTap: _requestFreshLocation,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ── Loading ────────────────────────────────────────────────────────────────
+
+  Widget _buildLoading(bool isAr) {
+    return _DarkGradientBackground(
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(
+              width: 56,
+              height: 56,
+              child: CircularProgressIndicator(
+                color: AppColors.secondary,
+                strokeWidth: 3,
+              ),
+            ),
+            const SizedBox(height: 24),
+            Text(
+              isAr ? 'جارٍ تحديد موقعك…' : 'Locating you…',
+              style: GoogleFonts.amiri(
+                color: AppColors.secondary,
+                fontSize: 18,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ── Error ──────────────────────────────────────────────────────────────────
+
+  Widget _buildError(bool isAr) {
+    return _DarkGradientBackground(
+      child: Padding(
+        padding: const EdgeInsets.all(28),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.location_off_rounded,
+              size: 72,
+              color: AppColors.secondary.withValues(alpha: 0.70),
+            ),
+            const SizedBox(height: 24),
+            Text(
+              isAr ? 'تعذّر تحديد موقعك' : 'Could Not Get Your Location',
+              style: GoogleFonts.cinzel(
+                fontSize: 20,
+                fontWeight: FontWeight.w700,
+                color: AppColors.secondary,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 14),
+            Text(
+              _error!,
+              style: const TextStyle(color: Colors.white60, fontSize: 14),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 32),
+            Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              alignment: WrapAlignment.center,
+              children: [
+                ElevatedButton.icon(
+                  onPressed: _fetchFreshLocation,
+                  icon: const Icon(Icons.refresh_rounded),
+                  label: Text(isAr ? 'إعادة المحاولة' : 'Retry'),
+                ),
+                OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppColors.secondary,
+                    side: const BorderSide(color: AppColors.secondary),
+                  ),
+                  onPressed: _location.openAppSettings,
+                  icon: const Icon(Icons.settings_rounded),
+                  label: Text(isAr ? 'الإعدادات' : 'App Settings'),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ── Main compass body ──────────────────────────────────────────────────────
+
+  Widget _buildCompassBody(bool isAr) {
+    final qiblaAngle = _qiblahAngle!;
+    // Arrow on screen = qiblaAngle − heading.
+    // When this equals 0 the arrow points UP → phone is facing Qibla.
+    final arrowRad = (qiblaAngle - _heading) * math.pi / 180;
+    final compassAccuracyOk = (_compassAccuracy ?? 999) <= 20;
+
+    return _DarkGradientBackground(
+      child: SafeArea(
+        child: Column(
+          children: [
+            // ── Location caption ──────────────────────────────────────────
+            if (_lat != null)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.location_on_rounded,
+                      size: 13,
+                      color: AppColors.secondary.withValues(alpha: 0.60),
+                    ),
+                    const SizedBox(width: 4),
+                    Flexible(
+                      child: Text(
+                        '${_lat!.toStringAsFixed(4)}°, ${_lng!.toStringAsFixed(4)}°'
+                        '${_locationFromCache ? '  ·  ${isAr ? 'من الذاكرة' : 'cached'}' : ''}',
+                        style: TextStyle(
+                          color: AppColors.secondary.withValues(alpha: 0.50),
+                          fontSize: 11,
+                          letterSpacing: 0.3,
+                        ),
+                        textAlign: TextAlign.center,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+            // ── No-compass fallback notice ────────────────────────────────
+            if (!_hasCompass)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 10, 20, 0),
+                child: Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: Colors.amber.withValues(alpha: 0.10),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(
+                      color: Colors.amber.withValues(alpha: 0.35),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.warning_amber_rounded,
+                        color: Colors.amber,
+                        size: 20,
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          isAr
+                              ? 'جهازك لا يحتوي على بوصلة. يُعرض اتجاه القبلة كزاوية ثابتة فقط.'
+                              : 'No compass sensor found. Showing Qiblah angle as a static reference.',
+                          style: const TextStyle(
+                            color: Colors.amber,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
+            // ── Compass ───────────────────────────────────────────────────
+            Expanded(
+              child: Center(
+                child: AnimatedBuilder(
+                  animation: _glowAnim,
+                  builder: (context, child) => _QiblahCompassWidget(
+                    heading: _heading,
+                    arrowRad: arrowRad,
+                    aligned: _aligned,
+                    glowIntensity: _aligned ? _glowAnim.value : 0,
+                    showLiveArrow: _hasCompass,
+                    qiblahAngle: qiblaAngle,
+                  ),
+                ),
+              ),
+            ),
+
+            // ── Info cards ────────────────────────────────────────────────
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 18),
+              child: Row(
+                children: [
+                  if (_hasCompass)
+                    Expanded(
+                      child: _InfoCard(
+                        icon: Icons.navigation_rounded,
+                        label: isAr ? 'اتجاه الهاتف' : 'Heading',
+                        value: '${_heading.toStringAsFixed(0)}°',
+                        sub: _cardinalLabel(_heading),
+                      ),
+                    ),
+                  if (_hasCompass) const SizedBox(width: 10),
+                  Expanded(
+                    child: _InfoCard(
+                      icon: Icons.mosque_rounded,
+                      label: isAr ? 'اتجاه القبلة' : 'Qiblah',
+                      value: '${qiblaAngle.toStringAsFixed(1)}°',
+                      sub: _cardinalLabel(qiblaAngle),
+                      highlight: true,
+                    ),
+                  ),
+                  if (_hasCompass && !compassAccuracyOk) ...[
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: _InfoCard(
+                        icon: Icons.sensors_rounded,
+                        label: isAr ? 'دقة البوصلة' : 'Accuracy',
+                        value:
+                            '±${_compassAccuracy?.toStringAsFixed(0) ?? '?'}°',
+                        sub: isAr ? 'تحتاج معايرة' : 'needs cal.',
+                        warning: true,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+
+            // ── Alignment banner ──────────────────────────────────────────
+            if (_hasCompass)
+              _AlignmentBanner(
+                aligned: _aligned,
+                isAr: isAr,
+                glowIntensity: _aligned ? _glowAnim.value : 1.0,
+              ),
+
+            // ── Calibration card ──────────────────────────────────────────
+            if (_hasCompass && !compassAccuracyOk)
+              _CalibrationCard(isAr: isAr),
+            const SizedBox(height: 22),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  DARK GRADIENT BACKGROUND
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _DarkGradientBackground extends StatelessWidget {
+  final Widget child;
+  const _DarkGradientBackground({required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      height: double.infinity,
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            Color(0xFF0C2018), // deep Islamic green
+            Color(0xFF091C13),
+            Color(0xFF050D0A),
+          ],
+        ),
+      ),
+      child: child,
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  COMPASS WIDGET – stack of layers
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _QiblahCompassWidget extends StatelessWidget {
+  final double heading; // phone bearing from North (degrees)
+  final double arrowRad; // pre-computed arrow angle in radians
+  final bool aligned;
+  final double glowIntensity; // 0–1 animated value
+  final bool showLiveArrow; // false when no compass sensor
+  final double qiblahAngle; // fallback for no-sensor devices
+
+  const _QiblahCompassWidget({
+    required this.heading,
+    required this.arrowRad,
+    required this.aligned,
+    required this.glowIntensity,
+    required this.showLiveArrow,
+    required this.qiblahAngle,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    // Static fallback: arrow points to qiblahAngle from North on screen.
+    final effectiveArrowRad =
+        showLiveArrow ? arrowRad : qiblahAngle * math.pi / 180;
+
+    return SizedBox(
+      width: 320,
+      height: 320,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          // Green glow halo when aligned
+          if (aligned)
+            Container(
+              width: 320,
+              height: 320,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.greenAccent.withValues(
+                      alpha: 0.28 * glowIntensity,
+                    ),
+                    blurRadius: 50 * glowIntensity,
+                    spreadRadius: 12 * glowIntensity,
+                  ),
+                ],
+              ),
+            ),
+
+          // Sweep-gradient outer gold ring
+          Container(
+            width: 318,
+            height: 318,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: const SweepGradient(
+                colors: [
+                  AppColors.secondary,
+                  AppColors.accent,
+                  Color(0xFFF9E87A),
+                  AppColors.secondary,
+                  Color(0xFFB8860B),
+                  AppColors.secondary,
+                ],
+                stops: [0.0, 0.18, 0.50, 0.68, 0.84, 1.0],
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: AppColors.secondary,
+                  blurRadius: 0,
+                  spreadRadius: 0,
+                ),
+              ],
+            ),
+          ),
+
+          // Rotating compass face (N always at actual North)
+          Transform.rotate(
+            angle: -heading * math.pi / 180,
+            child: const SizedBox(
+              width: 298,
+              height: 298,
+              child: CustomPaint(painter: _IslamicCompassFacePainter()),
+            ),
+          ),
+
+          // Dark inner disc
+          Container(
+            width: 208,
+            height: 208,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: const Color(0xFF06100C),
+              border: Border.all(
+                color: AppColors.secondary.withValues(alpha: 0.20),
+                width: 1.5,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.65),
+                  blurRadius: 18,
+                  spreadRadius: 5,
+                ),
+              ],
+            ),
+          ),
+
+          // Qiblah arrow – rotated so it always points toward Mecca
+          Transform.rotate(
+            angle: effectiveArrowRad,
+            child: SizedBox(
+              width: 208,
+              height: 208,
+              child: CustomPaint(
+                painter: _QiblahArrowPainter(aligned: aligned),
+              ),
+            ),
+          ),
+
+          // Fixed ▲ marker at top = direction phone is currently facing
+          if (showLiveArrow)
+            Positioned(
+              top: 5,
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 3,
+                ),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF06100C).withValues(alpha: 0.90),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: AppColors.secondary.withValues(alpha: 0.35),
+                  ),
+                ),
+                child: const Text(
+                  '▲',
+                  style: TextStyle(
+                    color: AppColors.secondary,
+                    fontSize: 11,
+                    height: 1.0,
+                  ),
+                ),
+              ),
+            ),
+
+          // Center hub – app logo / alignment check
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 400),
+            width: 64,
+            height: 64,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: aligned
+                  ? const LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [Color(0xFF43A047), Color(0xFF1B5E20)],
+                    )
+                  : const LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [AppColors.secondary, AppColors.accent],
+                    ),
+              boxShadow: [
+                BoxShadow(
+                  color: (aligned ? Colors.greenAccent : AppColors.secondary)
+                      .withValues(
+                    alpha: aligned ? 0.55 * glowIntensity : 0.42,
+                  ),
+                  blurRadius: 16,
+                  spreadRadius: 3,
+                ),
+              ],
+            ),
+            child: aligned
+                ? const Icon(
+                    Icons.done_all_rounded,
+                    color: Colors.white,
+                    size: 30,
+                  )
+                : Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Image.asset(
+                      'assets/logo/files/transparent/main_logo_transparent.png',
+                      color: Colors.white,
+                    ),
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  COMPASS FACE PAINTER
+//  Draws the rotating rose: N/E/S/W labels + tick marks.
+//  Labels naturally rotate with the compass face (standard compass UX).
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _IslamicCompassFacePainter extends CustomPainter {
+  const _IslamicCompassFacePainter();
+
+  static void _drawText(Canvas canvas, String text, Offset center,
+      TextStyle style) {
+    final tp = TextPainter(
+      text: TextSpan(text: text, style: style),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    tp.paint(canvas, center - Offset(tp.width / 2, tp.height / 2));
+  }
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final c = Offset(size.width / 2, size.height / 2);
+    final R = size.width / 2 - 1.0;
+
+    // Background circle
+    canvas.drawCircle(
+      c,
+      R,
+      Paint()
+        ..shader = RadialGradient(
+          colors: const [Color(0xFF162E24), Color(0xFF0C1C16)],
+          radius: 0.75,
+        ).createShader(Rect.fromCircle(center: c, radius: R)),
+    );
+
+    // Tick marks (every 5°)
+    for (var deg = 0; deg < 360; deg += 5) {
+      if (deg % 90 == 0) continue; // cardinals handled via labels
+      final isMajor = deg % 30 == 0;
+      final tickLen = isMajor ? 15.0 : 8.0;
+      final rad = (deg - 90) * math.pi / 180;
+
+      canvas.drawLine(
+        Offset(c.dx + (R - tickLen) * math.cos(rad),
+            c.dy + (R - tickLen) * math.sin(rad)),
+        Offset(c.dx + (R - 0.5) * math.cos(rad),
+            c.dy + (R - 0.5) * math.sin(rad)),
+        Paint()
+          ..color = isMajor
+              ? AppColors.secondary.withValues(alpha: 0.65)
+              : AppColors.secondary.withValues(alpha: 0.28)
+          ..strokeWidth = isMajor ? 2.0 : 1.0
+          ..strokeCap = StrokeCap.round,
+      );
+    }
+
+    // Cardinal & intercardinal labels
+    const labels = [
+      (0, 'N', true),
+      (45, 'NE', false),
+      (90, 'E', true),
+      (135, 'SE', false),
+      (180, 'S', true),
+      (225, 'SW', false),
+      (270, 'W', true),
+      (315, 'NW', false),
+    ];
+
+    for (final (deg, label, isCard) in labels) {
+      final rad = (deg - 90.0) * math.pi / 180;
+      final dist = isCard ? 28.0 : 24.0;
+      final pos = Offset(
+        c.dx + (R - dist) * math.cos(rad),
+        c.dy + (R - dist) * math.sin(rad),
+      );
+
+      if (isCard) {
+        final isNorth = label == 'N';
+        canvas.drawCircle(
+          pos,
+          13,
+          Paint()
+            ..color = isNorth
+                ? const Color(0xFFB71C1C).withValues(alpha: 0.20)
+                : AppColors.secondary.withValues(alpha: 0.09),
+        );
+        _drawText(
+          canvas,
+          label,
+          pos,
+          TextStyle(
+            fontSize: 15,
+            fontWeight: FontWeight.w800,
+            color: isNorth ? const Color(0xFFEF5350) : AppColors.secondary,
+            shadows: const [Shadow(blurRadius: 5, color: Colors.black54)],
+          ),
+        );
+      } else {
+        _drawText(
+          canvas,
+          label,
+          pos,
+          TextStyle(
+            fontSize: 9,
+            fontWeight: FontWeight.w500,
+            color: AppColors.secondary.withValues(alpha: 0.38),
+          ),
+        );
+      }
+    }
+
+    // Degree labels at 30° intervals (skip cardinals)
+    for (var deg = 30; deg < 360; deg += 30) {
+      if (deg % 90 == 0) continue;
+      final rad = (deg - 90.0) * math.pi / 180;
+      final pos = Offset(
+        c.dx + (R - 46) * math.cos(rad),
+        c.dy + (R - 46) * math.sin(rad),
+      );
+      _drawText(
+        canvas,
+        '$deg',
+        pos,
+        TextStyle(
+          fontSize: 8,
+          fontWeight: FontWeight.w400,
+          color: AppColors.secondary.withValues(alpha: 0.28),
+        ),
+      );
+    }
+
+    // Inner ring decorator
+    canvas.drawCircle(
+      c,
+      R - 54,
+      Paint()
+        ..color = AppColors.secondary.withValues(alpha: 0.08)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.0,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter old) => false;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  QIBLA ARROW PAINTER
+//  Elegant golden arrow; points UP in its natural state.
+//  The parent Transform.rotate turns it toward Mecca.
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _QiblahArrowPainter extends CustomPainter {
+  final bool aligned;
+  const _QiblahArrowPainter({required this.aligned});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final cx = size.width / 2;
+    final cy = size.height / 2;
+    final maxR = size.width / 2 - 14;
+
+    final tipY = cy - maxR;
+    const bodyW = 10.0;
+    final tailY = cy + 24.0;
+
+    // Arrow outline (Bézier curves for smooth edges)
+    final arrow = Path()
+      ..moveTo(cx, tipY)
+      ..cubicTo(cx - bodyW, cy - maxR * 0.4, cx - bodyW * 0.9, cy - 8,
+          cx - 4, tailY)
+      ..lineTo(cx + 4, tailY)
+      ..cubicTo(cx + bodyW * 0.9, cy - 8, cx + bodyW, cy - maxR * 0.4,
+          cx, tipY)
+      ..close();
+
+    // Drop shadow
+    canvas.drawPath(
+      arrow,
+      Paint()
+        ..color = Colors.black.withValues(alpha: 0.40)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 7),
+    );
+
+    // Fill
+    canvas.drawPath(
+      arrow,
+      Paint()
+        ..shader = LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: aligned
+              ? const [Color(0xFF81C784), Color(0xFF43A047), Color(0xFF1B5E20)]
+              : const [Color(0xFFF9E87A), Color(0xFFD4AF37), Color(0xFFB8860B)],
+          stops: const [0.0, 0.5, 1.0],
+        ).createShader(Rect.fromCenter(
+          center: Offset(cx, cy),
+          width: size.width,
+          height: size.height,
+        )),
+    );
+
+    // White edge highlight
+    canvas.drawPath(
+      arrow,
+      Paint()
+        ..color = Colors.white.withValues(alpha: 0.20)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.5,
+    );
+
+    // Mini Kaaba near arrow tip
+    _drawKaaba(canvas, Offset(cx, tipY + 19));
+
+    // Counter-weight at tail
+    canvas.drawOval(
+      Rect.fromCenter(
+        center: Offset(cx, tailY + 5),
+        width: 11,
+        height: 7,
+      ),
+      Paint()
+        ..color = aligned ? const Color(0xFF1B5E20) : AppColors.accent,
+    );
+  }
+
+  void _drawKaaba(Canvas canvas, Offset center) {
+    const sz = 11.0;
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromCenter(center: center, width: sz, height: sz),
+        const Radius.circular(2),
+      ),
+      Paint()..color = Colors.black87,
+    );
+    canvas.drawRect(
+      Rect.fromCenter(
+          center: Offset(center.dx, center.dy + 1), width: sz, height: 2),
+      Paint()
+        ..color = aligned
+            ? Colors.greenAccent.shade400
+            : const Color(0xFFD4AF37),
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _QiblahArrowPainter old) =>
+      old.aligned != aligned;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  INFO CARD
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _InfoCard extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
+  final String sub;
+  final bool highlight;
+  final bool warning;
+
+  const _InfoCard({
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.sub,
+    this.highlight = false,
+    this.warning = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final color = warning
+        ? Colors.amber
+        : highlight
+            ? AppColors.secondary
+            : const Color(0xFF6FAF8E);
+
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 13),
+      decoration: BoxDecoration(
+        color: const Color(0xFF0B1C14).withValues(alpha: 0.85),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: color.withValues(alpha: 0.22), width: 1.2),
+        boxShadow: [
+          BoxShadow(
+            color: color.withValues(alpha: 0.06),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            children: [
+              Icon(icon, color: color, size: 12),
+              const SizedBox(width: 4),
+              Expanded(
+                child: Text(
+                  label,
+                  style: TextStyle(
+                    color: color.withValues(alpha: 0.65),
+                    fontSize: 10,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 5),
+          Text(
+            value,
+            style: TextStyle(
+              color: color,
+              fontSize: 22,
+              fontWeight: FontWeight.w700,
+              height: 1.0,
+            ),
+          ),
+          Text(
+            sub,
+            style: TextStyle(
+              color: color.withValues(alpha: 0.55),
+              fontSize: 11,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  ALIGNMENT BANNER
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _AlignmentBanner extends StatelessWidget {
+  final bool aligned;
+  final bool isAr;
+  final double glowIntensity;
+
+  const _AlignmentBanner({
+    required this.aligned,
+    required this.isAr,
+    required this.glowIntensity,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 24),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 400),
+        width: double.infinity,
+        padding:
+            const EdgeInsets.symmetric(vertical: 14, horizontal: 22),
+        decoration: BoxDecoration(
+          gradient: aligned
+              ? LinearGradient(
+                  colors: [
+                    Color.lerp(
+                      const Color(0xFF2E7D32),
+                      const Color(0xFF1B5E20),
+                      1 - glowIntensity,
+                    )!,
+                    const Color(0xFF1B5E20),
+                  ],
+                )
+              : const LinearGradient(
+                  colors: [Color(0xFF15322A), Color(0xFF0D1F1A)],
+                ),
+          borderRadius: BorderRadius.circular(30),
+          border: Border.all(
+            color: aligned
+                ? Colors.greenAccent.withValues(alpha: 0.55 * glowIntensity)
+                : AppColors.secondary.withValues(alpha: 0.18),
+            width: 1.5,
+          ),
+          boxShadow: aligned
+              ? [
+                  BoxShadow(
+                    color: Colors.greenAccent.withValues(
+                      alpha: 0.28 * glowIntensity,
+                    ),
+                    blurRadius: 24,
+                    spreadRadius: 3,
+                  ),
+                ]
+              : [],
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              aligned
+                  ? Icons.done_all_rounded
+                  : Icons.screen_rotation_alt_rounded,
+              color:
+                  aligned ? Colors.greenAccent : AppColors.secondary,
+              size: 22,
+            ),
+            const SizedBox(width: 10),
+            Flexible(
+              child: Text(
+                aligned
+                    ? (isAr
+                        ? 'أنتَ تواجه القِبلة  ✓'
+                        : 'You are facing Qiblah  ✓')
+                    : (isAr
+                        ? 'أدِر هاتفك حتى يُشير السهمُ للأعلى'
+                        : 'Rotate until the arrow points up'),
+                style: TextStyle(
+                  color: aligned
+                      ? Colors.greenAccent
+                      : AppColors.secondary,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.3,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  LOCATION CHOICE BUTTON
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _LocationChoiceButton extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final bool isPrimary;
+  final VoidCallback onTap;
+
+  const _LocationChoiceButton({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.isPrimary,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 160),
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 18),
+        decoration: BoxDecoration(
+          gradient: isPrimary
+              ? const LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [AppColors.secondary, AppColors.accent],
+                )
+              : null,
+          color: isPrimary ? null : const Color(0xFF112316),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(
+            color: isPrimary
+                ? AppColors.secondary
+                : AppColors.secondary.withValues(alpha: 0.25),
+            width: 1.5,
+          ),
+          boxShadow: isPrimary
+              ? [
+                  BoxShadow(
+                    color: AppColors.secondary.withValues(alpha: 0.30),
+                    blurRadius: 18,
+                    spreadRadius: 2,
+                    offset: const Offset(0, 4),
+                  ),
+                ]
+              : [],
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: isPrimary
+                    ? Colors.black.withValues(alpha: 0.18)
+                    : AppColors.secondary.withValues(alpha: 0.12),
+              ),
+              child: Icon(
+                icon,
+                color: isPrimary ? Colors.black87 : AppColors.secondary,
+                size: 22,
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: TextStyle(
+                      color: isPrimary ? Colors.black : Colors.white,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    style: TextStyle(
+                      color: isPrimary
+                          ? Colors.black54
+                          : Colors.white38,
+                      fontSize: 12,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
+            ),
+            Icon(
+              Icons.chevron_right_rounded,
+              color: isPrimary ? Colors.black54 : AppColors.secondary,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  CALIBRATION CARD
+//  Visible when compass accuracy is poor (>20°). Shows step-by-step
+//  instructions with a figure-8 animation hint.
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _CalibrationCard extends StatefulWidget {
+  final bool isAr;
+  const _CalibrationCard({required this.isAr});
+
+  @override
+  State<_CalibrationCard> createState() => _CalibrationCardState();
+}
+
+class _CalibrationCardState extends State<_CalibrationCard>
+    with SingleTickerProviderStateMixin {
+  bool _expanded = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final isAr = widget.isAr;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 18),
+      child: GestureDetector(
+        onTap: () => setState(() => _expanded = !_expanded),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 250),
+          curve: Curves.easeOut,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: BoxDecoration(
+            color: Colors.amber.withValues(alpha: 0.09),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: Colors.amber.withValues(alpha: 0.40),
+              width: 1.2,
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // ─ Header row ─────────────────────────────────────────
+              Row(
+                children: [
+                  const Icon(
+                    Icons.sensors_off_rounded,
+                    color: Colors.amber,
+                    size: 20,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      isAr
+                          ? 'البوصلة تحتاج معايرة — اضغط لمعرفة كيف'
+                          : 'Compass needs calibration — tap to see how',
+                      style: const TextStyle(
+                        color: Colors.amber,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                  Icon(
+                    _expanded
+                        ? Icons.keyboard_arrow_up_rounded
+                        : Icons.keyboard_arrow_down_rounded,
+                    color: Colors.amber,
+                    size: 20,
+                  ),
+                ],
+              ),
+
+              // ─ Steps (shown when expanded) ─────────────────────────
+              if (_expanded) ...[
+                const SizedBox(height: 14),
+                const Divider(color: Colors.amber, thickness: 0.3, height: 1),
+                const SizedBox(height: 14),
+
+                // Figure-8 visual
+                Center(
+                  child: Text(
+                    '∞',
+                    style: TextStyle(
+                      fontSize: 52,
+                      color: Colors.amber.withValues(alpha: 0.80),
+                      height: 1.0,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 10),
+
+                // Steps
+                _CalibStep(
+                  num: '1',
+                  isAr: isAr,
+                  text: isAr
+                      ? 'أمسك الهاتف أمامك بشكل أفقي.'
+                      : 'Hold the phone flat in front of you.',
+                ),
+                const SizedBox(height: 8),
+                _CalibStep(
+                  num: '2',
+                  isAr: isAr,
+                  text: isAr
+                      ? 'حريك الهاتف في الهواء على شكل الرمز ∞ (رقم 8 على جنبه) 3–٥ مرات.'
+                      : 'Move the phone slowly in a figure-8 (∞) pattern 3–5 times.',
+                ),
+                const SizedBox(height: 8),
+                _CalibStep(
+                  num: '3',
+                  isAr: isAr,
+                  text: isAr
+                      ? 'ابتعد عن أي معدن أو مكبر صوت أثناء المعايرة.'
+                      : 'Keep away from metal objects or speakers during calibration.',
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CalibStep extends StatelessWidget {
+  final String num;
+  final String text;
+  final bool isAr;
+  const _CalibStep({
+    required this.num,
+    required this.text,
+    required this.isAr,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      textDirection: isAr ? TextDirection.rtl : TextDirection.ltr,
+      children: [
+        Container(
+          width: 22,
+          height: 22,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: Colors.amber.withValues(alpha: 0.20),
+          ),
+          child: Center(
+            child: Text(
+              num,
+              style: const TextStyle(
+                color: Colors.amber,
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text(
+            text,
+            style: TextStyle(
+              color: Colors.amber.withValues(alpha: 0.80),
+              fontSize: 12,
+              height: 1.45,
+            ),
+            textDirection: isAr ? TextDirection.rtl : TextDirection.ltr,
+          ),
+        ),
+      ],
     );
   }
 }

@@ -1,11 +1,11 @@
 {
-  "latestVersion": "1.0.3",
+  "latestVersion": "1.0.8",
   "minimumVersion": "1.0.3",
   "isMandatory": false,
   "downloadUrl": "https://play.google.com/store/apps/details?id=com.yourcompany.quraan",
-  "releaseDate": "2026-02-21T00:00:00.000Z",
+  "releaseDate": "2026-03-01T00:00:00.000Z",
   "changelog": {
-    "ar": "التحديثات الجديدة:\n• تحسينات في الأداء\n• إصلاح مشاكل الصوت\n• تحسين واجهة المستخدم",
-    "en": "What's New:\n• Performance improvements\n• Audio playback fixes\n• Enhanced user interface"
+    "ar": "✨ الجديد في هذا الإصدار:\n• البحث في القرآن الكريم\n• تفسير ابن كثير بدون إنترنت\n• تلاوة الشيخ عبدالله كامل\n• تلاوة كلمة بكلمة\n• ورد القضاء وتحسين الورد اليومي\n• تمرير عمودي لصفحات المصحف\n• تذكير باقتراب الصلاة والإقامة\n• تحسين مشغّل الصوت",
+    "en": "✨ What's New:\n• Quran Search\n• Ibn Kathir Tafsir (offline)\n• Sheikh Abdullah Kamel recitation\n• Word-by-word playback\n• Qada Wird & improved daily wird\n• Vertical Mushaf scrolling\n• Pre-prayer & Iqama reminders\n• Improved audio player"
   }
 }

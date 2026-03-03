@@ -69,6 +69,21 @@ class AdhanPlayerService : Service() {
         const val EXTRA_USE_ALARM_STREAM     = "useAlarmStream"
         /** For online sounds: direct streaming URL used if cache file is missing. */
         const val EXTRA_ONLINE_URL           = "onlineUrl"
+        /** Optional: custom foreground notification title (e.g. for iqama). */
+        const val EXTRA_NOTIF_TITLE         = "notifTitle"
+        /** Optional: custom foreground notification body text. */
+        const val EXTRA_NOTIF_BODY          = "notifBody"
+        /** Optional: custom stop-button label. */
+        const val EXTRA_STOP_LABEL          = "stopLabel"
+        /** Optional: SharedPreferences key for the playback volume (default: flutter.adhan_volume). */
+        const val EXTRA_VOLUME_KEY          = "volumeKey"
+        /**
+         * Pass true to disable the VOLUME_CHANGED_ACTION receiver.
+         * Use for iqama / approaching / salawat where the sound must play fully and
+         * should only be stopped by the notification button or audio-focus loss.
+         * Default: false (volume key stops the adhan, which is the desired adhan behaviour).
+         */
+        const val EXTRA_DISABLE_VOLUME_STOPPER = "disableVolumeStopper"
         const val ACTION_STOP               = "com.example.quraan.STOP_ADHAN"
         private const val TAG               = "AdhanPlayerService"
         /** Default fallback cutoff when none provided (≈ 2 takbeers). */
@@ -101,6 +116,11 @@ class AdhanPlayerService : Service() {
                                    ?: DEFAULT_SHORT_CUTOFF_SECONDS
         val useAlarmStream     = intent?.getBooleanExtra(EXTRA_USE_ALARM_STREAM, false) ?: false
         val onlineUrl          = intent?.getStringExtra(EXTRA_ONLINE_URL)?.takeIf { it.isNotBlank() }
+        val notifTitle         = intent?.getStringExtra(EXTRA_NOTIF_TITLE)
+        val notifBody          = intent?.getStringExtra(EXTRA_NOTIF_BODY)
+        val stopLabel          = intent?.getStringExtra(EXTRA_STOP_LABEL)
+        val volumeKey          = intent?.getStringExtra(EXTRA_VOLUME_KEY) ?: "flutter.adhan_volume"
+        val disableVolumeStopper = intent?.getBooleanExtra(EXTRA_DISABLE_VOLUME_STOPPER, false) ?: false
 
         // Guard: if already playing, stop first (e.g. AlarmManager + in-app both fire).
         if (isPlaying) {
@@ -108,8 +128,8 @@ class AdhanPlayerService : Service() {
         }
 
         // Must call startForeground() within 5 s of startForegroundService()
-        startForeground(NOTIF_ID, buildNotification())
-        playAdhan(soundName, isShortMode, shortCutoffSeconds, useAlarmStream, onlineUrl)
+        startForeground(NOTIF_ID, buildNotification(notifTitle, notifBody, stopLabel))
+        playAdhan(soundName, isShortMode, shortCutoffSeconds, useAlarmStream, onlineUrl, volumeKey, disableVolumeStopper)
         return START_NOT_STICKY
     }
 
@@ -196,7 +216,7 @@ class AdhanPlayerService : Service() {
         shortModeRunnable = null
     }
 
-    private fun playAdhan(soundName: String, shortMode: Boolean = false, shortCutoffSeconds: Int = DEFAULT_SHORT_CUTOFF_SECONDS, useAlarmStream: Boolean = false, onlineUrl: String? = null) {
+    private fun playAdhan(soundName: String, shortMode: Boolean = false, shortCutoffSeconds: Int = DEFAULT_SHORT_CUTOFF_SECONDS, useAlarmStream: Boolean = false, onlineUrl: String? = null, volumeKey: String = "flutter.adhan_volume", disableVolumeStopper: Boolean = false) {
         cancelShortModeTimer()
         stopAdhan()
         try {
@@ -285,7 +305,7 @@ class AdhanPlayerService : Service() {
 
             val prefs  = getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
             // Flutter stores doubles as Strings in SharedPreferences on Android.
-            val volume = prefs.getString("flutter.adhan_volume", null)
+            val volume = prefs.getString(volumeKey, null)
                 ?.toFloatOrNull()
                 ?.coerceIn(0.0f, 1.0f)
                 ?: 1.0f
@@ -296,7 +316,14 @@ class AdhanPlayerService : Service() {
                 mp.start()
                 mediaPlayer = mp
                 isPlaying = true
-                registerVolumeReceiver()
+                // Only register the volume stopper for adhan sounds.
+                // Iqama / approaching / salawat pass disableVolumeStopper=true so they play
+                // fully regardless of spurious VOLUME_CHANGED_ACTION from OEMs.
+                if (!disableVolumeStopper) {
+                    // Delay by 2 s so spurious broadcasts fired when a new stream starts don't
+                    // immediately kill the service (known issue on Xiaomi/Samsung/Oppo).
+                    Handler(Looper.getMainLooper()).postDelayed({ registerVolumeReceiver() }, 2000L)
+                }
                 Log.d(TAG, "Adhan playing: $soundName (shortMode=$shortMode, cutoff=${shortCutoffSeconds}s, streaming=$isStreamingFromUrl)")
                 if (shortMode) {
                     val cutoffMs = shortCutoffSeconds * 1000L
@@ -394,7 +421,11 @@ class AdhanPlayerService : Service() {
 
     // Notification
 
-    private fun buildNotification(): Notification {
+    private fun buildNotification(
+        title: String? = null,
+        body: String? = null,
+        stopLabel: String? = null
+    ): Notification {
         val stopIntent = Intent(this, AdhanPlayerService::class.java).apply { action = ACTION_STOP }
         val stopPi = PendingIntent.getService(
             this, 0, stopIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
@@ -416,14 +447,14 @@ class AdhanPlayerService : Service() {
 
         return builder
             .setSmallIcon(iconRes)
-            .setContentTitle("الأذان")
-            .setContentText("اضغط لوقف الأذان")
+            .setContentTitle(title ?: "الأذان")
+            .setContentText(body ?: "اضغط لوقف الأذان")
             .setContentIntent(openPi)
             .setOngoing(true)
             .addAction(
                 Notification.Action.Builder(
                     null,
-                    "ايقاف الاذان",
+                    stopLabel ?: "ايقاف الاذان",
                     stopPi
                 ).build()
             )
