@@ -51,6 +51,23 @@
             android:foregroundServiceType="mediaPlayback"
             android:exported="false" />
 
+        <!-- just_audio_background: keeps Quran audio alive with screen off -->
+        <service
+            android:name="com.ryanheise.audioservice.AudioService"
+            android:foregroundServiceType="mediaPlayback"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.media.browse.MediaBrowserService" />
+            </intent-filter>
+        </service>
+        <receiver
+            android:name="com.ryanheise.audioservice.MediaButtonReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MEDIA_BUTTON" />
+            </intent-filter>
+        </receiver>
+
         <!-- Adhan alarm receiver — wakes app at prayer time + reschedules after reboot -->
         <receiver
             android:name=".AdhanAlarmReceiver"

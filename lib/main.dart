@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
+import 'package:just_audio_background/just_audio_background.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'firebase_options.dart';
@@ -23,6 +24,14 @@ import 'features/adhkar/presentation/cubit/adhkar_progress_cubit.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Enable background audio playback (foreground service + lock-screen controls).
+  await JustAudioBackground.init(
+    androidNotificationChannelId: 'com.example.quraan.channel.audio',
+    androidNotificationChannelName: 'تلاوة القرآن الكريم',
+    androidNotificationOngoing: true,
+    androidStopForegroundOnPause: true,
+  );
 
   // Initialize Firebase (required for remote config, Firestore, etc.)
   await Firebase.initializeApp(

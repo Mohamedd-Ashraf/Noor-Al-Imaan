@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:http/http.dart' as http;
 import 'package:just_audio/just_audio.dart';
+import 'package:just_audio_background/just_audio_background.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path_provider/path_provider.dart';
 
@@ -38,6 +39,13 @@ class _AdhanSettingsScreenState extends State<AdhanSettingsScreen>
 
   late final SettingsService _settings;
   late final AdhanNotificationService _adhanService;
+
+  // ── Theme-aware color helpers (initialised in build()) ─────────────────
+  late ColorScheme _cs;
+  Color get _textSecondary => _cs.onSurfaceVariant;
+  Color get _textPrimary   => _cs.onSurface;
+  Color get _cardSurface   => _cs.surface;
+  Color get _cardBorder    => _cs.outlineVariant;
 
   // ── Core settings ──────────────────────────────────────────────────────
   String _selectedSoundId = AdhanSounds.defaultId;
@@ -417,7 +425,7 @@ class _AdhanSettingsScreenState extends State<AdhanSettingsScreen>
             ),
             child: Column(crossAxisAlignment: CrossAxisAlignment.center, children: [
               Text(isAr ? 'بداية النوم' : 'Sleep start',
-                style: const TextStyle(fontSize: 10, color: indigo, fontWeight: FontWeight.w600)),
+                style: TextStyle(fontSize: 10, color: indigo, fontWeight: FontWeight.w600)),
               const SizedBox(height: 4),
               Row(mainAxisAlignment: MainAxisAlignment.center, children: [
                 const Icon(Icons.bedtime_rounded, size: 14, color: indigo),
@@ -431,7 +439,7 @@ class _AdhanSettingsScreenState extends State<AdhanSettingsScreen>
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 10),
           child: Text(isAr ? 'حتى' : 'to',
-            style: const TextStyle(fontSize: 13, color: AppColors.textSecondary)),
+            style: TextStyle(fontSize: 13, color: _textSecondary)),
         ),
         Expanded(child: GestureDetector(
           onTap: () => pick(false),
@@ -480,9 +488,15 @@ class _AdhanSettingsScreenState extends State<AdhanSettingsScreen>
         final state = _cacheState[sound.id];
         if (state == _CacheState.cached) {
           final f = await _cachedFile(sound);
-          await _onlinePlayer!.setFilePath(f.path);
+          await _onlinePlayer!.setAudioSource(AudioSource.uri(
+            Uri.file(f.path),
+            tag: MediaItem(id: sound.id, title: sound.nameAr),
+          ));
         } else if (sound.url != null) {
-          await _onlinePlayer!.setUrl(sound.url!);
+          await _onlinePlayer!.setAudioSource(AudioSource.uri(
+            Uri.parse(sound.url!),
+            tag: MediaItem(id: sound.id, title: sound.nameAr),
+          ));
         } else {
           throw Exception('No URL available');
         }
@@ -654,9 +668,9 @@ class _AdhanSettingsScreenState extends State<AdhanSettingsScreen>
 
   @override
   Widget build(BuildContext context) {
+    _cs = Theme.of(context).colorScheme;
     final isAr = _isAr;
     return Scaffold(
-      backgroundColor: AppColors.background,
       body: NestedScrollView(
         headerSliverBuilder: (ctx, innerBoxIsScrolled) => [
           _buildAppBar(isAr, innerBoxIsScrolled),
@@ -786,7 +800,7 @@ class _AdhanSettingsScreenState extends State<AdhanSettingsScreen>
       child: Row(
         children: [
           Icon(Icons.volume_down_rounded, color: color, size: 20),
-          const SizedBox(width: 8),
+          SizedBox(width: 8),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1168,7 +1182,7 @@ class _AdhanSettingsScreenState extends State<AdhanSettingsScreen>
                 ),
                 child: Icon(icon, color: Colors.white, size: 16),
               ),
-              const SizedBox(width: 10),
+              SizedBox(width: 10),
               Text(
                 isAr ? titleAr : titleEn,
                 style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: AppColors.primary, letterSpacing: 0.3),
@@ -1178,9 +1192,9 @@ class _AdhanSettingsScreenState extends State<AdhanSettingsScreen>
         ),
         Container(
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: _cardSurface,
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: AppColors.cardBorder),
+            border: Border.all(color: _cardBorder),
             boxShadow: [
               BoxShadow(color: AppColors.primary.withValues(alpha: 0.06), blurRadius: 12, offset: const Offset(0, 4)),
             ],
@@ -1194,8 +1208,8 @@ class _AdhanSettingsScreenState extends State<AdhanSettingsScreen>
     );
   }
 
-  Widget _buildDivider() => const Divider(
-        height: 1, thickness: 1, color: AppColors.cardBorder, indent: 16, endIndent: 16);
+  Widget _buildDivider() => Divider(
+        height: 1, thickness: 1, color: _cardBorder, indent: 16, endIndent: 16);
 
   // ─── Switch row ──────────────────────────────────────────────────────────
 
@@ -1220,22 +1234,25 @@ class _AdhanSettingsScreenState extends State<AdhanSettingsScreen>
             decoration: BoxDecoration(color: iconColor.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(12)),
             child: Icon(icon, color: iconColor, size: 20),
           ),
-          const SizedBox(width: 14),
+          SizedBox(width: 14),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
                   children: [
-                    Text(
-                      isAr ? titleAr : titleEn,
-                      style: TextStyle(
-                        fontSize: 14, fontWeight: FontWeight.w600,
-                        color: onChanged == null ? AppColors.textSecondary : AppColors.textPrimary,
+                    Flexible(
+                      child: Text(
+                        isAr ? titleAr : titleEn,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 14, fontWeight: FontWeight.w600,
+                          color: onChanged == null ? _textSecondary : _textPrimary,
+                        ),
                       ),
                     ),
                     if (badge != null) ...[
-                      const SizedBox(width: 6),
+                      SizedBox(width: 6),
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
                         decoration: BoxDecoration(
@@ -1249,7 +1266,7 @@ class _AdhanSettingsScreenState extends State<AdhanSettingsScreen>
                 ),
                 const SizedBox(height: 3),
                 Text(isAr ? subtitleAr : subtitleEn,
-                    style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+                    style: TextStyle(fontSize: 12, color: _textSecondary)),
               ],
             ),
           ),
@@ -1277,10 +1294,10 @@ class _AdhanSettingsScreenState extends State<AdhanSettingsScreen>
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(children: [
-            Icon(icon, size: 16, color: AppColors.textSecondary),
-            const SizedBox(width: 8),
+            Icon(icon, size: 16, color: _textSecondary),
+            SizedBox(width: 8),
             Text(isAr ? labelAr : labelEn,
-                style: const TextStyle(fontSize: 13, color: AppColors.textSecondary, fontWeight: FontWeight.w500)),
+                style: TextStyle(fontSize: 13, color: _textSecondary, fontWeight: FontWeight.w500)),
           ]),
           const SizedBox(height: 10),
           Wrap(
@@ -1295,7 +1312,7 @@ class _AdhanSettingsScreenState extends State<AdhanSettingsScreen>
                   decoration: BoxDecoration(
                     color: selected ? AppColors.primary : AppColors.primary.withValues(alpha: 0.07),
                     borderRadius: BorderRadius.circular(30),
-                    border: Border.all(color: selected ? AppColors.primary : AppColors.cardBorder),
+                    border: Border.all(color: selected ? AppColors.primary : _cardBorder),
                   ),
                   child: Text(
                     isAr ? '$opt د' : '${opt}m',
@@ -1323,7 +1340,7 @@ class _AdhanSettingsScreenState extends State<AdhanSettingsScreen>
               _adhanVolume == 0 ? Icons.volume_off_rounded : _adhanVolume < 0.5 ? Icons.volume_down_rounded : Icons.volume_up_rounded,
               color: _notificationsEnabled ? AppColors.primary : Colors.grey, size: 22,
             ),
-            const SizedBox(width: 14),
+            SizedBox(width: 14),
             Expanded(child: Text(isAr ? 'مستوى صوت الأذان' : 'Adhan Volume',
                 style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600))),
             Container(
@@ -1337,7 +1354,7 @@ class _AdhanSettingsScreenState extends State<AdhanSettingsScreen>
               ),
               child: Text('${(_adhanVolume * 100).round()}%',
                   style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold,
-                      color: _notificationsEnabled ? Colors.white : AppColors.textSecondary)),
+                      color: _notificationsEnabled ? Colors.white : _textSecondary)),
             ),
           ]),
           SliderTheme(
@@ -1366,10 +1383,10 @@ class _AdhanSettingsScreenState extends State<AdhanSettingsScreen>
                 border: Border.all(color: AppColors.primary.withValues(alpha: 0.15)),
               ),
               child: Row(children: [
-                const Icon(Icons.phone_android_rounded, size: 16, color: AppColors.textSecondary),
-                const SizedBox(width: 8),
+                Icon(Icons.phone_android_rounded, size: 16, color: _textSecondary),
+                SizedBox(width: 8),
                 Expanded(child: Text.rich(TextSpan(
-                  style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                  style: TextStyle(fontSize: 12, color: _textSecondary),
                   children: [
                     TextSpan(
                       text: isAr
@@ -1413,18 +1430,18 @@ class _AdhanSettingsScreenState extends State<AdhanSettingsScreen>
               color: Colors.deepPurple.withValues(alpha: 0.10),
               borderRadius: BorderRadius.circular(12),
             ),
-            child: const Icon(Icons.tune_rounded, color: Colors.deepPurple, size: 20),
+            child: Icon(Icons.tune_rounded, color: Colors.deepPurple, size: 20),
           ),
           const SizedBox(width: 14),
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(
               isAr ? 'نوع تدفّق الصوت' : 'Audio Stream Type',
-              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: _textPrimary),
             ),
-            const SizedBox(height: 3),
+            SizedBox(height: 3),
             Text(
               isAr ? 'رنين: يكتم في الصامت • منبه: يتجاوز وضع الصامت' : 'Ring: muted in silent • Alarm: bypasses silent mode',
-              style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+              style: TextStyle(fontSize: 12, color: _textSecondary),
             ),
           ])),
         ]),
@@ -1472,7 +1489,7 @@ class _AdhanSettingsScreenState extends State<AdhanSettingsScreen>
           color: selected ? AppColors.primary : AppColors.primary.withValues(alpha: 0.06),
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
-            color: selected ? AppColors.primary : AppColors.cardBorder,
+            color: selected ? AppColors.primary : _cardBorder,
             width: selected ? 1.5 : 1.0,
           ),
         ),
@@ -1508,12 +1525,14 @@ class _AdhanSettingsScreenState extends State<AdhanSettingsScreen>
                 color: AppColors.secondary.withValues(alpha: 0.15),
                 borderRadius: BorderRadius.circular(10),
               ),
-              child: const Icon(Icons.info_outline_rounded, color: AppColors.secondary, size: 18),
+              child: Icon(Icons.info_outline_rounded, color: AppColors.secondary, size: 18),
             ),
             const SizedBox(width: 10),
-            Text(
-              isAr ? 'كيف يعمل الأذان المختصر؟' : 'How does Short Adhan work?',
-              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: AppColors.primary),
+            Expanded(
+              child: Text(
+                isAr ? 'كيف يعمل الأذان المختصر؟' : 'How does Short Adhan work?',
+                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: AppColors.primary),
+              ),
             ),
           ]),
           const SizedBox(height: 12),
@@ -1573,7 +1592,7 @@ class _AdhanSettingsScreenState extends State<AdhanSettingsScreen>
                 isAr
                     ? 'عند الضغط على استماع في القائمة أدناه سيشتغل الأذان بنفس الطريقة المختصرة'
                     : 'Preview buttons below will also use short mode',
-                style: const TextStyle(fontSize: 11, color: AppColors.textSecondary, height: 1.4),
+                style: TextStyle(fontSize: 11, color: _textSecondary, height: 1.4),
               )),
             ]),
           ),
@@ -1637,7 +1656,7 @@ class _AdhanSettingsScreenState extends State<AdhanSettingsScreen>
               isAr
                   ? 'اختر الصلوات التي تريد أذاناً لكل منها:'
                   : 'Select prayers you want adhan notifications for:',
-              style: const TextStyle(fontSize: 13, color: AppColors.textSecondary, height: 1.4),
+              style: TextStyle(fontSize: 13, color: _textSecondary, height: 1.4),
             ),
           ),
           Row(
@@ -1744,7 +1763,7 @@ class _AdhanSettingsScreenState extends State<AdhanSettingsScreen>
               isAr
                   ? 'الإقامة بعد الأذان بـ (دقيقة) — لكل صلاة:'
                   : 'Iqama after adhan (minutes) — per prayer:',
-              style: const TextStyle(fontSize: 13, color: AppColors.textSecondary),
+              style: TextStyle(fontSize: 13, color: _textSecondary),
             ),
           ),
           ...rows.map((r) => Padding(
@@ -1789,7 +1808,7 @@ class _AdhanSettingsScreenState extends State<AdhanSettingsScreen>
                             style: TextStyle(
                               fontSize: 12,
                               fontWeight: selected ? FontWeight.bold : FontWeight.normal,
-                              color: selected ? r.color : AppColors.textSecondary,
+                              color: selected ? r.color : _textSecondary,
                             ),
                           ),
                         ),
@@ -1816,7 +1835,7 @@ class _AdhanSettingsScreenState extends State<AdhanSettingsScreen>
             padding: const EdgeInsets.only(bottom: 10, left: 4),
             child: Text(
               isAr ? 'اختر صوت التذكير:' : 'Choose reminder sound:',
-              style: const TextStyle(fontSize: 13, color: AppColors.textSecondary),
+              style: TextStyle(fontSize: 13, color: _textSecondary),
             ),
           ),
           ...SalawatSounds.all.map((s) {
@@ -1850,7 +1869,7 @@ class _AdhanSettingsScreenState extends State<AdhanSettingsScreen>
                       color: selected ? Colors.pink : Colors.grey,
                       size: 20,
                     ),
-                    const SizedBox(width: 12),
+                    SizedBox(width: 12),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: isAr
@@ -1863,7 +1882,7 @@ class _AdhanSettingsScreenState extends State<AdhanSettingsScreen>
                             style: TextStyle(
                               fontSize: 13,
                               fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
-                              color: selected ? Colors.pink : AppColors.textPrimary,
+                              color: selected ? Colors.pink : _textPrimary,
                             ),
                           ),
                         ],
@@ -1907,7 +1926,7 @@ class _AdhanSettingsScreenState extends State<AdhanSettingsScreen>
                 gradient: const LinearGradient(colors: [AppColors.gradientStart, AppColors.gradientEnd]),
                 borderRadius: BorderRadius.circular(10),
               ),
-              child: const Icon(Icons.music_note_rounded, color: Colors.white, size: 16),
+              child: Icon(Icons.music_note_rounded, color: Colors.white, size: 16),
             ),
             const SizedBox(width: 10),
             Expanded(child: Text(
@@ -1946,14 +1965,14 @@ class _AdhanSettingsScreenState extends State<AdhanSettingsScreen>
               const SizedBox(height: 2),
               Text(
                 '${isAr ? "المؤذن: " : "Muezzin: "}${selected.muezzinDisplay(isAr)}',
-                style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                style: TextStyle(fontSize: 11, color: _textSecondary),
               ),
               Text(
                 '${isAr ? "المسجد: " : "Mosque: "}${selected.mosqueDisplay(isAr)}',
-                style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                style: TextStyle(fontSize: 11, color: _textSecondary),
               ),
             ])),
-            const Icon(Icons.check_circle_rounded, color: AppColors.secondary, size: 22),
+            Icon(Icons.check_circle_rounded, color: AppColors.secondary, size: 22),
           ]),
         ),
 
@@ -1967,13 +1986,13 @@ class _AdhanSettingsScreenState extends State<AdhanSettingsScreen>
             border: Border.all(color: AppColors.primary.withValues(alpha: 0.12)),
           ),
           child: Row(children: [
-            const Icon(Icons.wifi_off_rounded, size: 14, color: AppColors.textSecondary),
-            const SizedBox(width: 8),
+            Icon(Icons.wifi_off_rounded, size: 14, color: _textSecondary),
+            SizedBox(width: 8),
             Expanded(child: Text(
               isAr
                   ? 'الأصوات الأون‌لاين تُشغَّل مباشرةً بدون تحميل. عند انقطاع الإنترنت يُستخدم أذان مكة المكرمة احتياطياً.'
                   : 'Online sounds stream directly. If offline, Makkah adhan is used as fallback.',
-              style: const TextStyle(fontSize: 11, color: AppColors.textSecondary, height: 1.4),
+              style: TextStyle(fontSize: 11, color: _textSecondary, height: 1.4),
             )),
           ]),
         ),
@@ -1981,9 +2000,9 @@ class _AdhanSettingsScreenState extends State<AdhanSettingsScreen>
         // Unified sound list
         Container(
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: _cardSurface,
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: AppColors.cardBorder),
+            border: Border.all(color: _cardBorder),
             boxShadow: [BoxShadow(color: AppColors.primary.withValues(alpha: 0.06), blurRadius: 12, offset: const Offset(0, 4))],
           ),
           child: ClipRRect(
@@ -1992,7 +2011,7 @@ class _AdhanSettingsScreenState extends State<AdhanSettingsScreen>
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
               itemCount: allSounds.length,
-              separatorBuilder: (_, __) => const Divider(height: 1, color: AppColors.cardBorder, indent: 16, endIndent: 16),
+              separatorBuilder: (_, __) => Divider(height: 1, color: _cardBorder, indent: 16, endIndent: 16),
               itemBuilder: (_, i) {
                 final s = allSounds[i];
                 final cs = s.isOnline ? (_cacheState[s.id] ?? _CacheState.none) : _CacheState.cached;
@@ -2029,18 +2048,18 @@ class _AdhanSettingsScreenState extends State<AdhanSettingsScreen>
           value: _methodAutoDetected,
           title: Text(
             isAr ? 'تحديد الطريقة تلقائياً حسب الموقع' : 'Auto-detect method from location',
-            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
           ),
           subtitle: Text(
             isAr ? 'يعتمد على الدولة المكتشفة من GPS' : 'Based on GPS-detected country',
-            style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+            style: TextStyle(fontSize: 12, color: _textSecondary),
           ),
           onChanged: (v) { setState(() => _methodAutoDetected = v); _autoSave(); },
         ),
-        const Divider(height: 1, color: AppColors.cardBorder),
-        const SizedBox(height: 8),
+        Divider(height: 1, color: _cardBorder),
+        SizedBox(height: 8),
         Text(isAr ? 'أو اختر يدوياً:' : 'Or select manually:',
-            style: const TextStyle(fontSize: 12, color: AppColors.textSecondary, fontWeight: FontWeight.w600)),
+            style: TextStyle(fontSize: 12, color: _textSecondary, fontWeight: FontWeight.w600)),
         const SizedBox(height: 4),
         ...PrayerCalculationConstants.calculationMethods.entries.map((entry) {
           final id = entry.key;
@@ -2065,7 +2084,7 @@ class _AdhanSettingsScreenState extends State<AdhanSettingsScreen>
                 Flexible(child: Text(isAr ? info.nameAr : info.nameEn,
                     style: TextStyle(fontSize: 13,
                         fontWeight: isEgyptian || isSelected ? FontWeight.bold : FontWeight.normal,
-                        color: isSelected ? AppColors.primary : AppColors.textPrimary))),
+                        color: isSelected ? AppColors.primary : _textPrimary))),
                 if (isEgyptian) ...[
                   const SizedBox(width: 6),
                   Container(
@@ -2101,7 +2120,7 @@ class _AdhanSettingsScreenState extends State<AdhanSettingsScreen>
               borderRadius: BorderRadius.circular(20),
             ),
             child: Row(mainAxisSize: MainAxisSize.min, children: [
-              const Icon(Icons.event_available_rounded, size: 14, color: Colors.white),
+              Icon(Icons.event_available_rounded, size: 14, color: Colors.white),
               const SizedBox(width: 5),
               Text(isAr ? 'مُجدوَل: $days يوماً قادمة' : '$days days scheduled ahead',
                   style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white)),
@@ -2112,7 +2131,7 @@ class _AdhanSettingsScreenState extends State<AdhanSettingsScreen>
         Text(
           isAr ? 'يُجدَّل الأذان تلقائياً لـ $days يوماً حسب التذكيرات المُفعَّلة.\nيعمل حتى عند إغلاق التطبيق.'
               : 'Adhan auto-schedules $days days based on your active reminders.\nWorks even when the app is closed.',
-          style: const TextStyle(fontSize: 12, color: AppColors.textSecondary, height: 1.6),
+          style: TextStyle(fontSize: 12, color: _textSecondary, height: 1.6),
         ),
         const SizedBox(height: 14),
         SizedBox(
@@ -2153,7 +2172,7 @@ class _AdhanSettingsScreenState extends State<AdhanSettingsScreen>
           isAr
               ? 'تحقق من عمل الأذان. "بعد دقيقة" يختبر التشغيل في الخلفية — جرّب إغلاق التطبيق.'
               : 'Verify Adhan works. "In 1 min" tests background playback — try closing the app.',
-          style: const TextStyle(fontSize: 12, color: AppColors.textSecondary, height: 1.5),
+          style: TextStyle(fontSize: 12, color: _textSecondary, height: 1.5),
         ),
         // Warning banner when online sound isn't cached yet
         if (needsDownload) ...[               const SizedBox(height: 10),
@@ -2319,26 +2338,26 @@ class _AdhanSettingsScreenState extends State<AdhanSettingsScreen>
           title: Row(children: [
             Container(padding: const EdgeInsets.all(9),
               decoration: BoxDecoration(gradient: const LinearGradient(colors: [AppColors.gradientStart, AppColors.gradientEnd]), borderRadius: BorderRadius.circular(12)),
-              child: const Icon(Icons.calendar_month_rounded, color: Colors.white, size: 20)),
+              child: Icon(Icons.calendar_month_rounded, color: Colors.white, size: 20)),
             const SizedBox(width: 12),
             Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Text(isAr ? 'جدول الأذان' : 'Adhan Schedule',
                   style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
               Text('${parsed.length} ${isAr ? "صلاة · $days يوماً" : "prayers · $days days"}',
-                  style: const TextStyle(fontSize: 12, color: AppColors.textSecondary, fontWeight: FontWeight.normal)),
+                  style: TextStyle(fontSize: 12, color: _textSecondary, fontWeight: FontWeight.normal)),
             ]),
           ]),
           content: SizedBox(width: double.maxFinite, height: 480, child: parsed.isEmpty
             ? Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
                 Icon(notificationsEnabled ? Icons.event_busy_rounded : Icons.notifications_off_rounded,
-                    size: 56, color: AppColors.textSecondary.withValues(alpha: 0.3)),
-                const SizedBox(height: 16),
+                    size: 56, color: _textSecondary.withValues(alpha: 0.3)),
+                SizedBox(height: 16),
                 Text(
                   notificationsEnabled
                       ? (isAr ? 'لا يوجد جدول بعد.\nاحفظ الإعدادات أولاً.' : 'No schedule yet.\nSave settings first.')
                       : (isAr ? 'إشعارات الأذان معطّلة.' : 'Adhan notifications are off.'),
                   textAlign: TextAlign.center,
-                  style: const TextStyle(color: AppColors.textSecondary, fontSize: 14)),
+                  style: TextStyle(color: _textSecondary, fontSize: 14)),
               ]))
             : Column(children: [
                 if (nextPrayer != null) ...[
@@ -2378,7 +2397,7 @@ class _AdhanSettingsScreenState extends State<AdhanSettingsScreen>
                       Padding(padding: const EdgeInsets.fromLTRB(6, 10, 6, 6), child: Row(children: [
                         Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                           decoration: BoxDecoration(color: isToday ? AppColors.primary : AppColors.primary.withValues(alpha: 0.07), borderRadius: BorderRadius.circular(8)),
-                          child: Text(dayLabel, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: isToday ? Colors.white : AppColors.textSecondary))),
+                          child: Text(dayLabel, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: isToday ? Colors.white : _textSecondary))),
                         const SizedBox(width: 6),
                         const Expanded(child: Divider(color: AppColors.divider, height: 1)),
                       ])),
@@ -2393,13 +2412,13 @@ class _AdhanSettingsScreenState extends State<AdhanSettingsScreen>
                             border: Border.all(color: isPast ? AppColors.divider : color.withValues(alpha: 0.35)),
                           ),
                           child: Row(mainAxisSize: MainAxisSize.min, children: [
-                            Icon(prayerIcon(item.label), size: 14, color: isPast ? AppColors.textSecondary : color),
-                            const SizedBox(width: 5),
+                            Icon(prayerIcon(item.label), size: 14, color: isPast ? _textSecondary : color),
+                            SizedBox(width: 5),
                             Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                               Text(localizePrayer(item.label), style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700,
-                                  color: isPast ? AppColors.textSecondary : color)),
+                                  color: isPast ? _textSecondary : color)),
                               Text(fmtTime(item.time), style: TextStyle(fontSize: 11,
-                                  color: isPast ? AppColors.textSecondary : color.withValues(alpha: 0.8))),
+                                  color: isPast ? _textSecondary : color.withValues(alpha: 0.8))),
                             ]),
                           ]),
                         );
@@ -2488,7 +2507,7 @@ class _SoundTile extends StatelessWidget {
                 decoration: BoxDecoration(shape: BoxShape.circle,
                   border: Border.all(color: isSelected ? AppColors.primary : AppColors.divider, width: 2),
                   color: isSelected ? AppColors.primary : Colors.transparent),
-                child: isSelected ? const Icon(Icons.check, color: Colors.white, size: 14) : null),
+                child: isSelected ? Icon(Icons.check, color: Colors.white, size: 14) : null),
               const SizedBox(width: 12),
               // Mosque icon
               Container(width: 44, height: 44,
@@ -2496,17 +2515,17 @@ class _SoundTile extends StatelessWidget {
                   color: isSelected ? AppColors.primary.withValues(alpha: 0.12) : AppColors.primary.withValues(alpha: 0.06),
                   borderRadius: BorderRadius.circular(12)),
                 child: Icon(Icons.mosque_rounded,
-                  color: isSelected ? AppColors.primary : AppColors.textSecondary, size: 22)),
-              const SizedBox(width: 12),
+                  color: isSelected ? AppColors.primary : Theme.of(context).colorScheme.onSurfaceVariant, size: 22)),
+              SizedBox(width: 12),
               // Name & metadata
               Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Row(children: [
                   Flexible(child: Text(isAr ? sound.nameAr : sound.nameEn,
                     style: TextStyle(fontSize: 13, fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-                      color: isSelected ? AppColors.primary : AppColors.textPrimary),
+                      color: isSelected ? AppColors.primary : Theme.of(context).colorScheme.onSurface),
                     overflow: TextOverflow.ellipsis)),
                   if (sound.isOfflineFallback) ...[
-                    const SizedBox(width: 4),
+                    SizedBox(width: 4),
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
                       decoration: BoxDecoration(
@@ -2521,18 +2540,18 @@ class _SoundTile extends StatelessWidget {
                 ]),
                 const SizedBox(height: 2),
                 Row(children: [
-                  const Icon(Icons.person_outline_rounded, size: 11, color: AppColors.textSecondary),
-                  const SizedBox(width: 3),
+                  Icon(Icons.person_outline_rounded, size: 11, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                  SizedBox(width: 3),
                   Flexible(child: Text(sound.muezzinDisplay(isAr),
-                    style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                    style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurfaceVariant),
                     overflow: TextOverflow.ellipsis)),
                 ]),
-                const SizedBox(height: 1),
+                SizedBox(height: 1),
                 Row(children: [
-                  const Icon(Icons.location_on_outlined, size: 11, color: AppColors.textSecondary),
-                  const SizedBox(width: 3),
+                  Icon(Icons.location_on_outlined, size: 11, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                  SizedBox(width: 3),
                   Flexible(child: Text(sound.mosqueDisplay(isAr),
-                    style: const TextStyle(fontSize: 10, color: AppColors.textSecondary),
+                    style: TextStyle(fontSize: 10, color: Theme.of(context).colorScheme.onSurfaceVariant),
                     overflow: TextOverflow.ellipsis)),
                 ]),
               ])),
@@ -2629,7 +2648,7 @@ class _BatteryWarningCard extends StatelessWidget {
         Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Container(padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(color: Colors.amber.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(10)),
-            child: const Icon(Icons.battery_alert_rounded, color: Colors.amber, size: 20)),
+            child: Icon(Icons.battery_alert_rounded, color: Colors.amber, size: 20)),
           const SizedBox(width: 12),
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(isAr ? 'تحسين استهلاك البطارية' : 'Battery Optimization',
@@ -2638,7 +2657,7 @@ class _BatteryWarningCard extends StatelessWidget {
             Text(
               isAr ? 'لضمان سماع الأذان دائماً، اضغط أدناه واختر "غير مقيَّد"'
                   : 'For reliable Adhan, tap below and select "Unrestricted"',
-              style: const TextStyle(fontSize: 12, color: AppColors.textSecondary, height: 1.5),
+              style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant, height: 1.5),
             ),
           ])),
         ]),
@@ -2743,14 +2762,14 @@ class _ShortModeStep extends StatelessWidget {
             shape: BoxShape.circle,
           ),
           child: Center(
-            child: Text(number, style: const TextStyle(fontSize: 11, color: Colors.white, fontWeight: FontWeight.bold)),
+            child: Text(number, style: TextStyle(fontSize: 11, color: Colors.white, fontWeight: FontWeight.bold)),
           ),
         ),
         const SizedBox(width: 10),
         Expanded(
           child: Text(
             isAr ? ar : en,
-            style: const TextStyle(fontSize: 12, color: AppColors.textSecondary, height: 1.4),
+            style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant, height: 1.4),
           ),
         ),
       ]),

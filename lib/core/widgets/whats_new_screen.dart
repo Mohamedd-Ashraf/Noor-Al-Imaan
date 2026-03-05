@@ -239,6 +239,42 @@ const Map<String, List<_WhatsNewEntry>> _changelog = {
     // 11 ── الصلاة على النبي ﷺ
 
   ],
+
+  // ─── v1.0.9 ────────────────────────────────────────────────────
+  '1.0.9': [
+    _WhatsNewEntry(
+      icon: Icons.explore_rounded,
+      titleAr: 'شاشة القبلة',
+      titleEn: 'Qiblah Compass',
+      descAr: 'تحديد اتجاه القبلة بدقة بوصلة حية وخريطة تفاعلية، مع تنبيه فوري عند استقبال القبلة.',
+      descEn: 'Find the Qibla direction with a live compass and interactive map, with instant haptic feedback when aligned.',
+      color: AppColors.primary,
+    ),
+    _WhatsNewEntry(
+      icon: Icons.notifications_active_rounded,
+      titleAr: 'إصلاح جدولة الأذان والإشعارات',
+      titleEn: 'Fixed Adhan & Notification Scheduling',
+      descAr: 'تم إصلاح جدولة الأذان والإشعارات بشكل كامل — التنبيهات تصلك أخيراً في الوقت الصحيح دون انقطاع.',
+      descEn: 'Adhan and notification scheduling is now fully fixed — alerts arrive on time, every time.',
+      color: const Color(0xFF2E7D32),
+    ),
+    _WhatsNewEntry(
+      icon: Icons.sensors_rounded,
+      titleAr: 'تنبيه معايرة البوصلة',
+      titleEn: 'Compass Calibration Alert',
+      descAr: 'يظهر تنبيه تلقائي عند انخفاض دقة بوصلة جهازك مع خطوات واضحة لإعادة المعايرة.',
+      descEn: 'An automatic prompt appears when compass accuracy is low, with step-by-step calibration instructions.',
+      color: Colors.amber,
+    ),
+    _WhatsNewEntry(
+      icon: Icons.auto_fix_high_rounded,
+      titleAr: 'إصلاحات عامة',
+      titleEn: 'General Fixes',
+      descAr: 'حذف البسملة المكررة من بداية السور، ورقم الصفحة لم يعد يختبئ خلف شريط تنقل الأندرويد، وتحسينات في الوضع الليلي.',
+      descEn: 'Duplicate Basmala removed from verse 1, page numbers no longer hidden on 3-button nav devices, and dark mode improvements.',
+      color: const Color(0xFF00695C),
+    ),
+  ],
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -262,8 +298,8 @@ class WhatsNewScreen extends StatefulWidget {
 
 class _WhatsNewScreenState extends State<WhatsNewScreen>
     with SingleTickerProviderStateMixin {
-  // Total = 300ms base + 11 cards × 100ms stagger + 500ms card window = 2500ms (v1.0.8)
-  static const int _totalMs = 2500;
+  // Total = 300ms base + 4 cards × 100ms stagger + 500ms card window = 1700ms (v1.0.9)
+  static const int _totalMs = 1700;
 
   late final AnimationController _animController;
 

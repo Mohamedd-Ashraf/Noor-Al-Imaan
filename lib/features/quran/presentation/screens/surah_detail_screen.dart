@@ -146,6 +146,10 @@ class _SurahDetailScreenState extends State<SurahDetailScreen> {
       (cubit) => cubit.state.quranFont,
     );
 
+    final wordByWordAudio = context.select<AppSettingsCubit, bool>(
+      (cubit) => cubit.state.wordByWordAudio,
+    );
+
     // Reload surah when edition or script type changes.
     final editionChanged = _previousEditionSetting != null &&
         _previousEditionSetting != quranEdition;
@@ -203,18 +207,7 @@ class _SurahDetailScreenState extends State<SurahDetailScreen> {
 
                 // Use Mushaf page view when Uthmani script is enabled
                 if (useUthmaniScript) {
-                  return Scaffold(
-                    appBar: AppBar(
-                      title: Text(
-                        isArabicUi ? surah.name : surah.englishName,
-                        style: GoogleFonts.amiriQuran(
-                          fontSize: 20,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      centerTitle: true,
-                    ),
-                    body: MushafPageView(
+                  return MushafPageView(
                       surah: surah,
                       surahNumber: widget.surahNumber,
                       initialPage:
@@ -253,8 +246,7 @@ class _SurahDetailScreenState extends State<SurahDetailScreen> {
                               );
                             }
                           : null,
-                    ),
-                  );
+                    );
                 }
 
                 // Regular scrollable view
@@ -287,6 +279,49 @@ class _SurahDetailScreenState extends State<SurahDetailScreen> {
                       floating: false,
                       pinned: true,
                       actions: [
+                        IconButton(
+                          tooltip: wordByWordAudio
+                              ? (isArabicUi
+                                  ? 'إيقاف التلاوة كلمة بكلمة'
+                                  : 'Disable word-by-word')
+                              : (isArabicUi
+                                  ? 'تفعيل التلاوة كلمة بكلمة'
+                                  : 'Enable word-by-word'),
+                          icon: Icon(
+                            wordByWordAudio
+                                ? Icons.record_voice_over_rounded
+                                : Icons.voice_over_off_rounded,
+                            color: wordByWordAudio
+                                ? AppColors.secondary
+                                : Colors.white54,
+                          ),
+                          onPressed: () {
+                            HapticFeedback.lightImpact();
+                            context
+                                .read<AppSettingsCubit>()
+                                .setWordByWordAudio(!wordByWordAudio);
+                            ScaffoldMessenger.of(context).clearSnackBars();
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  !wordByWordAudio
+                                      ? (isArabicUi
+                                          ? '✓ التلاوة كلمة بكلمة مفعّلة'
+                                          : '✓ Word-by-word audio enabled')
+                                      : (isArabicUi
+                                          ? 'التلاوة كلمة بكلمة معطّلة'
+                                          : 'Word-by-word audio disabled'),
+                                ),
+                                duration: const Duration(seconds: 2),
+                                behavior: SnackBarBehavior.floating,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                margin: const EdgeInsets.all(12),
+                              ),
+                            );
+                          },
+                        ),
                         IconButton(
                           tooltip: isSurahPlaying
                               ? (isArabicUi ? 'إيقاف مؤقت' : 'Pause surah')
@@ -451,7 +486,7 @@ class _SurahDetailScreenState extends State<SurahDetailScreen> {
                         },
                       ),
                     ),
-                    // Bismillah (except for Surah 9)
+                    // Bismillah (except for Surah 1 & 9)
                     if (widget.surahNumber != 1 && widget.surahNumber != 9)
                       SliverToBoxAdapter(
                         child: Builder(
@@ -460,109 +495,67 @@ class _SurahDetailScreenState extends State<SurahDetailScreen> {
                                 .watch<AppSettingsCubit>()
                                 .state
                                 .darkMode;
+                            final gold = AppColors.secondary;
+                            final green = AppColors.primary;
                             return Container(
                               width: double.infinity,
-                              margin: const EdgeInsets.fromLTRB(
-                                  16, 8, 16, 0),
+                              margin: const EdgeInsets.fromLTRB(16, 8, 16, 0),
                               padding: const EdgeInsets.symmetric(
-                                  vertical: 22, horizontal: 20),
+                                  vertical: 20, horizontal: 24),
                               decoration: BoxDecoration(
                                 gradient: LinearGradient(
-                                  begin: Alignment.centerRight,
-                                  end: Alignment.centerLeft,
+                                  begin: Alignment.topCenter,
+                                  end: Alignment.bottomCenter,
                                   colors: isDark
                                       ? [
-                                          AppColors.primary.withValues(
-                                              alpha: 0.18),
-                                          AppColors.primary.withValues(
-                                              alpha: 0.08),
-                                          AppColors.primary.withValues(
-                                              alpha: 0.18),
+                                          green.withValues(alpha: 0.20),
+                                          green.withValues(alpha: 0.10),
                                         ]
                                       : [
-                                          AppColors.primary.withValues(
-                                              alpha: 0.04),
-                                          AppColors.primary.withValues(
-                                              alpha: 0.09),
-                                          AppColors.primary.withValues(
-                                              alpha: 0.04),
+                                          green.withValues(alpha: 0.04),
+                                          green.withValues(alpha: 0.08),
                                         ],
                                 ),
-                                borderRadius: BorderRadius.circular(16),
+                                borderRadius: BorderRadius.circular(20),
                                 border: Border.all(
-                                  color: AppColors.secondary.withValues(
-                                      alpha: isDark ? 0.5 : 0.4),
+                                  color: gold.withValues(
+                                      alpha: isDark ? 0.55 : 0.40),
                                   width: 1.5,
                                 ),
                                 boxShadow: [
                                   BoxShadow(
-                                    color: AppColors.primary.withValues(
-                                        alpha: isDark ? 0.2 : 0.06),
-                                    blurRadius: 10,
-                                    offset: const Offset(0, 3),
+                                    color: gold.withValues(
+                                        alpha: isDark ? 0.18 : 0.09),
+                                    blurRadius: 22,
+                                    spreadRadius: 0,
+                                    offset: const Offset(0, 4),
                                   ),
                                 ],
                               ),
                               child: Column(
                                 children: [
-                                  Row(
-                                    mainAxisAlignment:
-                                        MainAxisAlignment.center,
-                                    children: [
-                                      _buildBismillahOrnamentLine(),
-                                      Padding(
-                                        padding: const EdgeInsets.symmetric(
-                                            horizontal: 10),
-                                        child: Icon(
-                                          Icons.star,
-                                          size: 11,
-                                          color: AppColors.secondary
-                                              .withValues(alpha: 0.7),
-                                        ),
-                                      ),
-                                      _buildBismillahOrnamentLine(),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 12),
+                                  _buildIslamicOrnamentRow(isDark),
+                                  const SizedBox(height: 14),
                                   Text(
                                     'بِسْمِ ٱللَّهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ',
                                     textAlign: TextAlign.center,
                                     style: GoogleFonts.amiriQuran(
-                                      fontSize: 30,
-                                      color: isDark
-                                          ? AppColors.secondary
-                                          : AppColors.primary,
+                                      fontSize: 32,
+                                      color: isDark ? gold : green,
                                       fontWeight: FontWeight.w700,
                                       height: 1.8,
                                       shadows: [
                                         Shadow(
-                                          color: AppColors.primary.withValues(
-                                              alpha: isDark ? 0.35 : 0.12),
-                                          blurRadius: 6,
-                                          offset: const Offset(0, 1),
+                                          color: (isDark ? gold : green)
+                                              .withValues(alpha: 0.30),
+                                          blurRadius: 10,
+                                          offset: const Offset(0, 2),
                                         ),
                                       ],
                                     ),
                                   ),
-                                  const SizedBox(height: 12),
-                                  Row(
-                                    mainAxisAlignment:
-                                        MainAxisAlignment.center,
-                                    children: [
-                                      _buildBismillahOrnamentLine(),
-                                      Padding(
-                                        padding: const EdgeInsets.symmetric(
-                                            horizontal: 10),
-                                        child: Icon(
-                                          Icons.star,
-                                          size: 11,
-                                          color: AppColors.secondary
-                                              .withValues(alpha: 0.7),
-                                        ),
-                                      ),
-                                      _buildBismillahOrnamentLine(),
-                                    ],
-                                  ),
+                                  const SizedBox(height: 14),
+                                  _buildIslamicOrnamentRow(isDark),
                                 ],
                               ),
                             );
@@ -674,39 +667,26 @@ class _SurahDetailScreenState extends State<SurahDetailScreen> {
                                               height: 36,
                                               decoration: BoxDecoration(
                                                 shape: BoxShape.circle,
-                                                gradient: RadialGradient(
-                                                  colors: [
-                                                    AppColors.primary
-                                                        .withValues(
-                                                      alpha: isDarkMode
-                                                          ? 0.3
-                                                          : 0.12,
-                                                    ),
-                                                    AppColors.primary
-                                                        .withValues(
-                                                      alpha: isDarkMode
-                                                          ? 0.08
-                                                          : 0.03,
-                                                    ),
-                                                  ],
-                                                ),
+                                                color: isDarkMode
+                                                    ? Colors.white
+                                                        .withValues(alpha: 0.12)
+                                                    : AppColors.primary
+                                                        .withValues(alpha: 0.08),
                                                 border: Border.all(
-                                                  color: AppColors.primary
-                                                      .withValues(
-                                                    alpha: isDarkMode
-                                                        ? 0.7
-                                                        : 0.5,
-                                                  ),
+                                                  color: isDarkMode
+                                                      ? Colors.white
+                                                          .withValues(alpha: 0.55)
+                                                      : AppColors.primary
+                                                          .withValues(alpha: 0.5),
                                                   width: 1.5,
                                                 ),
                                                 boxShadow: [
                                                   BoxShadow(
-                                                    color: AppColors.primary
-                                                        .withValues(
-                                                      alpha: isDarkMode
-                                                          ? 0.22
-                                                          : 0.1,
-                                                    ),
+                                                    color: isDarkMode
+                                                        ? Colors.black
+                                                            .withValues(alpha: 0.3)
+                                                        : AppColors.primary
+                                                            .withValues(alpha: 0.1),
                                                     blurRadius: 6,
                                                     spreadRadius: 0,
                                                   ),
@@ -730,7 +710,7 @@ class _SurahDetailScreenState extends State<SurahDetailScreen> {
                                                     fontWeight:
                                                         FontWeight.w800,
                                                     color: isDarkMode
-                                                        ? AppColors.secondary
+                                                        ? Colors.white
                                                         : AppColors.primary,
                                                     height: 1.0,
                                                   ),
@@ -864,11 +844,28 @@ class _SurahDetailScreenState extends State<SurahDetailScreen> {
                                         color: textColor,
                                       );
 
+                                      // Strip Basmala from first ayah (shown separately above)
+                                      // Use "keep base letters only" regex – covers all Quran diacritic
+                                      // variants (U+06E1 etc.) that the old diacritic-removal regex missed.
+                                      String displayText = ayah.text;
+                                      if (ayah.numberInSurah == 1 &&
+                                          widget.surahNumber != 1 &&
+                                          widget.surahNumber != 9) {
+                                        final ws = displayText.split(' ');
+                                        final bare = ws.isNotEmpty
+                                            ? ws[0].replaceAll(
+                                                RegExp(r'[^\u0621-\u063A\u0641-\u064A\u0671]'), '')
+                                            : '';
+                                        if (ws.length >= 4 && bare.startsWith('\u0628\u0633\u0645')) {
+                                          displayText = ws.sublist(4).join(' ').trim();
+                                        }
+                                      }
+
                                       // ── WORD-BY-WORD MODE ──────────────
                                       if (wordByWord) {
                                         final audioState =
                                             context.watch<AyahAudioCubit>().state;
-                                        final words = ayah.text
+                                        final words = displayText
                                             .split(' ')
                                             .where((w) => w.isNotEmpty)
                                             .toList();
@@ -1007,7 +1004,7 @@ class _SurahDetailScreenState extends State<SurahDetailScreen> {
                                           );
                                         },
                                         child: Text(
-                                          ayah.text,
+                                          displayText,
                                           textAlign: TextAlign.right,
                                           textDirection: TextDirection.rtl,
                                           style: baseStyle,
@@ -1229,20 +1226,49 @@ class _SurahDetailScreenState extends State<SurahDetailScreen> {
     }).join();
   }
 
-  /// Decorative horizontal gradient line for the Bismillah ornament
-  Widget _buildBismillahOrnamentLine() {
-    return Container(
-      width: 60,
-      height: 1.5,
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            AppColors.secondary.withValues(alpha: 0.0),
-            AppColors.secondary.withValues(alpha: 0.75),
-            AppColors.secondary.withValues(alpha: 0.0),
-          ],
+  /// Decorative Islamic ornament row: gradient line ✦ gradient line
+  Widget _buildIslamicOrnamentRow(bool isDark) {
+    final gold = AppColors.secondary;
+    final lineAlpha = isDark ? 0.60 : 0.42;
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Container(
+          width: 72,
+          height: 1,
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [
+                gold.withValues(alpha: 0.0),
+                gold.withValues(alpha: lineAlpha),
+              ],
+            ),
+          ),
         ),
-      ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          child: Text(
+            '✦',
+            style: TextStyle(
+              fontSize: 11,
+              color: gold.withValues(alpha: isDark ? 0.85 : 0.65),
+              height: 1,
+            ),
+          ),
+        ),
+        Container(
+          width: 72,
+          height: 1,
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [
+                gold.withValues(alpha: lineAlpha),
+                gold.withValues(alpha: 0.0),
+              ],
+            ),
+          ),
+        ),
+      ],
     );
   }
 

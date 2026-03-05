@@ -11,11 +11,11 @@ import android.os.PowerManager
 import android.provider.Settings
 import android.util.Log
 import android.view.KeyEvent
-import io.flutter.embedding.android.FlutterActivity
+import com.ryanheise.audioservice.AudioServiceFragmentActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 
-class MainActivity : FlutterActivity() {
+class MainActivity : AudioServiceFragmentActivity() {
 
     private val adhanChannel = "quraan/adhan_player"
 
@@ -358,13 +358,22 @@ class MainActivity : FlutterActivity() {
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         if (event.action == KeyEvent.ACTION_DOWN &&
             (event.keyCode == KeyEvent.KEYCODE_VOLUME_UP ||
-             event.keyCode == KeyEvent.KEYCODE_VOLUME_DOWN) &&
-            AdhanPlayerService.isPlaying
+             event.keyCode == KeyEvent.KEYCODE_VOLUME_DOWN)
         ) {
-            Log.d("MainActivity", "Volume key pressed — stopping Adhan")
-            stopAdhanService()
-            stopPreviewNative()
-            return true // consume the event: don’t change volume, just stop Adhan
+            val adhanRunning   = AdhanPlayerService.isPlaying
+            val previewRunning = previewPlayer != null
+            Log.d("MainActivity", "Volume key DOWN: adhanRunning=$adhanRunning previewRunning=$previewRunning")
+
+            if (adhanRunning || previewRunning) {
+                Log.d("MainActivity", "Volume key — stopping ${if (adhanRunning) "Adhan service" else "preview"}")
+
+                if (adhanRunning)   stopAdhanService()
+                if (previewRunning) {
+                    stopPreviewNative()
+                    runOnUiThread { channel?.invokeMethod("previewCompleted", null) }
+                }
+                return true // consume the event: stop Adhan/preview, don’t change volume
+            }
         }
         return super.dispatchKeyEvent(event)
     }

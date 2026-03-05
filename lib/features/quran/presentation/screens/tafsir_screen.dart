@@ -1,12 +1,21 @@
+import 'dart:io';
+import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../../../../core/constants/api_constants.dart';
 import '../../../../core/constants/app_colors.dart';
+import '../../../../core/di/injection_container.dart' as di;
+import '../../../../core/services/bookmark_service.dart';
 import '../../../../core/settings/app_settings_cubit.dart';
 import '../bloc/tafsir/tafsir_cubit.dart';
+import '../../../../core/utils/arabic_text_style_helper.dart';
 import '../bloc/tafsir/tafsir_state.dart';
 
 /// Screen that displays the tafsir (exegesis / commentary) for a single ayah.
@@ -32,13 +41,130 @@ class TafsirScreen extends StatefulWidget {
 }
 
 class _TafsirScreenState extends State<TafsirScreen> {
+  late final BookmarkService _bookmarkService;
+  bool _isBookmarked = false;
+  bool _isSharing = false;
+
+  String get _bookmarkId =>
+      'surah_${widget.surahNumber}_ayah_${widget.ayahNumber}';
+
   @override
   void initState() {
     super.initState();
+    _bookmarkService = di.sl<BookmarkService>();
+    _isBookmarked = _bookmarkService.isBookmarked(_bookmarkId);
     context.read<TafsirCubit>().init(
           surahNumber: widget.surahNumber,
           ayahNumber: widget.ayahNumber,
         );
+  }
+
+  Future<void> _toggleBookmark(bool isArabicUi) async {
+    if (_isBookmarked) {
+      await _bookmarkService.removeBookmark(_bookmarkId);
+      setState(() => _isBookmarked = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(isArabicUi ? 'تمت إزالة الإشارة' : 'Bookmark removed'),
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+    } else {
+      await _bookmarkService.addBookmark(
+        id: _bookmarkId,
+        reference: '${widget.surahNumber}:${widget.ayahNumber}',
+        arabicText: widget.arabicAyahText,
+        surahName: widget.surahName,
+        surahNumber: widget.surahNumber,
+        ayahNumber: widget.ayahNumber,
+      );
+      setState(() => _isBookmarked = true);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(isArabicUi ? 'تمت إضافة الإشارة' : 'Bookmark added'),
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _shareAyah(bool isArabicUi) async {
+    if (_isSharing) return;
+    setState(() => _isSharing = true);
+
+    final quranFont = context.read<AppSettingsCubit>().state.quranFont;
+    OverlayEntry? overlayEntry;
+    try {
+      final captureKey = GlobalKey();
+
+      // Insert share-card into the Overlay off-screen so Flutter actually
+      // lays it out and paints it (Offstage skips painting, so toImage fails).
+      overlayEntry = OverlayEntry(
+        builder: (_) => Positioned(
+          left: -4000,
+          top: 0,
+          child: Directionality(
+            textDirection: TextDirection.rtl,
+            child: SizedBox(
+              width: 380,
+              child: RepaintBoundary(
+                key: captureKey,
+                child: _buildShareCard(quranFont),
+              ),
+            ),
+          ),
+        ),
+      );
+      Overlay.of(context).insert(overlayEntry);
+
+      // Wait two frames: first for layout, second for paint
+      await Future.delayed(const Duration(milliseconds: 200));
+
+      final renderObj = captureKey.currentContext?.findRenderObject();
+      if (renderObj is! RenderRepaintBoundary) {
+        throw Exception('Capture failed — card not painted');
+      }
+
+      final image = await renderObj.toImage(pixelRatio: 3.0);
+      final byteData =
+          await image.toByteData(format: ui.ImageByteFormat.png);
+      if (byteData == null) throw Exception('PNG encoding failed');
+
+      final bytes = byteData.buffer.asUint8List();
+      final tempDir = await getTemporaryDirectory();
+      final filePath =
+          '${tempDir.path}/ayah_${widget.surahNumber}_${widget.ayahNumber}.png';
+      await File(filePath).writeAsBytes(bytes, flush: true);
+
+      final subject = isArabicUi
+          ? '${widget.surahName} — الآية ${widget.ayahNumber}'
+          : '${widget.surahEnglishName} — Ayah ${widget.ayahNumber}';
+
+      await SharePlus.instance.share(
+        ShareParams(
+          files: [XFile(filePath, mimeType: 'image/png')],
+          subject: subject,
+        ),
+      );
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              isArabicUi ? 'تعذّر المشاركة' : 'Could not share. Try again.',
+            ),
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+    } finally {
+      overlayEntry?.remove();
+      if (mounted) setState(() => _isSharing = false);
+    }
   }
 
   @override
@@ -76,6 +202,187 @@ class _TafsirScreenState extends State<TafsirScreen> {
     );
   }
 
+  // ─── Share Card (captured as PNG image) ─────────────────────────────────
+
+  Widget _buildShareCard(String quranFont) {
+    const gold = Color(0xFFD4AF37);
+    const goldLight = Color(0xFFEDD97A);
+    const deepGreen = Color(0xFF064428);
+    const midGreen = Color(0xFF0D5E3A);
+
+    final ayahStyle = ArabicTextStyleHelper.quranFontStyle(
+      fontKey: quranFont,
+      fontSize: 24,
+      height: 2.2,
+      color: Colors.white,
+    );
+
+    return Material(
+      color: Colors.transparent,
+      child: Container(
+        width: 420,
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [deepGreen, midGreen, Color(0xFF0A3D22)],
+            stops: [0.0, 0.5, 1.0],
+          ),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // ── Gold top rule ──────────────────────────────────────────
+            Container(height: 4, color: gold),
+
+            // ── Bismillah header ───────────────────────────────────────
+            Container(
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              decoration: BoxDecoration(
+                color: Colors.black.withValues(alpha: 0.20),
+                border: Border(
+                  bottom: BorderSide(
+                      color: gold.withValues(alpha: 0.45), width: 1),
+                ),
+              ),
+              child: Text(
+                '\uFDFD', // ﷽
+                textAlign: TextAlign.center,
+                textDirection: TextDirection.rtl,
+                style: ArabicTextStyleHelper.quranFontStyle(
+                  fontKey: quranFont,
+                  fontSize: 30,
+                  color: goldLight,
+                ),
+              ),
+            ),
+
+            // ── Ayah body ──────────────────────────────────────────────
+            Padding(
+              padding: const EdgeInsets.fromLTRB(28, 22, 28, 22),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _ornamentRow(gold),
+                  const SizedBox(height: 18),
+                  Text(
+                    widget.arabicAyahText,
+                    textAlign: TextAlign.center,
+                    textDirection: TextDirection.rtl,
+                    style: ayahStyle,
+                  ),
+                  const SizedBox(height: 18),
+                  _ornamentRow(gold),
+                ],
+              ),
+            ),
+
+            // ── Surah reference footer ─────────────────────────────────
+            Container(
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+              decoration: BoxDecoration(
+                color: Colors.black.withValues(alpha: 0.25),
+                border: Border(
+                  top: BorderSide(
+                      color: gold.withValues(alpha: 0.45), width: 1),
+                ),
+              ),
+              child: Column(
+                children: [
+                  Text(
+                    widget.surahName,
+                    textAlign: TextAlign.center,
+                    textDirection: TextDirection.rtl,
+                    style: GoogleFonts.scheherazadeNew(
+                      fontSize: 22,
+                      color: goldLight,
+                      fontWeight: FontWeight.w600,
+                      height: 1.6,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'الآية الكريمة  ${widget.ayahNumber}',
+                    textAlign: TextAlign.center,
+                    textDirection: TextDirection.rtl,
+                    style: GoogleFonts.cairo(
+                      fontSize: 13,
+                      color: gold.withValues(alpha: 0.9),
+                      fontWeight: FontWeight.w500,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Container(
+                    height: 0.5,
+                    color: gold.withValues(alpha: 0.35),
+                    margin: const EdgeInsets.symmetric(horizontal: 40),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    '─  القرآن الكريم  ─',
+                    textAlign: TextAlign.center,
+                    textDirection: TextDirection.rtl,
+                    style: GoogleFonts.cairo(
+                      fontSize: 11,
+                      color: goldLight.withValues(alpha: 0.55),
+                      fontWeight: FontWeight.w400,
+                      letterSpacing: 0.8,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            // ── Gold bottom rule ───────────────────────────────────────
+            Container(height: 4, color: gold),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _ornamentRow(Color gold) {
+    return Row(
+      children: [
+        Expanded(
+          child: Container(
+            height: 1,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [Colors.transparent, gold.withValues(alpha: 0.7)],
+              ),
+            ),
+          ),
+        ),
+        Container(
+          width: 7,
+          height: 7,
+          margin: const EdgeInsets.symmetric(horizontal: 10),
+          decoration: BoxDecoration(
+            color: gold,
+            shape: BoxShape.circle,
+            boxShadow: [
+              BoxShadow(
+                  color: gold.withValues(alpha: 0.45), blurRadius: 5),
+            ],
+          ),
+        ),
+        Expanded(
+          child: Container(
+            height: 1,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [gold.withValues(alpha: 0.7), Colors.transparent],
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
   // ─── App Bar ─────────────────────────────────────────────────────────────
 
   Widget _buildAppBar(
@@ -83,6 +390,34 @@ class _TafsirScreenState extends State<TafsirScreen> {
     return SliverAppBar(
       expandedHeight: 120,
       pinned: true,
+      actions: [
+        IconButton(
+          icon: _isSharing
+              ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2.5,
+                    color: Colors.white,
+                  ),
+                )
+              : const Icon(Icons.share_rounded, color: Colors.white),
+          tooltip: isArabicUi ? 'مشاركة الآية' : 'Share ayah',
+          onPressed: _isSharing ? null : () => _shareAyah(isArabicUi),
+        ),
+        IconButton(
+          icon: Icon(
+            _isBookmarked
+                ? Icons.bookmark_rounded
+                : Icons.bookmark_outline_rounded,
+            color: _isBookmarked ? AppColors.secondary : Colors.white,
+          ),
+          tooltip: isArabicUi
+              ? (_isBookmarked ? 'إزالة الإشارة' : 'إضافة إشارة')
+              : (_isBookmarked ? 'Remove bookmark' : 'Add bookmark'),
+          onPressed: () => _toggleBookmark(isArabicUi),
+        ),
+      ],
       flexibleSpace: LayoutBuilder(
         builder: (context, constraints) {
           final topPadding = MediaQuery.of(context).padding.top;
@@ -93,6 +428,7 @@ class _TafsirScreenState extends State<TafsirScreen> {
           return Stack(
             fit: StackFit.expand,
             children: [
+              // Gradient background
               Container(
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
@@ -104,56 +440,47 @@ class _TafsirScreenState extends State<TafsirScreen> {
                   ),
                 ),
               ),
-              if (!isCollapsed)
-                SafeArea(
+              // Title area — left:48 for back arrow, right:100 for 2 action buttons
+              Positioned.fill(
+                child: SafeArea(
                   child: Padding(
-                    padding: const EdgeInsets.only(left: 56, right: 16),
+                    padding: const EdgeInsets.only(left: 48, right: 100),
                     child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        const SizedBox(height: 8),
                         Text(
                           isArabicUi
                               ? '${widget.surahName} — الآية ${widget.ayahNumber}'
                               : '${widget.surahEnglishName} — Ayah ${widget.ayahNumber}',
-                          style: GoogleFonts.cairo(
-                            fontSize: 18,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          textAlign: TextAlign.center,
+                          textDirection: TextDirection.rtl,
+                          style: GoogleFonts.scheherazadeNew(
+                            fontSize: isCollapsed ? 18 : 21,
                             fontWeight: FontWeight.w700,
                             color: Colors.white,
+                            height: 1.4,
                           ),
                         ),
-                        Text(
-                          isArabicUi ? 'التفسير والمعنى' : 'Tafsir & Commentary',
-                          style: TextStyle(
-                            fontSize: 13,
-                            color: Colors.white.withValues(alpha: 0.85),
+                        if (!isCollapsed) ...[
+                          const SizedBox(height: 2),
+                          Text(
+                            isArabicUi
+                                ? 'التفسير والمعنى'
+                                : 'Tafsir & Commentary',
+                            textDirection: TextDirection.rtl,
+                          style: GoogleFonts.cairo(
+                              fontSize: 12,
+                              color: Colors.white.withValues(alpha: 0.8),
+                            ),
                           ),
-                        ),
+                        ],
                       ],
                     ),
                   ),
                 ),
-              // collapsed title
-              if (isCollapsed)
-                Align(
-                  alignment: Alignment.center,
-                  child: Padding(
-                    padding: const EdgeInsets.only(left: 56, right: 16),
-                    child: Text(
-                      isArabicUi
-                          ? '${widget.surahName} — الآية ${widget.ayahNumber}'
-                          : '${widget.surahEnglishName} — Ayah ${widget.ayahNumber}',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: GoogleFonts.cairo(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ),
-                ),
+              ),
             ],
           );
         },
@@ -242,7 +569,8 @@ class _TafsirScreenState extends State<TafsirScreen> {
               widget.arabicAyahText,
               textAlign: TextAlign.right,
               textDirection: TextDirection.rtl,
-              style: GoogleFonts.amiriQuran(
+              style: ArabicTextStyleHelper.quranFontStyle(
+                fontKey: settings.quranFont,
                 fontSize: settings.arabicFontSize + 2,
                 height: 2.1,
                 color: isDark

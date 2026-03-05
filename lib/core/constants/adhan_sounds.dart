@@ -162,17 +162,17 @@ class AdhanSounds {
       shortDurationSeconds: 9,
     ),
     AdhanSoundInfo(
-      id: 'online_afasy_fajr',
-      nameAr: 'أذان الفجر — مشاري العفاسي',
-      nameEn: 'Fajr Adhan — Mishary Al-Afasy',
+      id: 'online_afasy',
+      nameAr: 'أذان مشاري راشد العفاسي',
+      nameEn: 'Mishary Rashid Al-Afasy Adhan',
       muezzinAr: 'مشاري راشد العفاسي',
       muezzinEn: 'Mishary Rashid Al-Afasy',
       mosqueAr: 'الكويت',
       mosqueEn: 'Kuwait',
       isOnline: true,
-      url: '${_base}Mishary_Rashid_al_Afasy_Fajr_Adhan.mp3',
-      // measured via adhan_analyzer.py: silence after 2nd Takbeer at 5.20s
-      shortDurationSeconds: 5,
+      url: 'https://archive.org/download/VeryBeautifulAdhaanByMisharyAlAfasy/Very%20Beautiful%20Adhaan%20by%20Mishary%20Al-Afasy.mp3',
+      // measured: silence after 2nd Takbeer at 19s
+      shortDurationSeconds: 19,
     ),
     AdhanSoundInfo(
       id: 'online_mokhtar_slimane',

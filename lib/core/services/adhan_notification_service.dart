@@ -84,6 +84,11 @@ class AdhanNotificationService {
   // _isAdhanPlaying removed — AdhanPlayerService manages its own concurrency.
   DateTime? _lastAdhanStartedAt;
 
+  // Mutex: prevents concurrent ensureScheduled() calls from racing and
+  // causing alarm accumulation that exceeds Android's 500-alarm limit.
+  bool _isScheduling = false;
+  bool _schedulePending = false;
+
   AdhanNotificationService(
     this._plugin,
     this._settings,
@@ -229,16 +234,11 @@ class AdhanNotificationService {
           debugPrint('🔔 [Adhan] AlarmManager: cancelled ${ids.length} alarm(s)');
         }
       }
-      // Cancel iqama alarms — same IDs as adhan, native side adds +50000 offset.
+      // Cancel iqama alarms — use saved iqama IDs (different from adhan IDs).
       try {
-        final raw2 = _settings.getAdhanSchedulePreview();
+        final raw2 = _settings.getIqamaAlarmIds();
         if (raw2 != null && raw2.isNotEmpty) {
-          final list2 = jsonDecode(raw2) as List;
-          final ids2 = list2
-              .whereType<Map>()
-              .map((e) => e['id'])
-              .whereType<int>()
-              .toList();
+          final ids2 = (jsonDecode(raw2) as List).whereType<int>().toList();
           if (ids2.isNotEmpty) {
             await _androidAdhanPlayerChannel.invokeMethod('cancelIqamaAlarms', {'ids': ids2});
             debugPrint('🔔 [Iqama] AlarmManager: cancelled ${ids2.length} alarm(s)');
@@ -478,6 +478,27 @@ class AdhanNotificationService {
   }
 
   Future<void> ensureScheduled() async {
+    // If a scheduling is already in progress, just flag that another run is
+    // needed after it finishes. This prevents concurrent calls from racing
+    // (cancel-then-add interleaving) and blowing past the 500-alarm limit.
+    if (_isScheduling) {
+      _schedulePending = true;
+      return;
+    }
+    _isScheduling = true;
+    try {
+      await _doEnsureScheduled();
+      // If settings changed while we were scheduling, run once more.
+      while (_schedulePending) {
+        _schedulePending = false;
+        await _doEnsureScheduled();
+      }
+    } finally {
+      _isScheduling = false;
+    }
+  }
+
+  Future<void> _doEnsureScheduled() async {
     final enabled = _settings.getAdhanNotificationsEnabled();
     if (!enabled) return;
 
@@ -496,12 +517,14 @@ class AdhanNotificationService {
     await cancelAll();             // clear flutter_local_notifications alarms (including from older app versions)
     await _cancelAllNativeAlarms(); // cancel existing native AlarmManager alarms before re-registering
     final days = computeDaysAhead();
-    final preview = <Map<String, dynamic>>[];
+    final preview              = <Map<String, dynamic>>[];
+    final allIqamaAlarms       = <Map<String, dynamic>>[];
+    final allApproachingAlarms = <Map<String, dynamic>>[];
     for (var i = 0; i < days; i++) {
-      final items = await _scheduleForDate(coords, today.add(Duration(days: i)));
-      for (final it in items) {
-        preview.add(it);
-      }
+      final r = await _scheduleForDate(coords, today.add(Duration(days: i)));
+      preview.addAll(r.scheduled);
+      allIqamaAlarms.addAll(r.iqama);
+      allApproachingAlarms.addAll(r.approaching);
     }
 
     await _settings.setLastAdhanScheduleDateIso(today.toIso8601String());
@@ -516,6 +539,34 @@ class AdhanNotificationService {
       });
       await _settings.setAdhanSchedulePreview(jsonEncode(preview));
       await _scheduleNativeAlarms(preview);
+      // Iqama — schedule all days at once and persist IDs for correct cancellation.
+      if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+        try {
+          await _androidAdhanPlayerChannel.invokeMethod('scheduleIqamaAlarms', {
+            'alarms':  allIqamaAlarms,
+            'enabled': _settings.getIqamaEnabled(),
+          });
+          await _settings.setIqamaAlarmIds(
+              jsonEncode(allIqamaAlarms.map((a) => a['id']).toList()));
+          debugPrint('🔔 [Iqama] Native: scheduled ${allIqamaAlarms.length} alarm(s)');
+        } catch (e) {
+          debugPrint('🔔 [Iqama] Native scheduling error: $e');
+        }
+        // Approaching — schedule all days at once and persist all IDs.
+        try {
+          final remEnabled = _settings.getPrayerReminderEnabled();
+          final remMinutes = _settings.getPrayerReminderMinutes();
+          await _androidAdhanPlayerChannel.invokeMethod('scheduleApproachingAlarms', {
+            'alarms':  allApproachingAlarms,
+            'enabled': remEnabled && remMinutes > 0,
+          });
+          await _settings.setApproachingAlarmIds(
+              jsonEncode(allApproachingAlarms.map((a) => a['id']).toList()));
+          debugPrint('🔔 [Approaching] Native: scheduled ${allApproachingAlarms.length} alarm(s)');
+        } catch (e) {
+          debugPrint('🔔 [Approaching] Native scheduling error: $e');
+        }
+      }
       await _scheduleSalawatNotifications();
     } catch (_) {
       // Ignore preview/schedule failures.
@@ -548,7 +599,11 @@ class AdhanNotificationService {
     if (_settings.getPrayerReminderEnabled() &&
         _settings.getPrayerReminderMinutes() > 0) typesPerPrayer++;
 
-    final salawatBudget = _settings.getSalawatEnabled() ? salawatCap : 0;
+    // Always reserve salawatCap regardless of getSalawatEnabled() to prevent
+    // overflow if the setting is read inconsistently mid-cycle (e.g. during a
+    // rapid settings change + phone lock). With 500 - 30 - 20 = 450 available,
+    // the worst case is 450 prayer alarms + 30 salawat = 480 < 500.
+    const salawatBudget = salawatCap;
     final available = limit - salawatBudget - buffer;
     final perDay    = enabledPrayers * typesPerPrayer;
 
@@ -622,7 +677,7 @@ class AdhanNotificationService {
     }
   }
 
-  Future<List<Map<String, dynamic>>> _scheduleForDate(Coordinates coordinates, DateTime date) async {
+  Future<({List<Map<String, dynamic>> scheduled, List<Map<String, dynamic>> iqama, List<Map<String, dynamic>> approaching})> _scheduleForDate(Coordinates coordinates, DateTime date) async {
     // Try to use cached prayer times first (offline support)
     final cachedTimes = _cache.getCachedTimesForDate(date);
     
@@ -779,37 +834,10 @@ class AdhanNotificationService {
       }
     }
 
-    // ── Schedule all iqama alarms natively on Android ───────────────────────────
-    if (isAndroid && iqamaNativeAlarms.isNotEmpty) {
-      try {
-        await _androidAdhanPlayerChannel.invokeMethod('scheduleIqamaAlarms', {
-          'alarms':  iqamaNativeAlarms,
-          'enabled': iqamaEnabled,
-        });
-        debugPrint('🔔 [Iqama] Native: scheduled ${iqamaNativeAlarms.length} alarm(s)');
-      } catch (e) {
-        debugPrint('🔔 [Iqama] Native scheduling error: $e');
-      }
-    }
-
-    // ── Schedule all approaching-reminder alarms natively on Android ─────────────
-    if (isAndroid) {
-      try {
-        final approachingEnabled = reminderEnabled && reminderMinutes > 0;
-        await _androidAdhanPlayerChannel.invokeMethod('scheduleApproachingAlarms', {
-          'alarms':  approachingNativeAlarms,
-          'enabled': approachingEnabled,
-        });
-        // Persist IDs so _cancelAllNativeAlarms can cancel them later.
-        await _settings.setApproachingAlarmIds(
-            jsonEncode(approachingNativeAlarms.map((a) => a['id']).toList()));
-        debugPrint('🔔 [Approaching] Native: scheduled ${approachingNativeAlarms.length} alarm(s)');
-      } catch (e) {
-        debugPrint('🔔 [Approaching] Native scheduling error: $e');
-      }
-    }
-
-    return scheduled;
+    // Iqama and approaching alarms are returned to the caller (_doEnsureScheduled)
+    // for bulk scheduling across all days in a single native call — this prevents
+    // per-day ID overwrites that caused < all IDs to be saved for cancellation.
+    return (scheduled: scheduled, iqama: iqamaNativeAlarms, approaching: approachingNativeAlarms);
   }
 
   NotificationDetails _notificationDetails() {

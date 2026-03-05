@@ -387,12 +387,10 @@ class _MushafPageViewState extends State<MushafPageView>
     final totalPages = _pageOffset + _pages.length + (hasNextSurah ? 1 : 0);
     final isRtlFlip = settings.pageFlipRightToLeft;
     final isScrollMode = settings.scrollMode;
+    final wordByWordAudio = settings.wordByWordAudio;
+    final isAr = widget.isArabicUi;
 
-    // ── Unified horizontal PageView ────────────────────────────────────
-    // In scroll mode: disable horizontal PageView swipe — navigation is
-    // handled exclusively by vertical drag (GestureDetector on each page).
-    // In normal mode: horizontal swipe flips pages as usual.
-    return Directionality(
+    final pageViewWidget = Directionality(
       textDirection: TextDirection.rtl,
       child: PageView.builder(
         controller: _pageController,
@@ -414,6 +412,82 @@ class _MushafPageViewState extends State<MushafPageView>
           return _buildMushafPage(_pages[realIndex], scrollMode: isScrollMode);
         },
       ),
+    );
+
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(
+          isAr ? widget.surah.name : widget.surah.englishName,
+          style: GoogleFonts.amiriQuran(
+            fontSize: 20,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        centerTitle: true,
+        actions: [
+          // Word-by-word toggle
+          IconButton(
+            tooltip: wordByWordAudio
+                ? (isAr ? 'إيقاف التلاوة كلمة بكلمة' : 'Disable word-by-word')
+                : (isAr ? 'تفعيل التلاوة كلمة بكلمة' : 'Enable word-by-word'),
+            icon: Icon(
+              wordByWordAudio
+                  ? Icons.record_voice_over_rounded
+                  : Icons.voice_over_off_rounded,
+              color: wordByWordAudio ? AppColors.secondary : Colors.white54,
+            ),
+            onPressed: () {
+              HapticFeedback.lightImpact();
+              context
+                  .read<AppSettingsCubit>()
+                  .setWordByWordAudio(!wordByWordAudio);
+              ScaffoldMessenger.of(context).clearSnackBars();
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(
+                    !wordByWordAudio
+                        ? (isAr
+                            ? '✓ التلاوة كلمة بكلمة مفعّلة'
+                            : '✓ Word-by-word audio enabled')
+                        : (isAr
+                            ? 'التلاوة كلمة بكلمة معطّلة'
+                            : 'Word-by-word audio disabled'),
+                  ),
+                  duration: const Duration(seconds: 2),
+                  behavior: SnackBarBehavior.floating,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  margin: const EdgeInsets.all(12),
+                ),
+              );
+            },
+          ),
+          // Bookmark + Play for the current page
+          ListenableBuilder(
+            listenable: _pageController,
+            builder: (context, _) {
+              final rawIdx = _pageController.hasClients
+                  ? (_pageController.page?.round() ??
+                      _pageController.initialPage)
+                  : _pageController.initialPage;
+              final realIndex = rawIdx - _pageOffset;
+              if (realIndex < 0 || realIndex >= _pages.length) {
+                return const SizedBox.shrink();
+              }
+              final page = _pages[realIndex];
+              return Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _buildPageBookmarkButton(page),
+                  _buildPagePlayButton(page),
+                ],
+              );
+            },
+          ),
+        ],
+      ),
+      body: pageViewWidget,
     );
   }
 
@@ -815,10 +889,7 @@ class _MushafPageViewState extends State<MushafPageView>
                   background: _buildDecorativeHeader(),
                   collapseMode: CollapseMode.parallax,
                 ),
-                actions: [
-                  _buildPageBookmarkButton(page),
-                  _buildPagePlayButton(page),
-                ],
+                actions: const [],
               ),
               SliverPadding(
                 padding: const EdgeInsets.symmetric(
@@ -836,14 +907,15 @@ class _MushafPageViewState extends State<MushafPageView>
                 ),
               ),
               SliverToBoxAdapter(
-                child: _buildDecorativeFooter(page.pageNumber),
+                child: _buildDecorativeFooter(page.pageNumber, isDarkMode: isDarkMode),
               ),
             ],
           ),
           // "Swipe up" indicator — shown when at bottom
+          // Offset by system nav bar height so it is never hidden behind it.
           if (scrollMode && (_pageAtBottom[page.pageNumber] ?? true))
             Positioned(
-              bottom: 6,
+              bottom: 6 + MediaQuery.of(context).padding.bottom,
               left: 0,
               right: 0,
               child: _ScrollModeIndicator(
@@ -1071,9 +1143,13 @@ class _MushafPageViewState extends State<MushafPageView>
     );
   }
 
-  Widget _buildDecorativeFooter(int pageNumber) {
+  Widget _buildDecorativeFooter(int pageNumber, {required bool isDarkMode}) {
+    // Add bottom padding equal to the system navigation bar height so the
+    // page number is never hidden behind the 3-button nav bar on Android.
+    final bottomInset = MediaQuery.of(context).padding.bottom;
+
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
+      padding: EdgeInsets.fromLTRB(16, 10, 16, 10 + bottomInset),
       decoration: BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topCenter,
@@ -1102,6 +1178,8 @@ class _MushafPageViewState extends State<MushafPageView>
               Image.asset(
                 'assets/logo/files/transparent/label.png',
                 height: 30,
+                // Tint white in dark mode so the label decoration is visible
+                color: isDarkMode ? Colors.white.withValues(alpha: 0.85) : null,
               ),
               Text(
                 _toArabicNumerals(pageNumber),
@@ -1109,7 +1187,7 @@ class _MushafPageViewState extends State<MushafPageView>
                 style: GoogleFonts.amiriQuran(
                   fontSize: 18,
                   fontWeight: FontWeight.w700,
-                  color: AppColors.primary,
+                  color: isDarkMode ? Colors.white : AppColors.primary,
                   height: 2,
                 ),
               ),
@@ -1134,7 +1212,13 @@ class _MushafPageViewState extends State<MushafPageView>
           widget.surahNumber != 1 &&
           widget.surahNumber != 9) {
         final words = text.split(' ');
-        if (words.length >= 5 && words[0] == 'بِسْمِ') {
+        // Keep only base Arabic letters – covers all Quran diacritic
+        // variants (U+06E1 etc.) that the old narrow regex missed.
+        final bare = words.isNotEmpty
+            ? words[0].replaceAll(
+                RegExp(r'[^\u0621-\u063A\u0641-\u064A\u0671]'), '')
+            : '';
+        if (words.length >= 4 && bare.startsWith('\u0628\u0633\u0645')) {
           text = words.sublist(4).join(' ').trim();
         }
       }
@@ -1229,9 +1313,14 @@ class _MushafPageViewState extends State<MushafPageView>
                   if (ayah.numberInSurah == 1 &&
                       widget.surahNumber != 1 &&
                       widget.surahNumber != 9) {
-                    // Split by spaces and remove first 4 words (Basmala)
+                    // Remove first 4 words (Basmala) — shown separately above
+                    // Keep only base Arabic letters for robust cross-encoding match.
                     final words = ayahText.split(' ');
-                    if (words.length >= 5 && words[0] == 'بِسْمِ') {
+                    final bare = words.isNotEmpty
+                        ? words[0].replaceAll(
+                            RegExp(r'[^\u0621-\u063A\u0641-\u064A\u0671]'), '')
+                        : '';
+                    if (words.length >= 4 && bare.startsWith('\u0628\u0633\u0645')) {
                       ayahText = words.sublist(4).join(' ').trim();
                     }
                   }
@@ -1477,6 +1566,7 @@ class _MushafPageViewState extends State<MushafPageView>
               'assets/logo/files/transparent/frame.png',
               width: frameSize,
               height: frameSize,
+              color: isDarkMode ? Colors.white.withValues(alpha: 0.85) : null,
             ),
             Padding(
               padding: EdgeInsets.fromLTRB(0, 0, 0, bottomPadding),
@@ -1486,7 +1576,7 @@ class _MushafPageViewState extends State<MushafPageView>
                 style: GoogleFonts.amiriQuran(
                   fontSize: fontSize,
                   fontWeight: FontWeight.w800,
-                  color: textColor,
+                  color: isDarkMode ? Colors.white : AppColors.primary,
                   height: 1,
                 ),
               ),
@@ -1522,7 +1612,7 @@ class _MushafPageViewState extends State<MushafPageView>
           },
           icon: Icon(
             isPagePlaying ? Icons.pause_circle : Icons.play_circle,
-            color: AppColors.primary,
+            color: isPagePlaying ? AppColors.secondary : Colors.white54,
             size: 28,
           ),
           tooltip: widget.isArabicUi ? 'تشغيل الصفحة' : 'Play page',

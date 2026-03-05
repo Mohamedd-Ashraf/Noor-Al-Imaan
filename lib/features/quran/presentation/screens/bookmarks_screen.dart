@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/services/bookmark_service.dart';
 import '../../../../core/di/injection_container.dart' as di;
 import '../../../../core/settings/app_settings_cubit.dart';
-import '../../../../core/utils/arabic_text_style_helper.dart';
 import '../bloc/surah/surah_bloc.dart';
 import '../bloc/surah/surah_state.dart';
 import 'surah_detail_screen.dart';
@@ -275,14 +275,25 @@ class BookmarksScreenState extends State<BookmarksScreen> {
                             color: AppColors.primary.withValues(alpha: 0.1),
                             borderRadius: BorderRadius.circular(20),
                           ),
-                          child: Text(
-                            _formatBookmarkLabel(bookmark),
-                            style: Theme.of(context).textTheme.bodySmall
-                                ?.copyWith(
-                                  color: AppColors.primary,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                          ),
+                          child: Builder(builder: (ctx) {
+                            final isAr = ctx
+                                .read<AppSettingsCubit>()
+                                .state
+                                .appLanguageCode
+                                .toLowerCase()
+                                .startsWith('ar');
+                            return Text(
+                              _formatBookmarkLabel(bookmark),
+                              textDirection: isAr
+                                  ? TextDirection.rtl
+                                  : TextDirection.ltr,
+                              style: GoogleFonts.cairo(
+                                fontSize: 12,
+                                color: AppColors.primary,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            );
+                          }),
                         ),
                         Icon(
                           Icons.bookmark,
@@ -293,10 +304,6 @@ class BookmarksScreenState extends State<BookmarksScreen> {
                     ),
                     const SizedBox(height: 16),
                     Builder(builder: (context) {
-                      final quranFont = context
-                          .read<AppSettingsCubit>()
-                          .state
-                          .quranFont;
                       return Text(
                         bookmark['arabicText'] ??
                             'بِسْمِ ٱللَّهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ',
@@ -304,8 +311,7 @@ class BookmarksScreenState extends State<BookmarksScreen> {
                         textDirection: TextDirection.rtl,
                         maxLines: 3,
                         overflow: TextOverflow.ellipsis,
-                        style: ArabicTextStyleHelper.quranFontStyle(
-                          fontKey: quranFont,
+                        style: GoogleFonts.amiriQuran(
                           fontSize: 20,
                           color: AppColors.arabicText,
                           height: 2.2,

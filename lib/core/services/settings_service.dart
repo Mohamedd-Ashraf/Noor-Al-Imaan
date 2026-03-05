@@ -395,6 +395,8 @@ class SettingsService {
   // ── Native alarm ID caches (Android only — for cancellation) ─────────────
   String? getApproachingAlarmIds() => _prefs.getString('approaching_alarm_ids');
   Future<bool> setApproachingAlarmIds(String json) => _prefs.setString('approaching_alarm_ids', json);
+  String? getIqamaAlarmIds() => _prefs.getString('iqama_alarm_ids');
+  Future<bool> setIqamaAlarmIds(String json) => _prefs.setString('iqama_alarm_ids', json);
   String? getSalawatAlarmIds() => _prefs.getString('salawat_alarm_ids');
   Future<bool> setSalawatAlarmIds(String json) => _prefs.setString('salawat_alarm_ids', json);
 }

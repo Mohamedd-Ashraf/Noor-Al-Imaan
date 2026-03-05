@@ -16,7 +16,7 @@ Usage
 -----
   python tool/adhan_analyzer.py                    # menu to pick a sound
   python tool/adhan_analyzer.py adhan_1            # open specific sound directly
-  python tool/adhan_analyzer.py online_afasy_fajr  # online sound (downloads once)
+  python tool/adhan_analyzer.py online_afasy  # online sound (downloads once)
 
 Requirements
 ------------
@@ -73,10 +73,10 @@ SOUNDS = [
         "cutoff":      9,
     },
     {
-        "id":          "online_afasy_fajr",
-        "label":       "Mishary Al-Afasy (Fajr) — Kuwait",
-        "url":         BASE_URL + "Mishary_Rashid_al_Afasy_Fajr_Adhan.mp3",
-        "cutoff":      5,
+        "id":          "online_afasy",
+        "label":       "Mishary Rashid Al-Afasy — Kuwait",
+        "url":         "https://archive.org/download/VeryBeautifulAdhaanByMisharyAlAfasy/Very%20Beautiful%20Adhaan%20by%20Mishary%20Al-Afasy.mp3",
+        "cutoff":      19,
     },
     {
         "id":          "online_mokhtar_slimane",

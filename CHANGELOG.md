@@ -2,6 +2,24 @@
 
 ---
 
+## [1.0.9] – 2026-03-04
+
+### عربي
+- **شاشة القبلة:** تحديد اتجاه القبلة بدقة ببوصلة حية وخريطة تفاعلية، مع تنبيه فوري عند استقبال القبلة.
+- **إصلاح جدولة الأذان والإشعارات:** تم إصلاح جدولة الأذان والإشعارات بشكل كامل — التنبيهات تصلك أخيراً في الوقت الصحيح دون انقطاع.
+- **تنبيه معايرة البوصلة:** يظهر تنبيه تلقائي عند انخفاض دقة بوصلة جهازك مع خطوات واضحة لإعادة المعايرة.
+- **إصلاحات عامة:** حذف البسملة المكررة من بداية السور، ورقم الصفحة لم يعد يختبئ خلف شريط تنقل الأندرويد، وتحسينات في الوضع الليلي.
+- تحديث رقم الإصدار إلى **1.0.9**.
+
+### English
+- **Qiblah Compass:** Find the Qibla direction with a live compass and interactive map, with instant haptic feedback when aligned.
+- **Fixed Adhan & Notification Scheduling:** Adhan and notification scheduling is now fully fixed — alerts arrive on time, every time.
+- **Compass Calibration Alert:** An automatic prompt appears when compass accuracy is low, with step-by-step calibration instructions.
+- **General Fixes:** Duplicate Basmala removed from verse 1, page numbers no longer hidden on 3-button nav devices, and dark mode improvements.
+- Version bumped to **1.0.9**.
+
+---
+
 ## [1.0.8] – 2026-03-01
 
 ### عربي

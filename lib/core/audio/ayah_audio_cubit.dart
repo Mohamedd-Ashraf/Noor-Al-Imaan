@@ -5,6 +5,7 @@ import 'package:equatable/equatable.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:just_audio/just_audio.dart';
+import 'package:just_audio_background/just_audio_background.dart';
 
 import '../services/ayah_audio_service.dart';
 import '../services/adhan_notification_service.dart';
@@ -123,7 +124,7 @@ class AyahAudioCubit extends Cubit<AyahAudioState> {
   /// Silence gap injected between consecutive ayahs.
   static const Duration _ayahGap = Duration(milliseconds: 400);
   /// Tag used on SilenceAudioSource items so we can identify them.
-  static const int _kSilenceTag = -1;
+  static const String _kSilenceTag = 'silence';
   /// True while [seekToAbsolute] is in progress.
   /// Suppresses spurious `ProcessingState.completed` events that just_audio
   /// fires during the internal FLUSHING/RESUMING cycle of a seek operation.
@@ -247,9 +248,12 @@ class AyahAudioCubit extends Cubit<AyahAudioState> {
         final tag = sequence.sequence[idx].tag;
         // Silence items: keep current ayah highlighted, don't change state.
         if (tag == _kSilenceTag) return;
-        if (tag is int) {
-          emit(state.copyWith(ayahNumber: tag));
-          return;
+        if (tag is MediaItem) {
+          final ayahNum = int.tryParse(tag.id.split('_').last);
+          if (ayahNum != null) {
+            emit(state.copyWith(ayahNumber: ayahNum));
+            return;
+          }
         }
       }
 
@@ -440,10 +444,18 @@ class AyahAudioCubit extends Cubit<AyahAudioState> {
         ayahNumber: ayahNumber,
       );
 
+      final mediaItem = MediaItem(
+        id: '${surahNumber}_$ayahNumber',
+        title: 'الآية $ayahNumber',
+        album: 'سورة $surahNumber',
+        artist: 'القرآن الكريم',
+      );
       if (source.isLocal) {
-        await _player.setAudioSource(AudioSource.file(source.localFilePath!));
+        await _player.setAudioSource(
+            AudioSource.file(source.localFilePath!, tag: mediaItem));
       } else {
-        await _player.setAudioSource(AudioSource.uri(source.remoteUri!));
+        await _player.setAudioSource(
+            AudioSource.uri(source.remoteUri!, tag: mediaItem));
       }
 
       await _player.setLoopMode(LoopMode.off);
@@ -498,11 +510,17 @@ class AyahAudioCubit extends Cubit<AyahAudioState> {
     final a = ayahNumber.toString().padLeft(3, '0');
     final w = wordIndex.toString().padLeft(3, '0');
     final uri = Uri.parse(
-      'https://audio.qurancdn.com/wbw/${s}_${a}_${w}.mp3',
+      'https://audio.qurancdn.com/wbw/${s}_${a}_$w.mp3',
     );
 
     try {
-      await _player.setAudioSource(AudioSource.uri(uri));
+      final mediaItem = MediaItem(
+        id: 'word_${surahNumber}_${ayahNumber}_$wordIndex',
+        title: 'الآية $ayahNumber - كلمة $wordIndex',
+        album: 'سورة $surahNumber',
+        artist: 'القرآن الكريم',
+      );
+      await _player.setAudioSource(AudioSource.uri(uri, tag: mediaItem));
       await _player.setLoopMode(LoopMode.off);
       await _player.setShuffleModeEnabled(false);
       await _player.play();
@@ -587,10 +605,16 @@ class AyahAudioCubit extends Cubit<AyahAudioState> {
       for (var i = 0; i < sources.length; i++) {
         final ayahNumber = i + 1;
         final s = sources[i];
+        final mediaItem = MediaItem(
+          id: '${surahNumber}_$ayahNumber',
+          title: 'الآية $ayahNumber',
+          album: 'سورة $surahNumber',
+          artist: 'القرآن الكريم',
+        );
         if (s.isLocal) {
-          children.add(AudioSource.file(s.localFilePath!, tag: ayahNumber));
+          children.add(AudioSource.file(s.localFilePath!, tag: mediaItem));
         } else {
-          children.add(AudioSource.uri(s.remoteUri!, tag: ayahNumber));
+          children.add(AudioSource.uri(s.remoteUri!, tag: mediaItem));
         }
         // Add silence gap after every ayah except the last.
         if (i < sources.length - 1) {
@@ -653,12 +677,18 @@ class AyahAudioCubit extends Cubit<AyahAudioState> {
           ayahNumber: ayahNumber,
         );
 
+        final mediaItem = MediaItem(
+          id: '${surahNumber}_$ayahNumber',
+          title: 'الآية $ayahNumber',
+          album: 'سورة $surahNumber',
+          artist: 'القرآن الكريم',
+        );
         if (source.isLocal) {
           children.add(
-            AudioSource.file(source.localFilePath!, tag: ayahNumber),
+            AudioSource.file(source.localFilePath!, tag: mediaItem),
           );
         } else {
-          children.add(AudioSource.uri(source.remoteUri!, tag: ayahNumber));
+          children.add(AudioSource.uri(source.remoteUri!, tag: mediaItem));
         }
         // Add silence gap after every ayah except the last.
         if (ayahNumber < endAyah) {
