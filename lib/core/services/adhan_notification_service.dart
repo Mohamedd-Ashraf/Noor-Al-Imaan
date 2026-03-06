@@ -744,12 +744,56 @@ class AdhanNotificationService {
     for (final item in items) {
       if (!item.enabled) continue;
 
-      final localTime = tz.TZDateTime.from(item.time.toLocal(), tz.local);
-      // Don't schedule notifications in the past.
+      final localTime  = tz.TZDateTime.from(item.time.toLocal(), tz.local);
+      final arabicName = arabicNames[item.prayer.name] ?? item.label;
+
+      // ── Iqama reminder ────────────────────────────────────────────────────
+      // Evaluated BEFORE the adhan-past check so that the iqama alarm is
+      // (re-)scheduled even when the app reschedules between adhan and iqama
+      // time.  Without this, _cancelAllNativeAlarms() wipes the previously
+      // registered iqama alarm and it is never re-added because the adhan's
+      // localTime is already in the past.
+      if (iqamaEnabled) {
+        final iqamaMinutes = switch (item.prayer) {
+          Prayer.fajr    => _settings.getIqamaMinutesFajr(),
+          Prayer.dhuhr   => _settings.getIqamaMinutesDhuhr(),
+          Prayer.asr     => _settings.getIqamaMinutesAsr(),
+          Prayer.maghrib => _settings.getIqamaMinutesMaghrib(),
+          Prayer.isha    => _settings.getIqamaMinutesIsha(),
+          _              => _settings.getIqamaMinutes(),
+        };
+        if (iqamaMinutes > 0) {
+          final iqamaTime  = localTime.add(Duration(minutes: iqamaMinutes));
+          // Only add if the iqama itself is still in the future.
+          if (iqamaTime.isAfter(now)) {
+            final iqamaId    = _iqamaNotificationId(date, item.prayer);
+            final iqamaTitle = isArabic ? 'إقامة: $arabicName' : 'Iqama: ${item.label}';
+            final iqamaBody  = isArabic
+                ? 'حان وقت الإقامة لصلاة $arabicName'
+                : 'Time to stand for ${item.label} prayer';
+            if (isAndroid) {
+              iqamaNativeAlarms.add({
+                'id':     iqamaId,
+                'timeMs': iqamaTime.millisecondsSinceEpoch,
+                'title':  iqamaTitle,
+                'body':   iqamaBody,
+              });
+            } else {
+              await _plugin.zonedSchedule(
+                iqamaId, iqamaTitle, iqamaBody,
+                iqamaTime,
+                _iqamaNotificationDetails(),
+                androidScheduleMode: schedMode,
+              );
+            }
+          }
+        }
+      }
+
+      // ── Don't schedule adhan or pre-prayer reminder in the past ──────────
       if (localTime.isBefore(now)) continue;
 
       final id = _notificationId(date, item.prayer);
-      final arabicName = arabicNames[item.prayer.name] ?? item.label;
 
       // ── Only add to schedule (drives native alarms + preview UI) ─────────
       // Audio + foreground notification are handled by AdhanPlayerService.
@@ -788,45 +832,6 @@ class AdhanNotificationService {
               remId, remTitle, remBody,
               reminderTime,
               _reminderNotificationDetails(item.prayer),
-              androidScheduleMode: schedMode,
-            );
-          }
-        }
-      }
-
-      // ── Iqama reminder ────────────────────────────────────────────────────
-      if (iqamaEnabled) {
-        // Per-prayer iqama minutes (different defaults per prayer).
-        final iqamaMinutes = switch (item.prayer) {
-          Prayer.fajr    => _settings.getIqamaMinutesFajr(),
-          Prayer.dhuhr   => _settings.getIqamaMinutesDhuhr(),
-          Prayer.asr     => _settings.getIqamaMinutesAsr(),
-          Prayer.maghrib => _settings.getIqamaMinutesMaghrib(),
-          Prayer.isha    => _settings.getIqamaMinutesIsha(),
-          _              => _settings.getIqamaMinutes(), // fallback
-        };
-        final iqamaTime  = localTime.add(Duration(minutes: iqamaMinutes));
-        final iqamaId    = _iqamaNotificationId(date, item.prayer);
-        final iqamaTitle = isArabic ? 'إقامة: $arabicName' : 'Iqama: ${item.label}';
-        final iqamaBody  = isArabic
-            ? 'حان وقت الإقامة لصلاة $arabicName'
-            : 'Time to stand for ${item.label} prayer';
-        if (iqamaMinutes > 0) {
-          if (isAndroid) {
-            // Android: route through IqamaAlarmReceiver → AdhanPlayerService
-            // so the full iqama sound is never cut off by the 30s OS limit.
-            iqamaNativeAlarms.add({
-              'id':     iqamaId,
-              'timeMs': iqamaTime.millisecondsSinceEpoch,
-              'title':  iqamaTitle,
-              'body':   iqamaBody,
-            });
-          } else {
-            // iOS: flutter_local_notifications handles it
-            await _plugin.zonedSchedule(
-              iqamaId, iqamaTitle, iqamaBody,
-              iqamaTime,
-              _iqamaNotificationDetails(),
               androidScheduleMode: schedMode,
             );
           }
