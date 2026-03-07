@@ -122,7 +122,7 @@ class AyahAudioCubit extends Cubit<AyahAudioState> {
   /// Sum of durations of all items that have already *finished* playing.
   Duration _accumulatedDuration = Duration.zero;
   /// Silence gap injected between consecutive ayahs.
-  static const Duration _ayahGap = Duration(milliseconds: 400);
+  static const Duration _ayahGap = Duration.zero;
   /// Tag used on SilenceAudioSource items so we can identify them.
   static const String _kSilenceTag = 'silence';
   /// True while [seekToAbsolute] is in progress.
@@ -403,15 +403,18 @@ class AyahAudioCubit extends Cubit<AyahAudioState> {
   void _resetPlaylistTracking(int ayahCount, {int firstAyahNumber = 1}) {
     _ayahCount = ayahCount;
     _firstAyahNumber = firstAyahNumber;
-    // Total items: ayahs interleaved with silence gaps.
-    // N ayahs → N + (N−1) = 2N−1 items.  Single ayah → 1 item (no gap).
-    _playlistLength = ayahCount <= 1 ? 1 : 2 * ayahCount - 1;
+    // When gap > 0: N ayahs + (N-1) silences = 2N-1 items.
+    // When gap == 0: no silence items inserted, so exactly N items.
+    final hasGap = _ayahGap > Duration.zero;
+    _playlistLength = (ayahCount <= 1 || !hasGap) ? ayahCount : 2 * ayahCount - 1;
     _currentItemIndex = 0;
     _accumulatedDuration = Duration.zero;
     _itemDurations.clear();
-    // Pre-populate known durations for silence items (odd indices).
-    for (var i = 1; i < _playlistLength; i += 2) {
-      _itemDurations[i] = _ayahGap;
+    // Pre-populate known durations for silence items (odd indices, only when gap > 0).
+    if (hasGap) {
+      for (var i = 1; i < _playlistLength; i += 2) {
+        _itemDurations[i] = _ayahGap;
+      }
     }
   }
 
@@ -617,7 +620,7 @@ class AyahAudioCubit extends Cubit<AyahAudioState> {
           children.add(AudioSource.uri(s.remoteUri!, tag: mediaItem));
         }
         // Add silence gap after every ayah except the last.
-        if (i < sources.length - 1) {
+        if (_ayahGap > Duration.zero && i < sources.length - 1) {
           children.add(
             SilenceAudioSource(duration: _ayahGap, tag: _kSilenceTag),
           );
@@ -691,7 +694,7 @@ class AyahAudioCubit extends Cubit<AyahAudioState> {
           children.add(AudioSource.uri(source.remoteUri!, tag: mediaItem));
         }
         // Add silence gap after every ayah except the last.
-        if (ayahNumber < endAyah) {
+        if (_ayahGap > Duration.zero && ayahNumber < endAyah) {
           children.add(
             SilenceAudioSource(duration: _ayahGap, tag: _kSilenceTag),
           );
@@ -772,8 +775,11 @@ class AyahAudioCubit extends Cubit<AyahAudioState> {
 
       // ── Walk the playlist to find target item + in-item offset ─────────────
       Duration consumed = Duration.zero;
+      final hasGap = _ayahGap > Duration.zero;
       for (var i = 0; i < _playlistLength; i++) {
-        final isAyahItem = i.isEven; // ayahs are at even indices
+        // When gap > 0: even indices are ayahs, odd are silences.
+        // When gap == 0: all indices are ayahs.
+        final isAyahItem = !hasGap || i.isEven;
         // Use the actual cached duration if available, otherwise estimate.
         final dur = _itemDurations[i] ??
             (isAyahItem

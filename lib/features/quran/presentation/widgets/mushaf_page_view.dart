@@ -1265,7 +1265,7 @@ class _MushafPageViewState extends State<MushafPageView>
         final useDifferentDiacriticsColor = diacriticsColorMode != 'same';
         final baseTextColor = isDarkMode
             ? const Color(0xFFE8E8E8) // Light gray for dark mode
-            : AppColors.arabicText;
+            : const Color(0xFF1A1A1A); // Black for light mode
 
         // Define diacritics color based on mode
         Color? diacriticsColor;
@@ -1546,7 +1546,6 @@ class _MushafPageViewState extends State<MushafPageView>
     return BlocBuilder<AppSettingsCubit, AppSettingsState>(
       builder: (context, settingsState) {
         final isDarkMode = settingsState.darkMode;
-        final textColor = isDarkMode ? AppColors.secondary : AppColors.primary;
 
         // Scale everything proportionally with the arabic font size (base = 18)
         final scale = settingsState.arabicFontSize / 18.0;

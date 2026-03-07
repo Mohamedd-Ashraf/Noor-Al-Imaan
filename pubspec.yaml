@@ -139,6 +139,7 @@ flutter:
     - assets/logo/files/
     - assets/logo/files/transparent/
     - "assets/logo/button icons/"
+    - assets/fonts/
     # - assets/sound/ # Commented out to reduce size as it seems unused and contains images?
 
   # An image asset can refer to one or more resolution-specific "variants", see
@@ -164,5 +165,10 @@ flutter:
   #       - asset: fonts/TrajanPro_Bold.ttf
   #         weight: 700
   #
+  fonts:
+    - family: UthmanicHafs
+      fonts:
+        - asset: assets/fonts/UthmanicHafs1Ver18.ttf
+
   # For details regarding fonts from package dependencies,
   # see https://flutter.dev/to/font-from-package
