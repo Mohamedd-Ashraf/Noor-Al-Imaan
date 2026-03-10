@@ -9,7 +9,6 @@ import '../widgets/islamic_audio_player.dart';
 import '../../domain/usecases/get_surah.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/api_constants.dart';
-import '../../../../core/services/bookmark_service.dart';
 import '../../../../core/di/injection_container.dart' as di;
 import '../../../../core/settings/app_settings_cubit.dart';
 import '../../../../core/audio/ayah_audio_cubit.dart';
@@ -36,7 +35,6 @@ class SurahDetailScreen extends StatefulWidget {
 class _SurahDetailScreenState extends State<SurahDetailScreen> {
   final ScrollController _scrollController = ScrollController();
   bool _showScrollToTop = false;
-  late final BookmarkService _bookmarkService;
 
   /// Mirrors whether the floating audio player is collapsed (mini pill)
   /// or expanded (full player). Passed to both the player and the content
@@ -45,7 +43,6 @@ class _SurahDetailScreenState extends State<SurahDetailScreen> {
 
   final Map<int, GlobalKey> _ayahKeys = {};
   bool _hasScrolledToTarget = false;
-  bool _scrollCallbackScheduled = false;
 
   final Map<int, String> _translationByAyah = {};
   bool _isLoadingTranslation = false;
@@ -57,7 +54,6 @@ class _SurahDetailScreenState extends State<SurahDetailScreen> {
   @override
   void initState() {
     super.initState();
-    _bookmarkService = di.sl<BookmarkService>();
 
     // Use the user-selected edition from settings instead of a binary toggle.
     final settings = context.read<AppSettingsCubit>().state;
@@ -88,20 +84,11 @@ class _SurahDetailScreenState extends State<SurahDetailScreen> {
     // Reset scroll target flag if the target ayah/page changed
     if (oldWidget.initialAyahNumber != widget.initialAyahNumber ||
         oldWidget.initialPageNumber != widget.initialPageNumber) {
-      print('ðŸ”„ didUpdateWidget: Detected change in target');
-      print(
-        '   Old ayah: ${oldWidget.initialAyahNumber}, New ayah: ${widget.initialAyahNumber}',
-      );
-      print(
-        '   Old page: ${oldWidget.initialPageNumber}, New page: ${widget.initialPageNumber}',
-      );
       setState(() {
         _hasScrolledToTarget = false;
-        _scrollCallbackScheduled = false; // Reset to allow new callback
       });
       // Trigger scroll to new target
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        print('   ðŸŽ¯ Triggering scroll...');
         _maybeScrollToInitialAyah();
       });
     }
@@ -336,61 +323,6 @@ class _SurahDetailScreenState extends State<SurahDetailScreen> {
     );
   }
 
-  /// Converts a Latin integer to Arabic-Indic numeral string (Ù Ù¡Ù¢Ù£â€¦Ù©)
-  String _toArabicNumerals(int number) {
-    const arabicDigits = ['Ù ', 'Ù¡', 'Ù¢', 'Ù£', 'Ù¤', 'Ù¥', 'Ù¦', 'Ù§', 'Ù¨', 'Ù©'];
-    return number.toString().split('').map((digit) {
-      final index = int.tryParse(digit);
-      return index != null ? arabicDigits[index] : digit;
-    }).join();
-  }
-
-  /// Decorative Islamic ornament row: gradient line âœ¦ gradient line
-  Widget _buildIslamicOrnamentRow(bool isDark) {
-    final gold = AppColors.secondary;
-    final lineAlpha = isDark ? 0.60 : 0.42;
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        Container(
-          width: 72,
-          height: 1,
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [
-                gold.withValues(alpha: 0.0),
-                gold.withValues(alpha: lineAlpha),
-              ],
-            ),
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 10),
-          child: Text(
-            'âœ¦',
-            style: TextStyle(
-              fontSize: 11,
-              color: gold.withValues(alpha: isDark ? 0.85 : 0.65),
-              height: 1,
-            ),
-          ),
-        ),
-        Container(
-          width: 72,
-          height: 1,
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [
-                gold.withValues(alpha: lineAlpha),
-                gold.withValues(alpha: 0.0),
-              ],
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
   String surahNameForBar(SurahState state, {required bool isArabicUi}) {
     if (state is SurahDetailLoaded) {
       return isArabicUi ? state.surah.name : state.surah.englishName;
@@ -400,13 +332,9 @@ class _SurahDetailScreenState extends State<SurahDetailScreen> {
 
   void _maybeScrollToInitialAyah() {
     if (_hasScrolledToTarget) {
-      print('â­ï¸ Scroll already done, skipping');
       return;
     }
 
-    print('\nðŸ“ _maybeScrollToInitialAyah started');
-    print('   initialAyahNumber: ${widget.initialAyahNumber}');
-    print('   initialPageNumber: ${widget.initialPageNumber}');
 
     // Determine which ayah to scroll to
     int? targetAyahNumber = widget.initialAyahNumber;
@@ -420,17 +348,13 @@ class _SurahDetailScreenState extends State<SurahDetailScreen> {
           state.surah.ayahs,
           widget.initialPageNumber!,
         );
-        print('   ðŸ“„ Found first ayah in page: $targetAyahNumber');
       }
     }
 
     if (targetAyahNumber == null) {
-      print('   âŒ No target ayah found');
       return;
     }
 
-    print('   ðŸŽ¯ Target ayah: $targetAyahNumber');
-    print('   ðŸ“ Total keys in map before scroll: ${_ayahKeys.length}');
 
     // CRITICAL: Animate to approximate position FIRST to trigger ListView building
     // This ensures the target ayah's widget gets built and key gets created
@@ -444,9 +368,6 @@ class _SurahDetailScreenState extends State<SurahDetailScreen> {
       final distance = (targetPosition - currentPosition).abs();
       final duration = (distance / 3).clamp(600, 1500).toInt(); // 600ms to 1.5s
 
-      print(
-        '   ðŸŽ¬ Animating to approximate position: $targetPosition (duration: ${duration}ms)',
-      );
 
       // Animate smoothly to approximate position
       _scrollController
@@ -459,15 +380,9 @@ class _SurahDetailScreenState extends State<SurahDetailScreen> {
             // After animation completes, wait a bit then search for the exact key
             Future.delayed(const Duration(milliseconds: 200), () {
               if (!mounted) return;
-              print('   ðŸ” Starting search for ayah key...');
-              print(
-                '   ðŸ“ Total keys in map after animation: ${_ayahKeys.length}',
-              );
               _scrollToAyahWithRetry(targetAyahNumber!, 0);
             });
           });
-    } else {
-      print('   âš ï¸ ScrollController has no clients!');
     }
   }
 
@@ -476,14 +391,12 @@ class _SurahDetailScreenState extends State<SurahDetailScreen> {
     if (_hasScrolledToTarget) return;
     if (attemptCount > 150) {
       // Give up after 150 attempts (enough for longest surahs like Al-Baqarah)
-      print('   âŒ Failed after 150 attempts');
       setState(() {
         _hasScrolledToTarget = true;
       });
       return;
     }
 
-    print('   ðŸ”„ Attempt ${attemptCount + 1}: Looking for ayah $ayahNumber...');
 
     final key = _ayahKeys[ayahNumber];
     if (key == null) {
@@ -494,9 +407,6 @@ class _SurahDetailScreenState extends State<SurahDetailScreen> {
 
         // If we're at max extent, wait for ListView to build more items
         if (currentOffset >= maxExtent - 10) {
-          print(
-            '      â¸ï¸ At max extent, waiting for ListView to build more...',
-          );
           Future.delayed(const Duration(milliseconds: 300), () {
             if (!mounted) return;
             _scrollToAyahWithRetry(ayahNumber, attemptCount + 1);
@@ -505,7 +415,6 @@ class _SurahDetailScreenState extends State<SurahDetailScreen> {
         }
 
         final nextOffset = (currentOffset + 500).clamp(0.0, maxExtent);
-        print('      ðŸ“œ Scrolling forward from $currentOffset to $nextOffset');
 
         // Animate smoothly and retry immediately after animation completes
         _scrollController
@@ -529,11 +438,9 @@ class _SurahDetailScreenState extends State<SurahDetailScreen> {
       return;
     }
 
-    print('      âœ… Key found in map!');
     final context = key.currentContext;
     if (context != null) {
       // Found it! Scroll to it smoothly with nice animation
-      print('   âœ… Context exists! Scrolling to it smoothly...');
       Scrollable.ensureVisible(
         context,
         duration: const Duration(milliseconds: 800),
@@ -543,7 +450,6 @@ class _SurahDetailScreenState extends State<SurahDetailScreen> {
         alignmentPolicy: ScrollPositionAlignmentPolicy.keepVisibleAtEnd,
       ).then((_) {
         if (mounted) {
-          print('   ðŸŽ‰ Scroll completed successfully!');
           setState(() {
             _hasScrolledToTarget = true;
           });
@@ -551,7 +457,6 @@ class _SurahDetailScreenState extends State<SurahDetailScreen> {
       });
     } else {
       // Context not ready, retry immediately
-      print('      â³ Context is null, retrying immediately...');
 
       // Use microtask for immediate retry
       Future.microtask(() {
@@ -580,14 +485,6 @@ class _SurahDetailScreenState extends State<SurahDetailScreen> {
     } catch (e) {
       return null;
     }
-  }
-
-  GlobalKey _getAyahKey(int ayahNumber) {
-    if (!_ayahKeys.containsKey(ayahNumber)) {
-      print('ðŸ”‘ Creating key for ayah $ayahNumber');
-      _ayahKeys[ayahNumber] = GlobalKey();
-    }
-    return _ayahKeys[ayahNumber]!;
   }
 
   void _maybeLoadTranslation() {
@@ -646,92 +543,5 @@ class _SurahDetailScreenState extends State<SurahDetailScreen> {
         });
       }
     });
-  }
-
-  Widget _buildTranslationWidget(
-    BuildContext context, {
-    required int ayahNumberInSurah,
-    required double translationFontSize,
-  }) {
-    final isArabicUi = context
-        .read<AppSettingsCubit>()
-        .state
-        .appLanguageCode
-        .toLowerCase()
-        .startsWith('ar');
-    if (_isLoadingTranslation && _translationByAyah.isEmpty) {
-      return Row(
-        mainAxisAlignment: MainAxisAlignment.end,
-        children: [
-          SizedBox(
-            width: 14,
-            height: 14,
-            child: CircularProgressIndicator(
-              strokeWidth: 2,
-              color: AppColors.secondary,
-            ),
-          ),
-          const SizedBox(width: 8),
-          Text(
-            isArabicUi ? 'Ø¬Ø§Ø±ÙŠ ØªØ­Ù…ÙŠÙ„ Ø§Ù„ØªØ±Ø¬Ù…Ø©â€¦' : 'Loading translationâ€¦',
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
-        ],
-      );
-    }
-
-    if (_translationError != null) {
-      return Text(
-        _translationError!,
-        textAlign: TextAlign.left,
-        style: Theme.of(
-          context,
-        ).textTheme.bodySmall?.copyWith(color: AppColors.error),
-      );
-    }
-
-    final text = _translationByAyah[ayahNumberInSurah];
-    if (text == null || text.isEmpty) {
-      return const SizedBox.shrink();
-    }
-
-    return Text(
-      text,
-      textAlign: TextAlign.left,
-      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-        height: 1.5,
-        color: AppColors.textSecondary,
-        fontSize: translationFontSize,
-      ),
-    );
-  }
-
-  Widget _buildMetadataChip(
-    BuildContext context,
-    IconData icon,
-    String label, {
-    Color? color,
-  }) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: (color ?? AppColors.primary).withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 16, color: color ?? AppColors.primary),
-          const SizedBox(width: 4),
-          Text(
-            label,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: color ?? AppColors.primary,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
-      ),
-    );
   }
 }

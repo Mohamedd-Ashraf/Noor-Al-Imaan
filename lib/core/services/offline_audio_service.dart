@@ -113,8 +113,8 @@ class OfflineAudioService {
     await _prefs.setBool(_keyEnabled, value);
   }
 
-  /// Default: verse-by-verse Mishary Alafasy.
-  String get edition => _prefs.getString(_keyEdition) ?? 'ar.alafasy';
+  /// Default: verse-by-verse Ali Abdullah Jaber.
+  String get edition => _prefs.getString(_keyEdition) ?? 'ar.alijaber';
 
   Future<void> setEdition(String value) async {
     await _prefs.setString(_keyEdition, value);

@@ -106,7 +106,6 @@ class _QiblahScreenState extends State<QiblahScreen>
       if (!mounted) return;
       if (event.heading == null) return;
       final smoothed = _circularSmooth(event.heading!);
-      final prevAccuracy = _compassAccuracy;
       setState(() {
         _heading = smoothed;
         _compassAccuracy = event.accuracy;

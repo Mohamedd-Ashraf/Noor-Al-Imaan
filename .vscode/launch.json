@@ -1,25 +1,25 @@
 {
-    // Use IntelliSense to learn about possible attributes.
-    // Hover to view descriptions of existing attributes.
-    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "quraan",
-            "request": "launch",
-            "type": "dart"
-        },
-        {
-            "name": "quraan (profile mode)",
+            "name": "quraan (debug)",
             "request": "launch",
             "type": "dart",
-            "flutterMode": "profile"
+            "program": "lib/main_firebase.dart"
         },
         {
-            "name": "quraan (release mode)",
+            "name": "quraan (profile)",
             "request": "launch",
             "type": "dart",
-            "flutterMode": "release"
+            "flutterMode": "profile",
+            "program": "lib/main_firebase.dart"
+        },
+        {
+            "name": "quraan (release)",
+            "request": "launch",
+            "type": "dart",
+            "flutterMode": "release",
+            "program": "lib/main_firebase.dart"
         }
     ]
 }

@@ -7,8 +7,6 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:qcf_quran/qcf_quran.dart';
 
-import 'package:share_plus/share_plus.dart';
-
 import '../../../../core/audio/ayah_audio_cubit.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/surah_names.dart';
@@ -18,6 +16,7 @@ import '../../../../core/settings/app_settings_cubit.dart';
 import '../../domain/entities/surah.dart';
 import '../bloc/tafsir/tafsir_cubit.dart';
 import '../screens/tafsir_screen.dart';
+import 'ayah_share_card.dart';
 import 'islamic_audio_player.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -99,15 +98,22 @@ void _showVerseOptionsSheet(
                   },
                 );
               }),
-              // Share
+              // Share as image (QCF Mushaf style)
               ListTile(
                 leading: const Icon(Icons.share_rounded, color: AppColors.primary),
                 title: const Text('مشاركة الآية', style: TextStyle(fontSize: 15)),
+                subtitle: const Text(
+                  'صورة بخط القرآن الكريم',
+                  style: TextStyle(fontSize: 11),
+                ),
                 onTap: () {
                   Navigator.pop(ctx);
-                  SharePlus.instance.share(ShareParams(
-                    text: '$arabicText\n— سورة $surahName، آية $verse',
-                  ));
+                  showAyahShareDialog(
+                    context: context,
+                    surahNumber: surah,
+                    initialVerse: verse,
+                    surahName: surahName,
+                  );
                 },
               ),
               // Tafsir
@@ -175,9 +181,6 @@ class _MushafPageViewState extends State<MushafPageView>
 
   late AnimationController _highlightAnimationController;
 
-  // 1-based mushaf page currently visible – tracked via onPageChanged.
-  int _currentPage = 1;
-
   // Mirrors the audio player's collapsed state so the page content
   // can shrink/grow to stay visible above the player.
   final ValueNotifier<bool> _playerCollapsed = ValueNotifier(true);
@@ -220,7 +223,6 @@ class _MushafPageViewState extends State<MushafPageView>
     );
 
     final startPage = _getStartPage();
-    _currentPage = startPage;
     _pageController = PageController(initialPage: startPage - 1);
 
     if (widget.initialAyahNumber != null) {
@@ -399,7 +401,6 @@ class _MushafPageViewState extends State<MushafPageView>
   Widget build(BuildContext context) {
     final settings = context.watch<AppSettingsCubit>().state;
     final isDark = settings.darkMode;
-    final isAr = widget.isArabicUi;
 
     // When the audio player is visible it overlays the bottom of the page.
     // We shrink the QuranPageView's Positioned area by the player's height so
@@ -457,9 +458,6 @@ class _MushafPageViewState extends State<MushafPageView>
                   child: PageView.builder(
                     controller: _pageController,
                     itemCount: 604,
-                    onPageChanged: (index) {
-                      if (mounted) setState(() => _currentPage = index + 1);
-                    },
                     itemBuilder: (ctx, index) {
                       final pageNum = index + 1;
                       return Column(
@@ -538,11 +536,8 @@ class _MushafPageViewState extends State<MushafPageView>
                                         verseTextColor: textColor,
                                         pageBackgroundColor: Colors.transparent,
                                         basmalaColor: textColor,
-                                        // The header banner (mainframe.png) is always cream/beige,
-                                        // so text must be dark in both light and dark modes.
-                                        headerTextColor: isDark
-                                            ? const Color(0xFF8B5E14) // warm gold — readable on cream in dark mode
-                                            : const Color(0xFF3D2000), // dark brown — readable on cream in light mode
+                                        customHeaderBuilder: (surahNum) =>
+                                            _buildSurahHeader(surahNum, isDark),
                                       ),
                                       verseBackgroundColor: (surah, verse) {
                                         for (final h in highlights) {
@@ -596,6 +591,56 @@ class _MushafPageViewState extends State<MushafPageView>
         ),
         ),
       ),
+    );
+  }
+
+  /// Surah header that supports both light and dark modes.
+  /// In dark mode the cream banner image is tinted to blend with the dark background.
+  Widget _buildSurahHeader(int surahNumber, bool isDark) {
+    return LayoutBuilder(
+      builder: (ctx, constraints) {
+        final isPortrait =
+            MediaQuery.of(ctx).orientation == Orientation.portrait;
+        final headerWidth =
+            isPortrait ? constraints.maxWidth * 0.95 : constraints.maxWidth * 0.8;
+        final fontSize =
+            isPortrait ? headerWidth * 0.075 : constraints.maxWidth * 0.05;
+        final nameColor =
+            isDark ? const Color(0xFFE8C46A) : const Color(0xFF3D2000);
+
+        return Padding(
+          padding: const EdgeInsets.symmetric(vertical: 4),
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              // In dark mode: use BlendMode.color to recolor the cream image
+              // with the app's dark-green hue while preserving all ornamental
+              // detail (luminance). This keeps the flower patterns and borders
+              // clearly visible instead of blending into blackness.
+              Image.asset(
+                'assets/mainframe.png',
+                package: 'qcf_quran',
+                width: headerWidth,
+                fit: BoxFit.contain,
+                color: isDark ? const Color.fromARGB(255, 43, 63, 48) : null,
+                colorBlendMode: isDark ? BlendMode.color : null,
+              ),
+              RichText(
+                textAlign: TextAlign.center,
+                text: TextSpan(
+                  text: 'surah${surahNumber.toString().padLeft(3, '0')}',
+                  style: TextStyle(
+                    fontFamily: SurahFontHelper.fontFamily,
+                    package: 'qcf_quran',
+                    fontSize: fontSize,
+                    color: nameColor,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 

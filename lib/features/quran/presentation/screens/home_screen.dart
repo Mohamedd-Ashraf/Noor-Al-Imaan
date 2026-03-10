@@ -35,7 +35,9 @@ class HomeScreen extends StatefulWidget {
 
 class HomeScreenState extends State<HomeScreen>
     with AutomaticKeepAliveClientMixin, WidgetsBindingObserver {
-  static const MethodChannel _adhanChannel = MethodChannel('quraan/adhan_player');
+  static const MethodChannel _adhanChannel = MethodChannel(
+    'quraan/adhan_player',
+  );
 
   final Map<int, String> _juzLabelBySurahNumber = {};
   final Set<int> _loadingJuzForSurah = {};
@@ -67,8 +69,11 @@ class HomeScreenState extends State<HomeScreen>
 
   Future<void> _checkBatteryStatus() async {
     try {
-      final disabled = await _adhanChannel
-              .invokeMethod<bool>('isBatteryOptimizationDisabled') ?? false;
+      final disabled =
+          await _adhanChannel.invokeMethod<bool>(
+            'isBatteryOptimizationDisabled',
+          ) ??
+          false;
       if (mounted) setState(() => _batteryUnrestricted = disabled);
     } catch (_) {
       // Not Android or channel unavailable — assume unrestricted
@@ -191,13 +196,14 @@ class HomeScreenState extends State<HomeScreen>
               ),
             ),
             child: IconButton(
-              icon: const Icon(Icons.search_rounded, color: AppColors.onPrimary),
+              icon: const Icon(
+                Icons.search_rounded,
+                color: AppColors.onPrimary,
+              ),
               tooltip: isArabicUi ? 'بحث' : 'Search',
               onPressed: () => Navigator.push(
                 context,
-                MaterialPageRoute(
-                  builder: (_) => const SearchScreen(),
-                ),
+                MaterialPageRoute(builder: (_) => const SearchScreen()),
               ),
             ),
           ),
@@ -594,7 +600,8 @@ class _CategoriesSection extends StatelessWidget {
                             colors: [
                               AppColors.secondary.withValues(alpha: 0.0),
                               AppColors.secondary.withValues(
-                                  alpha: isDark ? 0.45 : 0.32),
+                                alpha: isDark ? 0.45 : 0.32,
+                              ),
                             ],
                           ),
                           borderRadius: BorderRadius.circular(2),
@@ -610,18 +617,22 @@ class _CategoriesSection extends StatelessWidget {
                           height: 5,
                           decoration: BoxDecoration(
                             color: AppColors.secondary.withValues(
-                                alpha: isDark ? 0.65 : 0.45),
+                              alpha: isDark ? 0.65 : 0.45,
+                            ),
                             shape: BoxShape.circle,
                           ),
                         ),
                         const SizedBox(width: 10),
                         Text(
                           isArabicUi ? 'الأقسام' : 'Sections',
-                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.w800,
-                            color: isDark ? AppColors.secondary : AppColors.primary,
-                            letterSpacing: 1.5,
-                          ),
+                          style: Theme.of(context).textTheme.titleMedium
+                              ?.copyWith(
+                                fontWeight: FontWeight.w800,
+                                color: isDark
+                                    ? AppColors.secondary
+                                    : AppColors.primary,
+                                letterSpacing: 1.5,
+                              ),
                         ),
                         const SizedBox(width: 10),
                         Container(
@@ -629,7 +640,8 @@ class _CategoriesSection extends StatelessWidget {
                           height: 5,
                           decoration: BoxDecoration(
                             color: AppColors.secondary.withValues(
-                                alpha: isDark ? 0.65 : 0.45),
+                              alpha: isDark ? 0.65 : 0.45,
+                            ),
                             shape: BoxShape.circle,
                           ),
                         ),
@@ -643,7 +655,8 @@ class _CategoriesSection extends StatelessWidget {
                           gradient: LinearGradient(
                             colors: [
                               AppColors.secondary.withValues(
-                                  alpha: isDark ? 0.45 : 0.32),
+                                alpha: isDark ? 0.45 : 0.32,
+                              ),
                               AppColors.secondary.withValues(alpha: 0.0),
                             ],
                           ),
@@ -667,84 +680,126 @@ class _CategoriesSection extends StatelessWidget {
                       runSpacing: gap,
                       alignment: WrapAlignment.center,
                       children: [
-                        wrap(_CategoryTile(
-                          label: isArabicUi ? 'مواقيت الصلاة' : 'Prayer Times',
-                          imagePath: 'assets/logo/button icons/moon.png',
-                          onTap: () => Navigator.of(context).push(
-                            MaterialPageRoute(builder: (_) => const PrayerTimesScreen()),
+                        wrap(
+                          _CategoryTile(
+                            label: isArabicUi
+                                ? 'مواقيت الصلاة'
+                                : 'Prayer Times',
+                            imagePath: 'assets/logo/button icons/moon.png',
+                            onTap: () => Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => const PrayerTimesScreen(),
+                              ),
+                            ),
                           ),
-                        )),
-                        wrap(_CategoryTile(
-                          label: isArabicUi ? 'الأذكار والأدعية' : 'Adhkar',
-                          imagePath: 'assets/logo/button icons/praying.png',
-                          onTap: () => Navigator.of(context).push(
-                            MaterialPageRoute(builder: (_) => const AdhkarCategoriesScreen()),
+                        ),
+                        wrap(
+                          _CategoryTile(
+                            label: isArabicUi ? 'الأذكار والأدعية' : 'Adhkar',
+                            imagePath: 'assets/logo/button icons/praying.png',
+                            onTap: () => Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => const AdhkarCategoriesScreen(),
+                              ),
+                            ),
                           ),
-                        )),
-                        wrap(_CategoryTile(
-                          label: isArabicUi ? 'الأذان' : 'Adhan',
-                          imagePath: 'assets/logo/button icons/nabawi-mosque.png',
-                          imagePadding: 3,
-                          showDisabledBadge:
-                              !di.sl<SettingsService>().getAdhanNotificationsEnabled() ||
-                              !batteryUnrestricted,
-                          disabledTooltip: !di.sl<SettingsService>().getAdhanNotificationsEnabled()
-                              ? (isArabicUi ? 'الأذان معطَّل' : 'Adhan disabled')
-                              : (isArabicUi
-                                  ? 'لضمان سماع الأذان افتح إعدادات البطارية'
-                                  : 'Open battery settings for reliable Adhan'),
-                          onTap: () async {
-                            await Navigator.of(context).push(
-                              MaterialPageRoute(builder: (_) => const AdhanSettingsScreen()),
-                            );
-                            onBatteryCheck();
-                          },
-                        )),
-                        wrap(_CategoryTile(
-                          label: isArabicUi ? 'الصوت' : 'Audio',
-                          imagePath: 'assets/logo/button icons/microphone.png',
-                          imagePadding: 2,
-                          onTap: () => Navigator.of(context).push(
-                            MaterialPageRoute(builder: (_) => const OfflineAudioScreen()),
+                        ),
+                        wrap(
+                          _CategoryTile(
+                            label: isArabicUi ? 'الأذان' : 'Adhan',
+                            imagePath:
+                                'assets/logo/button icons/nabawi-mosque.png',
+                            imagePadding: 3,
+                            showDisabledBadge:
+                                !di
+                                    .sl<SettingsService>()
+                                    .getAdhanNotificationsEnabled() ||
+                                !batteryUnrestricted,
+                            disabledTooltip:
+                                !di
+                                    .sl<SettingsService>()
+                                    .getAdhanNotificationsEnabled()
+                                ? (isArabicUi
+                                      ? 'الأذان معطَّل'
+                                      : 'Adhan disabled')
+                                : (isArabicUi
+                                      ? 'لضمان سماع الأذان افتح إعدادات البطارية'
+                                      : 'Open battery settings for reliable Adhan'),
+                            onTap: () async {
+                              await Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (_) => const AdhanSettingsScreen(),
+                                ),
+                              );
+                              onBatteryCheck();
+                            },
                           ),
-                        )),
-                        wrap(_CategoryTile(
-                          label: isArabicUi ? 'الأجزاء' : 'Juz',
-                          imagePath: 'assets/logo/button icons/quran.png',
-                          onTap: () => Navigator.of(context).push(
-                            MaterialPageRoute(builder: (_) => const JuzListScreen()),
+                        ),
+                        wrap(
+                          _CategoryTile(
+                            label: isArabicUi ? 'الصوت' : 'Audio',
+                            imagePath:
+                                'assets/logo/button icons/microphone.png',
+                            imagePadding: 2,
+                            onTap: () => Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => const OfflineAudioScreen(),
+                              ),
+                            ),
                           ),
-                        )),
-                        wrap(_CategoryTile(
-                          label: isArabicUi ? 'القبلة' : 'Qibla',
-                          imagePath: 'assets/logo/button icons/qibla.png',
-                          imagePadding: 0,
-                          onTap: () => Navigator.of(context).push(
-                            MaterialPageRoute(builder: (_) => const QiblahScreen()),
+                        ),
+                        wrap(
+                          _CategoryTile(
+                            label: isArabicUi ? 'الأجزاء' : 'Juz',
+                            imagePath: 'assets/logo/button icons/quran.png',
+                            onTap: () => Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => const JuzListScreen(),
+                              ),
+                            ),
                           ),
-                        )),
-                        wrap(_CategoryTile(
-                          label: isArabicUi ? 'السبحة' : 'Tasbeeh',
-                          imagePath: 'assets/logo/button icons/beads.png',
-                          imagePadding: 3,
-                          onTap: () => Navigator.of(context).push(
-                            MaterialPageRoute(builder: (_) => const TasbeehScreen()),
+                        ),
+                        wrap(
+                          _CategoryTile(
+                            label: isArabicUi ? 'القبلة' : 'Qibla',
+                            imagePath: 'assets/logo/button icons/qibla.png',
+                            imagePadding: 0,
+                            onTap: () => Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => const QiblahScreen(),
+                              ),
+                            ),
                           ),
-                        )),
-                        wrap(_CategoryTile(
-                          label: isArabicUi ? 'الإذاعة' : 'Radio',
-                          imagePath: 'assets/logo/button icons/radio.png',
-                                                    imagePadding: 3,
+                        ),
+                        wrap(
+                          _CategoryTile(
+                            label: isArabicUi ? 'السبحة' : 'Tasbeeh',
+                            imagePath: 'assets/logo/button icons/beads.png',
+                            imagePadding: 3,
+                            onTap: () => Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => const TasbeehScreen(),
+                              ),
+                            ),
+                          ),
+                        ),
+                        wrap(
+                          _CategoryTile(
+                            label: isArabicUi ? 'الإذاعة' : 'Radio',
+                            imagePath: 'assets/logo/button icons/radio.png',
+                            imagePadding: 3,
 
-                          onTap: () => Navigator.of(context).push(
-                            MaterialPageRoute(builder: (_) => const QuranRadioScreen()),
+                            onTap: () => Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => const QuranRadioScreen(),
+                              ),
+                            ),
                           ),
-                        )),
+                        ),
                       ],
                     );
                   },
                 ),
-
               ],
             ),
           ),
@@ -822,7 +877,10 @@ class _CategoryTile extends StatelessWidget {
     this.imagePadding = 4,
     this.showDisabledBadge = false,
     this.disabledTooltip,
-  }) : assert(imagePath != null || iconData != null, 'Provide imagePath or iconData');
+  }) : assert(
+         imagePath != null || iconData != null,
+         'Provide imagePath or iconData',
+       );
 
   @override
   Widget build(BuildContext context) {
@@ -839,12 +897,16 @@ class _CategoryTile extends StatelessWidget {
             borderRadius: BorderRadius.circular(16),
             color: isDark ? AppColors.darkCard : Colors.white,
             border: Border.all(
-              color: AppColors.secondary.withValues(alpha: isDark ? 0.20 : 0.15),
+              color: AppColors.secondary.withValues(
+                alpha: isDark ? 0.20 : 0.15,
+              ),
               width: 1.0,
             ),
             boxShadow: [
               BoxShadow(
-                color: AppColors.secondary.withValues(alpha: isDark ? 0.08 : 0.10),
+                color: AppColors.secondary.withValues(
+                  alpha: isDark ? 0.08 : 0.10,
+                ),
                 blurRadius: 10,
                 offset: const Offset(0, 4),
               ),
@@ -861,9 +923,15 @@ class _CategoryTile extends StatelessWidget {
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
                       colors: [
-                        AppColors.secondary.withValues(alpha: isDark ? 0.55 : 0.40),
-                        AppColors.goldGradientEnd.withValues(alpha: isDark ? 0.75 : 0.60),
-                        AppColors.secondary.withValues(alpha: isDark ? 0.55 : 0.40),
+                        AppColors.secondary.withValues(
+                          alpha: isDark ? 0.55 : 0.40,
+                        ),
+                        AppColors.goldGradientEnd.withValues(
+                          alpha: isDark ? 0.75 : 0.60,
+                        ),
+                        AppColors.secondary.withValues(
+                          alpha: isDark ? 0.55 : 0.40,
+                        ),
                       ],
                     ),
                   ),
@@ -871,7 +939,10 @@ class _CategoryTile extends StatelessWidget {
                 // Content
                 Expanded(
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 10),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 6,
+                      vertical: 10,
+                    ),
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
@@ -883,16 +954,23 @@ class _CategoryTile extends StatelessWidget {
                             gradient: const LinearGradient(
                               begin: Alignment.topLeft,
                               end: Alignment.bottomRight,
-                              colors: [AppColors.gradientStart, AppColors.gradientEnd],
+                              colors: [
+                                AppColors.gradientStart,
+                                AppColors.gradientEnd,
+                              ],
                             ),
                             shape: BoxShape.circle,
                             border: Border.all(
-                              color: AppColors.secondary.withValues(alpha: 0.50),
+                              color: AppColors.secondary.withValues(
+                                alpha: 0.50,
+                              ),
                               width: 1.5,
                             ),
                             boxShadow: [
                               BoxShadow(
-                                color: AppColors.primary.withValues(alpha: 0.22),
+                                color: AppColors.primary.withValues(
+                                  alpha: 0.22,
+                                ),
                                 blurRadius: 8,
                                 offset: const Offset(0, 3),
                               ),
@@ -910,7 +988,10 @@ class _CategoryTile extends StatelessWidget {
                               else
                                 Padding(
                                   padding: EdgeInsets.all(imagePadding),
-                                  child: Image.asset(imagePath!, fit: BoxFit.contain),
+                                  child: Image.asset(
+                                    imagePath!,
+                                    fit: BoxFit.contain,
+                                  ),
                                 ),
                               if (showDisabledBadge)
                                 Positioned(
@@ -925,11 +1006,14 @@ class _CategoryTile extends StatelessWidget {
                                         color: Colors.orange,
                                         shape: BoxShape.circle,
                                         border: Border.all(
-                                            color: Colors.white, width: 1.5),
+                                          color: Colors.white,
+                                          width: 1.5,
+                                        ),
                                         boxShadow: [
                                           BoxShadow(
-                                            color: Colors.orange
-                                                .withValues(alpha: 0.6),
+                                            color: Colors.orange.withValues(
+                                              alpha: 0.6,
+                                            ),
                                             blurRadius: 4,
                                           ),
                                         ],

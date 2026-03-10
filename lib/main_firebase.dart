@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -33,7 +34,7 @@ void main() async {
   try {
     await FirebaseFirestore.instance.settings;
   } catch (e) {
-    print('Firestore init error: $e');
+    debugPrint('Firestore init error: $e');
   }
   
   // Initialize dependency injection
@@ -123,34 +124,11 @@ class MyApp extends StatelessWidget {
 
   /// Check for app updates in the background
   Future<void> _checkForUpdates(BuildContext context, String languageCode) async {
-    print('🔍 _checkForUpdates called - languageCode: $languageCode');
-    
     try {
       final updateService = di.sl<AppUpdateServiceFirebase>();
-      print('✅ Update service retrieved');
-      
-      // Force check for testing (remove shouldCheckForUpdate check temporarily)
-      // final shouldCheck = await updateService.shouldCheckForUpdate();
-      // print('⏰ Should check: $shouldCheck');
-      // if (!shouldCheck) return;
-
-      // Check for updates
-      print('🔄 Calling checkForUpdate...');
       final updateInfo = await updateService.checkForUpdate();
-      print('📦 Update info received: ${updateInfo != null ? "YES" : "NO"}');
-      
-      if (updateInfo != null) {
-        print('   - Current: ${updateInfo.currentVersion}');
-        print('   - Latest: ${updateInfo.latestVersion}');
-        print('   - Has update: ${updateInfo.hasUpdate}');
-        print('   - Mandatory: ${updateInfo.isMandatory}');
-        print('   - Download URL: ${updateInfo.downloadUrl}');
-      }
-      
-      // Show dialog if update is available
+
       if (updateInfo != null && context.mounted) {
-        print('🎉 Showing update dialog NOW!');
-        // Delay slightly to ensure UI is ready
         await Future.delayed(const Duration(milliseconds: 500));
         if (context.mounted) {
           showPremiumUpdateDialog(
@@ -159,18 +137,10 @@ class MyApp extends StatelessWidget {
             updateService: updateService,
             languageCode: languageCode,
           );
-          print('✅ Dialog shown successfully');
-        } else {
-          print('❌ Context not mounted after delay');
         }
-      } else {
-        print('⚠️ No update to show');
-        print('   - updateInfo null: ${updateInfo == null}');
-        print('   - context mounted: ${context.mounted}');
       }
     } catch (e, stack) {
-      print('❌ Error in _checkForUpdates: $e');
-      print('Stack trace: $stack');
+      debugPrint('Error in _checkForUpdates: $e\n$stack');
     }
   }
 
@@ -220,7 +190,6 @@ class MyApp extends StatelessWidget {
                 builder: (context) {
                   // Check for updates after the app loads
                   WidgetsBinding.instance.addPostFrameCallback((_) async {
-                    print('📲 App loaded, checking for updates...');
                     _checkForUpdates(context, settings.appLanguageCode);
                   });
                   return const OnboardingGate();

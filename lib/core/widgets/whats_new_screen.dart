@@ -274,6 +274,14 @@ const Map<String, List<_WhatsNewEntry>> _changelog = {
       descEn: 'Duplicate Basmala removed from verse 1, page numbers no longer hidden on 3-button nav devices, and dark mode improvements.',
       color: const Color(0xFF00695C),
     ),
+    _WhatsNewEntry(
+      icon: Icons.record_voice_over_rounded,
+      titleAr: 'الشيخ علي عبدالله جابر القارئ الافتراضي',
+      titleEn: 'Ali Abdullah Jaber — New Default Reciter',
+      descAr: 'صوت الشيخ علي عبدالله جابر العذب أصبح القارئ الافتراضي للتطبيق — يمكنك تغييره في أي وقت من الإعدادات.',
+      descEn: 'Sheikh Ali Abdullah Jaber\'s beautiful voice is now the app\'s default reciter — change it anytime in Settings.',
+      color: const Color(0xFF6A1B9A),
+    ),
   ],
 };
 
@@ -298,7 +306,7 @@ class WhatsNewScreen extends StatefulWidget {
 
 class _WhatsNewScreenState extends State<WhatsNewScreen>
     with SingleTickerProviderStateMixin {
-  // Total = 300ms base + 4 cards × 100ms stagger + 500ms card window = 1700ms (v1.0.9)
+  // Total = 300ms base + 5 cards × 100ms stagger + 500ms card window = 1700ms (v1.0.9)
   static const int _totalMs = 1700;
 
   late final AnimationController _animController;

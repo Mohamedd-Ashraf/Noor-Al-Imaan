@@ -3,11 +3,14 @@ import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:just_audio_background/just_audio_background.dart';
 
+import '../../../../core/audio/ayah_audio_cubit.dart';
 import '../../../../core/constants/app_colors.dart';
+import '../../../../core/settings/app_settings_cubit.dart';
 
 // ──────────────────────────────────────────────────────
 //  State enum – covers every broadcast situation cleanly
@@ -30,8 +33,8 @@ class _QuranRadioScreenState extends State<QuranRadioScreen>
 
   // إذاعة القرآن الكريم بالقاهرة — Official Egyptian Radio streams
   static const _streams = [
-    _RadioStream(label: 'جودة منخفضة', url: 'http://live.sec.gov.eg:9090/quranlow'),
-    _RadioStream(label: 'جودة عالية',  url: 'http://live.sec.gov.eg:9090/quranhi'),
+    _RadioStream(label: 'جودة منخفضة', labelEn: 'Low Quality',  url: 'http://live.sec.gov.eg:9090/quranlow'),
+    _RadioStream(label: 'جودة عالية',  labelEn: 'High Quality', url: 'http://live.sec.gov.eg:9090/quranhi'),
   ];
 
   static const _fallbackUrls = [
@@ -44,6 +47,8 @@ class _QuranRadioScreenState extends State<QuranRadioScreen>
   bool  _connecting          = false; // re-entrancy guard
   bool  _cancelConnect       = false; // cancellation flag
   bool  _usingFallback       = false;
+  Timer? _reconnectDebounce; // debounce unexpected-drop reconnects
+  int _connectAttemptId      = 0;
 
   // ──────────────────────────  Lifecycle  ──────────────────────────
   @override
@@ -61,18 +66,25 @@ class _QuranRadioScreenState extends State<QuranRadioScreen>
 
     // Detect unexpected mid-stream drops from the server.
     _playerStateSub = _player.playerStateStream.listen(_onPlayerStateChanged);
-    _connect();
+
+    // Stop the Quran audio player first so just_audio_background releases
+    // its single-player slot before we register the radio player.
+    // AudioPlayer.stop() calls _setPlatformActive(false) which clears the
+    // background plugin's registered player reference.
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      await context.read<AyahAudioCubit>().stop();
+      if (mounted) _connect();
+    });
   }
 
   @override
   void dispose() {
+    _reconnectDebounce?.cancel();
     _playerStateSub?.cancel();
     _playerStateSub = null;
-    // Pause before dispose so ExoPlayer doesn't need to flush the codec
-    // during release. Flushing from a PLAYING state on some devices causes
-    // FLUSHING→RESUMING→RUNNING→RELEASING race → LegacyMessageQueue dead thread.
-    // Pause keeps the codec in RUNNING (no flush) so release is clean.
-    _player.pause().ignore();
+    // Stop before dispose so ExoPlayer clears its buffer cleanly.
+    _player.stop().ignore();
     _player.dispose();
     _waveController.dispose();
     _pulseController.dispose();
@@ -82,28 +94,49 @@ class _QuranRadioScreenState extends State<QuranRadioScreen>
   void _onPlayerStateChanged(PlayerState ps) {
     if (!mounted || _connecting || _playerStateSub == null) return;
 
+    if (ps.playing) {
+      _reconnectDebounce?.cancel();
+      if (_state != _RadioState.playing) {
+        setState(() => _state = _RadioState.playing);
+      }
+      if (!_waveController.isAnimating) _waveController.repeat();
+      return;
+    }
+
+    // Only handle truly unexpected server drops:
+    // if we're supposed to be playing but the player went idle externally.
+    // We do NOT handle the idle-after-manual-pause case here because
+    // _togglePlayPause sets _state = paused BEFORE calling _player.stop(),
+    // so _state != playing when this listener fires for a user-initiated stop.
     if (_state == _RadioState.playing &&
         ps.processingState == ProcessingState.idle &&
         !ps.playing) {
-      // Server dropped the connection while we were live.
-      setState(() => _state = _RadioState.error);
-      _waveController.stop();
-    } else if (ps.playing &&
-        ps.processingState == ProcessingState.ready &&
-        _state != _RadioState.playing) {
-      setState(() => _state = _RadioState.playing);
-      if (!_waveController.isAnimating) _waveController.repeat();
-    } else if (!ps.playing &&
-        ps.processingState == ProcessingState.ready &&
-        _state == _RadioState.playing) {
-      setState(() => _state = _RadioState.paused);
-      _waveController.stop();
+      // Debounce: live streams can transiently report idle during buffer
+      // switches. Wait 3 s before treating it as a real drop.
+      _reconnectDebounce?.cancel();
+      _reconnectDebounce = Timer(const Duration(seconds: 3), () {
+        if (!mounted || _state != _RadioState.playing || _connecting) return;
+        setState(() => _state = _RadioState.connecting);
+        _waveController.stop();
+        _connect();
+      });
     }
+  }
+
+  bool _isAttemptCurrent(int attemptId) =>
+      mounted && !_cancelConnect && attemptId == _connectAttemptId;
+
+  Future<void> _cancelInFlightConnection() async {
+    _reconnectDebounce?.cancel();
+    _cancelConnect = true;
+    _connectAttemptId++;
+    await _player.stop();
   }
 
   // ──────────────────────────  Connection  ─────────────────────────
   Future<void> _connect() async {
     if (_connecting) return;
+    final int attemptId = ++_connectAttemptId;
     _connecting    = true;
     _cancelConnect = false;
     try {
@@ -116,13 +149,13 @@ class _QuranRadioScreenState extends State<QuranRadioScreen>
       }
 
       if (!await _isOnline()) {
-        if (!_cancelConnect && mounted) {
+        if (_isAttemptCurrent(attemptId)) {
           setState(() => _state = _RadioState.noNetwork);
         }
         return;
       }
 
-      if (_cancelConnect) return;
+      if (!_isAttemptCurrent(attemptId)) return;
 
       final urlsToTry = [
         _streams[_selectedStreamIndex].url,
@@ -130,9 +163,9 @@ class _QuranRadioScreenState extends State<QuranRadioScreen>
       ];
 
       for (int i = 0; i < urlsToTry.length; i++) {
-        if (_cancelConnect || !mounted) return;
+        if (!_isAttemptCurrent(attemptId)) return;
         await Future<void>.delayed(const Duration(milliseconds: 150));
-        if (_cancelConnect || !mounted) return;
+        if (!_isAttemptCurrent(attemptId)) return;
 
         try {
           await _player
@@ -147,22 +180,30 @@ class _QuranRadioScreenState extends State<QuranRadioScreen>
                 ),
               )
               .timeout(const Duration(seconds: 8));
-          if (_cancelConnect || !mounted) return;
-          await _player.play();
-          if (mounted && !_cancelConnect) {
+          if (!_isAttemptCurrent(attemptId)) {
+            await _player.stop();
+            return;
+          }
+
+          unawaited(_player.play());
+
+          if (_isAttemptCurrent(attemptId)) {
             setState(() {
               _state        = _RadioState.playing;
               _usingFallback = i > 0;
             });
             if (!_waveController.isAnimating) _waveController.repeat();
+          } else {
+            await _player.stop();
           }
           return;
-        } catch (_) {
+        } catch (e) {
+          debugPrint('[Radio] URL ${urlsToTry[i]} failed: $e');
           // try next URL
         }
       }
 
-      if (!_cancelConnect && mounted) {
+      if (_isAttemptCurrent(attemptId)) {
         setState(() => _state = _RadioState.error);
         _waveController.stop();
       }
@@ -186,7 +227,7 @@ class _QuranRadioScreenState extends State<QuranRadioScreen>
     if (index == _selectedStreamIndex &&
         _state == _RadioState.playing &&
         !_usingFallback) { return; }
-    if (_connecting) { _cancelConnect = true; }
+    await _cancelInFlightConnection();
     setState(() => _selectedStreamIndex = index);
     // Wait for any in-flight connection to exit.
     while (_connecting) {
@@ -196,9 +237,9 @@ class _QuranRadioScreenState extends State<QuranRadioScreen>
   }
 
   Future<void> _togglePlayPause() async {
-    // While connecting: cancel and return to paused/idle state.
+    // While connecting: cancel and return to idle state.
     if (_connecting) {
-      _cancelConnect = true;
+      await _cancelInFlightConnection();
       setState(() {
         _state = _RadioState.paused;
         _usingFallback = false;
@@ -206,29 +247,34 @@ class _QuranRadioScreenState extends State<QuranRadioScreen>
       _waveController.stop();
       return;
     }
+
+    if (_state == _RadioState.playing) {
+      // Cancel any pending reconnect before stopping.
+      await _cancelInFlightConnection();
+      // IMPORTANT: set state to paused BEFORE awaiting the platform stop call.
+      // Live streams go idle on stop, which fires _onPlayerStateChanged.
+      // If _state were still 'playing' at that moment, the listener would
+      // treat it as an unexpected server drop and auto-reconnect,
+      // cancelling the user's stop request.
+      setState(() => _state = _RadioState.paused);
+      _waveController.stop();
+      return;
+    }
+
     if (_state == _RadioState.error || _state == _RadioState.noNetwork) {
       await _connect();
       return;
     }
-    if (_player.playing) {
-      await _player.pause();
-      setState(() => _state = _RadioState.paused);
-      _waveController.stop();
-    } else if (_player.processingState == ProcessingState.idle ||
-               _player.processingState == ProcessingState.completed) {
-      await _connect();
-    } else {
-      await _player.play();
-      setState(() => _state = _RadioState.playing);
-      if (!_waveController.isAnimating) _waveController.repeat();
-    }
+
+    // paused or connecting → reconnect (live streams can't resume from idle).
+    await _connect();
   }
 
   // ──────────────────────────  UI helpers  ─────────────────────────
-  bool get _isBuffering =>
-      _state == _RadioState.connecting ||
-      _player.processingState == ProcessingState.loading ||
-      _player.processingState == ProcessingState.buffering;
+  // Live radio streams report ProcessingState.buffering continuously while
+  // playing — never use processingState to determine the buffering UI.
+  // _state is the single source of truth.
+  bool get _isBuffering => _state == _RadioState.connecting;
 
   bool get _hasError =>
       _state == _RadioState.error || _state == _RadioState.noNetwork;
@@ -237,6 +283,12 @@ class _QuranRadioScreenState extends State<QuranRadioScreen>
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final isArabic = context
+        .watch<AppSettingsCubit>()
+        .state
+        .appLanguageCode
+        .toLowerCase()
+        .startsWith('ar');
 
     return Scaffold(
       backgroundColor: Colors.transparent,
@@ -250,13 +302,13 @@ class _QuranRadioScreenState extends State<QuranRadioScreen>
           onPressed: () => Navigator.of(context).pop(),
         ),
         title: Text(
-          'إذاعة القرآن الكريم',
+          isArabic ? 'إذاعة القرآن الكريم' : 'Quran Radio',
           style: GoogleFonts.amiriQuran(
             color: AppColors.onPrimary,
             fontSize: 20,
             fontWeight: FontWeight.bold,
           ),
-          textDirection: TextDirection.rtl,
+          textDirection: isArabic ? TextDirection.rtl : TextDirection.ltr,
         ),
         centerTitle: true,
         flexibleSpace: Container(
@@ -286,6 +338,7 @@ class _QuranRadioScreenState extends State<QuranRadioScreen>
                       // ── Station identity card ──
                       _StationHeader(
                         isDark: isDark,
+                        isArabic: isArabic,
                         pulseController: _pulseController,
                         isLive: _state == _RadioState.playing,
                       ),
@@ -306,6 +359,7 @@ class _QuranRadioScreenState extends State<QuranRadioScreen>
                         state: _state,
                         usingFallback: _usingFallback,
                         isDark: isDark,
+                        isArabic: isArabic,
                       ),
 
                       const SizedBox(height: 24),
@@ -327,7 +381,9 @@ class _QuranRadioScreenState extends State<QuranRadioScreen>
                             ? Padding(
                                 padding: const EdgeInsets.only(top: 10),
                                 child: Text(
-                                  'جارٍ الاتصال... اضغط للإلغاء',
+                                  isArabic
+                                      ? 'جارٍ الاتصال... اضغط للإلغاء'
+                                      : 'Connecting... tap to cancel',
                                   style: TextStyle(
                                     fontSize: 12,
                                     color: (isDark ? Colors.white : Colors.black)
@@ -346,6 +402,7 @@ class _QuranRadioScreenState extends State<QuranRadioScreen>
                         selectedIndex: _usingFallback ? -1 : _selectedStreamIndex,
                         onSelect: _switchStream,
                         isDark: isDark,
+                        isArabic: isArabic,
                         usingFallback: _usingFallback,
                         enabled: !_connecting,
                       ),
@@ -354,6 +411,7 @@ class _QuranRadioScreenState extends State<QuranRadioScreen>
                         const SizedBox(height: 20),
                         _ErrorCard(
                           noNetwork: _state == _RadioState.noNetwork,
+                          isArabic: isArabic,
                           onRetry: _connect,
                         ),
                       ],
@@ -405,11 +463,13 @@ class _RadioBackground extends StatelessWidget {
 // ── Station header (icon + name + live indicator) ────
 class _StationHeader extends StatelessWidget {
   final bool isDark;
+  final bool isArabic;
   final AnimationController pulseController;
   final bool isLive;
 
   const _StationHeader({
     required this.isDark,
+    required this.isArabic,
     required this.pulseController,
     required this.isLive,
   });
@@ -462,11 +522,12 @@ class _StationHeader extends StatelessWidget {
                   ),
                 ],
               ),
-              child: const Icon(
-                Icons.radio_rounded,
-                color: AppColors.onPrimary,
-                size: 44,
-              ),
+              child: Image.asset(
+  'assets/logo/button icons/radio.png',
+  width: 54,
+  height: 54,
+  fit: BoxFit.contain,
+),
             ),
             builder: (context, child) {
               final scale = isLive
@@ -501,8 +562,8 @@ class _StationHeader extends StatelessWidget {
           const SizedBox(height: 18),
 
           Text(
-            'إذاعة القرآن الكريم',
-            textDirection: TextDirection.rtl,
+            isArabic ? 'إذاعة القرآن الكريم' : 'Quran Radio',
+            textDirection: isArabic ? TextDirection.rtl : TextDirection.ltr,
             style: GoogleFonts.amiriQuran(
               fontSize: 24,
               fontWeight: FontWeight.bold,
@@ -512,8 +573,8 @@ class _StationHeader extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           Text(
-            'الإذاعة المصرية  ·  القاهرة',
-            textDirection: TextDirection.rtl,
+            isArabic ? 'الإذاعة المصرية  ·  القاهرة' : 'Egyptian Radio  ·  Cairo',
+            textDirection: isArabic ? TextDirection.rtl : TextDirection.ltr,
             style: TextStyle(
               fontSize: 13,
               color: isDark
@@ -604,7 +665,8 @@ class _StateChip extends StatelessWidget {
   final _RadioState state;
   final bool usingFallback;
   final bool isDark;
-  const _StateChip({required this.state, required this.usingFallback, required this.isDark});
+  final bool isArabic;
+  const _StateChip({required this.state, required this.usingFallback, required this.isDark, required this.isArabic});
 
   @override
   Widget build(BuildContext context) {
@@ -615,36 +677,36 @@ class _StateChip extends StatelessWidget {
 
     switch (state) {
       case _RadioState.connecting:
-        label = 'جارٍ الاتصال…';
+        label = isArabic ? 'جارٍ الاتصال…' : 'Connecting…';
         icon  = Icons.sync_rounded;
         bg    = AppColors.secondary.withValues(alpha: 0.15);
         fg    = AppColors.secondary;
       case _RadioState.playing:
         if (usingFallback) {
-          label = 'بث مباشر — رابط احتياطي';
+          label = isArabic ? 'بث مباشر — رابط احتياطي' : 'Live — Fallback stream';
           icon  = Icons.swap_horiz_rounded;
           bg    = const Color(0xFFFF8C00).withValues(alpha: 0.15);
           fg    = const Color(0xFFFF8C00);
         } else {
-          label = '● بث مباشر';
+          label = isArabic ? '● بث مباشر' : '● Live';
           icon  = Icons.graphic_eq_rounded;
           bg    = AppColors.success.withValues(alpha: 0.12);
           fg    = AppColors.success;
         }
       case _RadioState.paused:
-        label = 'متوقف مؤقتاً';
+        label = isArabic ? 'متوقف مؤقتاً' : 'Stopped';
         icon  = Icons.pause_circle_outline_rounded;
         bg    = (isDark ? AppColors.darkCard : AppColors.divider).withValues(alpha: 0.5);
         fg    = isDark
             ? AppColors.secondary.withValues(alpha: 0.60)
             : AppColors.textSecondary;
       case _RadioState.noNetwork:
-        label = 'لا يوجد اتصال بالإنترنت';
+        label = isArabic ? 'لا يوجد اتصال بالإنترنت' : 'No internet connection';
         icon  = Icons.wifi_off_rounded;
         bg    = AppColors.error.withValues(alpha: 0.12);
         fg    = AppColors.error;
       case _RadioState.error:
-        label = 'تعذّر الاتصال — اضغط للمحاولة';
+        label = isArabic ? 'تعذّر الاتصال — اضغط للمحاولة' : 'Connection failed — tap to retry';
         icon  = Icons.error_outline_rounded;
         bg    = AppColors.error.withValues(alpha: 0.12);
         fg    = AppColors.error;
@@ -661,13 +723,13 @@ class _StateChip extends StatelessWidget {
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
-          textDirection: TextDirection.rtl,
+          textDirection: isArabic ? TextDirection.rtl : TextDirection.ltr,
           children: [
             Icon(icon, size: 14, color: fg),
             const SizedBox(width: 6),
             Text(
               label,
-              textDirection: TextDirection.rtl,
+              textDirection: isArabic ? TextDirection.rtl : TextDirection.ltr,
               style: TextStyle(
                 color: fg,
                 fontSize: 12,
@@ -782,6 +844,7 @@ class _QualitySelector extends StatelessWidget {
   final int selectedIndex;
   final ValueChanged<int> onSelect;
   final bool isDark;
+  final bool isArabic;
   final bool usingFallback;
   final bool enabled;
 
@@ -790,6 +853,7 @@ class _QualitySelector extends StatelessWidget {
     required this.selectedIndex,
     required this.onSelect,
     required this.isDark,
+    required this.isArabic,
     required this.usingFallback,
     required this.enabled,
   });
@@ -800,8 +864,8 @@ class _QualitySelector extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         Text(
-          'جودة البث',
-          textDirection: TextDirection.rtl,
+          isArabic ? 'جودة البث' : 'Stream Quality',
+          textDirection: isArabic ? TextDirection.rtl : TextDirection.ltr,
           style: TextStyle(
             color: isDark
                 ? AppColors.secondary.withValues(alpha: 0.70)
@@ -850,8 +914,8 @@ class _QualitySelector extends StatelessWidget {
                           : null,
                     ),
                     child: Text(
-                      streams[i].label,
-                      textDirection: TextDirection.rtl,
+                      isArabic ? streams[i].label : streams[i].labelEn,
+                      textDirection: isArabic ? TextDirection.rtl : TextDirection.ltr,
                       style: TextStyle(
                         color: selected
                             ? AppColors.onPrimary
@@ -876,14 +940,14 @@ class _QualitySelector extends StatelessWidget {
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
-              textDirection: TextDirection.rtl,
+              textDirection: isArabic ? TextDirection.rtl : TextDirection.ltr,
               children: [
                 const Icon(Icons.warning_amber_rounded,
                     size: 12, color: Color(0xFFFF8C00)),
                 const SizedBox(width: 5),
                 Text(
-                  'يتم التشغيل من رابط احتياطي',
-                  textDirection: TextDirection.rtl,
+                  isArabic ? 'يتم التشغيل من رابط احتياطي' : 'Playing from fallback stream',
+                  textDirection: isArabic ? TextDirection.rtl : TextDirection.ltr,
                   style: const TextStyle(
                     color: Color(0xFFFF8C00),
                     fontSize: 11,
@@ -902,8 +966,9 @@ class _QualitySelector extends StatelessWidget {
 // ── Error card with retry ────────────────────────────
 class _ErrorCard extends StatelessWidget {
   final bool noNetwork;
+  final bool isArabic;
   final VoidCallback onRetry;
-  const _ErrorCard({required this.noNetwork, required this.onRetry});
+  const _ErrorCard({required this.noNetwork, required this.isArabic, required this.onRetry});
 
   @override
   Widget build(BuildContext context) {
@@ -920,7 +985,7 @@ class _ErrorCard extends StatelessWidget {
         children: [
           Row(
             mainAxisSize: MainAxisSize.min,
-            textDirection: TextDirection.rtl,
+            textDirection: isArabic ? TextDirection.rtl : TextDirection.ltr,
             children: [
               Icon(
                 noNetwork ? Icons.wifi_off_rounded : Icons.signal_wifi_bad_rounded,
@@ -931,9 +996,9 @@ class _ErrorCard extends StatelessWidget {
               Flexible(
                 child: Text(
                   noNetwork
-                      ? 'لا يوجد اتصال بالإنترنت'
-                      : 'تعذّر الاتصال بالإذاعة',
-                  textDirection: TextDirection.rtl,
+                      ? (isArabic ? 'لا يوجد اتصال بالإنترنت' : 'No internet connection')
+                      : (isArabic ? 'تعذّر الاتصال بالإذاعة' : 'Could not connect to radio'),
+                  textDirection: isArabic ? TextDirection.rtl : TextDirection.ltr,
                   style: const TextStyle(
                     color: AppColors.error,
                     fontSize: 13,
@@ -946,9 +1011,13 @@ class _ErrorCard extends StatelessWidget {
           const SizedBox(height: 4),
           Text(
             noNetwork
-                ? 'تحقق من اتصالك بالإنترنت ثم اضغط إعادة المحاولة'
-                : 'قد تكون الإذاعة غير متاحة مؤقتاً، اضغط إعادة المحاولة',
-            textDirection: TextDirection.rtl,
+                ? (isArabic
+                    ? 'تحقق من اتصالك بالإنترنت ثم اضغط إعادة المحاولة'
+                    : 'Check your internet connection, then tap Retry')
+                : (isArabic
+                    ? 'قد تكون الإذاعة غير متاحة مؤقتاً، اضغط إعادة المحاولة'
+                    : 'The stream may be temporarily unavailable. Tap Retry'),
+            textDirection: isArabic ? TextDirection.rtl : TextDirection.ltr,
             textAlign: TextAlign.center,
             style: TextStyle(
               color: AppColors.error.withValues(alpha: 0.80),
@@ -966,10 +1035,10 @@ class _ErrorCard extends StatelessWidget {
                 ),
                 borderRadius: BorderRadius.circular(20),
               ),
-              child: const Text(
-                'إعادة المحاولة',
-                textDirection: TextDirection.rtl,
-                style: TextStyle(
+              child: Text(
+                isArabic ? 'إعادة المحاولة' : 'Retry',
+                textDirection: isArabic ? TextDirection.rtl : TextDirection.ltr,
+                style: const TextStyle(
                   color: AppColors.onPrimary,
                   fontSize: 13,
                   fontWeight: FontWeight.w700,
@@ -986,9 +1055,10 @@ class _ErrorCard extends StatelessWidget {
 // ─────────────────────────────────────  Data model  ─────────────────────────
 
 class _RadioStream {
-  final String label;
+  final String label;   // Arabic label
+  final String labelEn; // English label
   final String url;
-  const _RadioStream({required this.label, required this.url});
+  const _RadioStream({required this.label, required this.labelEn, required this.url});
 }
 
 

@@ -9,6 +9,7 @@
 - **إصلاح جدولة الأذان والإشعارات:** تم إصلاح جدولة الأذان والإشعارات بشكل كامل — التنبيهات تصلك أخيراً في الوقت الصحيح دون انقطاع.
 - **تنبيه معايرة البوصلة:** يظهر تنبيه تلقائي عند انخفاض دقة بوصلة جهازك مع خطوات واضحة لإعادة المعايرة.
 - **إصلاحات عامة:** حذف البسملة المكررة من بداية السور، ورقم الصفحة لم يعد يختبئ خلف شريط تنقل الأندرويد، وتحسينات في الوضع الليلي.
+- **الشيخ علي عبدالله جابر القارئ الافتراضي:** صوت الشيخ علي عبدالله جابر العذب أصبح القارئ الافتراضي للتطبيق — يمكن للمستخدم تغييره في أي وقت من الإعدادات.
 - تحديث رقم الإصدار إلى **1.0.9**.
 
 ### English
@@ -16,6 +17,7 @@
 - **Fixed Adhan & Notification Scheduling:** Adhan and notification scheduling is now fully fixed — alerts arrive on time, every time.
 - **Compass Calibration Alert:** An automatic prompt appears when compass accuracy is low, with step-by-step calibration instructions.
 - **General Fixes:** Duplicate Basmala removed from verse 1, page numbers no longer hidden on 3-button nav devices, and dark mode improvements.
+- **Ali Abdullah Jaber — New Default Reciter:** Sheikh Ali Abdullah Jaber's beautiful voice is now the app's default reciter — users can change it anytime in Settings.
 - Version bumped to **1.0.9**.
 
 ---

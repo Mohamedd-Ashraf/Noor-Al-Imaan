@@ -5,7 +5,6 @@ import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
-import 'package:share_plus/share_plus.dart';
 
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/audio/ayah_audio_cubit.dart';
@@ -15,6 +14,7 @@ import '../../../../core/settings/app_settings_cubit.dart';
 import '../../../../core/utils/arabic_text_style_helper.dart';
 import '../bloc/tafsir/tafsir_cubit.dart';
 import 'tafsir_screen.dart';
+import '../widgets/ayah_share_card.dart';
 import '../widgets/mushaf_page_view.dart' show IslamicPatternPainter, BorderOrnamentPainter;
 
 // ─── Verse long-press options sheet ───────────────────────────────────────────
@@ -94,15 +94,22 @@ void _showVerseOptionsSheet(
                   },
                 );
               }),
-              // Share
+              // Share as image (QCF Mushaf style)
               ListTile(
                 leading: const Icon(Icons.share_rounded, color: AppColors.primary),
                 title: const Text('مشاركة الآية', style: TextStyle(fontSize: 15)),
+                subtitle: const Text(
+                  'صورة بخط القرآن الكريم',
+                  style: TextStyle(fontSize: 11),
+                ),
                 onTap: () {
                   Navigator.pop(ctx);
-                  SharePlus.instance.share(ShareParams(
-                    text: '$arabicText\n— سورة $surahName، آية $verse',
-                  ));
+                  showAyahShareDialog(
+                    context: context,
+                    surahNumber: surah,
+                    initialVerse: verse,
+                    surahName: surahName,
+                  );
                 },
               ),
               // Tafsir
@@ -776,8 +783,9 @@ class _PageTextState extends State<_PageText> {
                   child: Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 2),
                     child: _AyahMarker(
-                      number:      v.ayah,
-                      isDark:      isDark,
+                      number:        v.ayah,
+                      isDark:        isDark,
+                      quranFontSize: settings.arabicFontSize,
                       onTap: () {
                         HapticFeedback.selectionClick();
                         cubit.togglePlayAyah(
@@ -870,19 +878,28 @@ class _Basmala extends StatelessWidget {
 class _AyahMarker extends StatelessWidget {
   final int           number;
   final bool          isDark;
+  final double        quranFontSize;
   final VoidCallback? onTap;
   final VoidCallback? onLongPress;
   const _AyahMarker({
     required this.number,
     required this.isDark,
+    required this.quranFontSize,
     this.onTap,
     this.onLongPress,
   });
 
   @override
   Widget build(BuildContext context) {
-    const frameSize    = 28.0;
-    final baseFontSize = number > 99 ? 8.0 : (number > 9 ? 10.0 : 12.0);
+    // Scale the frame and text proportionally with the Quran font size.
+    // Base reference is fontSize 18 → frameSize 28.
+    final scale     = (quranFontSize / 18.0).clamp(0.7, 2.0);
+    final frameSize = 28.0 * scale;
+    final numFontSize = number > 99
+        ? 8.0  * scale
+        : number > 9
+            ? 10.0 * scale
+            : 12.0 * scale;
 
     return GestureDetector(
       onTap:       onTap,
@@ -897,12 +914,12 @@ class _AyahMarker extends StatelessWidget {
           color:  isDark ? Colors.white.withValues(alpha: 0.85) : null,
         ),
         Padding(
-          padding: const EdgeInsets.only(bottom: 8),
+          padding: EdgeInsets.only(bottom: frameSize * 0.28),
           child: Text(
             _toArabicNum(number),
             textAlign: TextAlign.center,
             style: GoogleFonts.amiriQuran(
-              fontSize:   baseFontSize,
+              fontSize:   numFontSize,
               fontWeight: FontWeight.w800,
               color:      isDark ? Colors.white : AppColors.primary,
               height:     1,
