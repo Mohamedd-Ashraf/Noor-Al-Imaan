@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../../core/constants/app_colors.dart';
+import '../../../../core/constants/mushaf_page_map.dart';
 import '../../../../core/services/bookmark_service.dart';
 import '../../../../core/di/injection_container.dart' as di;
 import '../../../../core/settings/app_settings_cubit.dart';
@@ -21,6 +22,9 @@ class BookmarksScreen extends StatefulWidget {
 class BookmarksScreenState extends State<BookmarksScreen> {
   late final BookmarkService _bookmarkService;
   List<Map<String, dynamic>> _bookmarks = [];
+  static final RegExp _ayahIdPattern = RegExp(r'^surah_(\d+)_ayah_(\d+)$');
+  static final RegExp _ayahRefPattern = RegExp(r'^(\d+):(\d+)$');
+  static final RegExp _pagePattern = RegExp(r'^(?:(\d+)|mushaf):page:(\d+)$');
 
   // ── Selection-mode state ──────────────────────────────────────────────────
   bool _isSelectionMode = false;
@@ -75,6 +79,91 @@ class BookmarksScreenState extends State<BookmarksScreen> {
     _loadBookmarks();
   }
 
+  int? _positiveInt(dynamic value) {
+    final parsed = switch (value) {
+      final int intValue => intValue,
+      final String stringValue => int.tryParse(stringValue),
+      _ => null,
+    };
+
+    if (parsed == null || parsed <= 0) return null;
+    return parsed;
+  }
+
+  int? _pageNumberFromBookmark(Map<String, dynamic> bookmark) {
+    final explicitPage = _positiveInt(bookmark['pageNumber']);
+    if (explicitPage != null) return explicitPage;
+
+    for (final token in [bookmark['id'], bookmark['reference']]) {
+      final rawToken = token?.toString().trim();
+      if (rawToken == null || rawToken.isEmpty) continue;
+
+      final match = _pagePattern.firstMatch(rawToken);
+      if (match != null) {
+        return _positiveInt(match.group(2));
+      }
+    }
+
+    return null;
+  }
+
+  int? _ayahNumberFromBookmark(Map<String, dynamic> bookmark) {
+    final explicitAyah = _positiveInt(bookmark['ayahNumber']);
+    if (explicitAyah != null) return explicitAyah;
+
+    for (final token in [bookmark['id'], bookmark['reference']]) {
+      final rawToken = token?.toString().trim();
+      if (rawToken == null || rawToken.isEmpty || rawToken.contains(':page:')) {
+        continue;
+      }
+
+      final idMatch = _ayahIdPattern.firstMatch(rawToken);
+      if (idMatch != null) {
+        return _positiveInt(idMatch.group(2));
+      }
+
+      final refMatch = _ayahRefPattern.firstMatch(rawToken);
+      if (refMatch != null) {
+        return _positiveInt(refMatch.group(2));
+      }
+    }
+
+    return null;
+  }
+
+  int? _surahNumberFromBookmark(Map<String, dynamic> bookmark) {
+    final explicitSurah = _positiveInt(bookmark['surahNumber']);
+    if (explicitSurah != null) return explicitSurah;
+
+    for (final token in [bookmark['id'], bookmark['reference']]) {
+      final rawToken = token?.toString().trim();
+      if (rawToken == null || rawToken.isEmpty) continue;
+
+      final idMatch = _ayahIdPattern.firstMatch(rawToken);
+      if (idMatch != null) {
+        return _positiveInt(idMatch.group(1));
+      }
+
+      final refMatch = _ayahRefPattern.firstMatch(rawToken);
+      if (refMatch != null) {
+        return _positiveInt(refMatch.group(1));
+      }
+
+      final pageMatch = _pagePattern.firstMatch(rawToken);
+      if (pageMatch != null) {
+        final parsedSurah = _positiveInt(pageMatch.group(1));
+        if (parsedSurah != null) return parsedSurah;
+      }
+    }
+
+    final pageNumber = _pageNumberFromBookmark(bookmark);
+    if (pageNumber == null) return null;
+
+    final surahs = kMushafPageToSurahs[pageNumber];
+    if (surahs == null || surahs.isEmpty) return null;
+    return surahs.first;
+  }
+
   @override
   Widget build(BuildContext context) {
     final isArabicUi = context
@@ -88,8 +177,8 @@ class BookmarksScreenState extends State<BookmarksScreen> {
         title: Text(
           _isSelectionMode
               ? (isArabicUi
-                  ? 'تحديد (${_selectedIds.length})'
-                  : 'Select (${_selectedIds.length})')
+                    ? 'تحديد (${_selectedIds.length})'
+                    : 'Select (${_selectedIds.length})')
               : (isArabicUi ? 'الإشارات' : 'Bookmarks'),
         ),
         centerTitle: true,
@@ -111,11 +200,11 @@ class BookmarksScreenState extends State<BookmarksScreen> {
                   ),
                   tooltip: isArabicUi
                       ? (_selectedIds.length == _bookmarks.length
-                          ? 'إلغاء تحديد الكل'
-                          : 'تحديد الكل')
+                            ? 'إلغاء تحديد الكل'
+                            : 'تحديد الكل')
                       : (_selectedIds.length == _bookmarks.length
-                          ? 'Deselect All'
-                          : 'Select All'),
+                            ? 'Deselect All'
+                            : 'Select All'),
                   onPressed: _toggleSelectAll,
                 ),
                 // Delete selected
@@ -298,7 +387,8 @@ class BookmarksScreenState extends State<BookmarksScreen> {
                         Checkbox(
                           value: isSelected,
                           activeColor: AppColors.primary,
-                          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          materialTapTargetSize:
+                              MaterialTapTargetSize.shrinkWrap,
                           visualDensity: VisualDensity.compact,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(5),
@@ -306,60 +396,64 @@ class BookmarksScreenState extends State<BookmarksScreen> {
                           onChanged: (_) => _toggleItem(bookmarkId),
                         ),
                         // Chip label — on the RIGHT in RTL (matches normal card)
-                        Builder(builder: (ctx) {
-                          final isAr = ctx
-                              .read<AppSettingsCubit>()
-                              .state
-                              .appLanguageCode
-                              .toLowerCase()
-                              .startsWith('ar');
-                          return Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 6,
-                            ),
-                            decoration: BoxDecoration(
-                              color: AppColors.primary.withValues(alpha: 0.1),
-                              borderRadius: BorderRadius.circular(20),
-                            ),
-                            child: Text(
-                              _formatBookmarkLabel(bookmark),
-                              textDirection: isAr
-                                  ? TextDirection.rtl
-                                  : TextDirection.ltr,
-                              style: GoogleFonts.cairo(
-                                fontSize: 12,
-                                color: AppColors.primary,
-                                fontWeight: FontWeight.bold,
+                        Builder(
+                          builder: (ctx) {
+                            final isAr = ctx
+                                .read<AppSettingsCubit>()
+                                .state
+                                .appLanguageCode
+                                .toLowerCase()
+                                .startsWith('ar');
+                            return Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 6,
                               ),
-                            ),
-                          );
-                        }),
+                              decoration: BoxDecoration(
+                                color: AppColors.primary.withValues(alpha: 0.1),
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: Text(
+                                _formatBookmarkLabel(bookmark),
+                                textDirection: isAr
+                                    ? TextDirection.rtl
+                                    : TextDirection.ltr,
+                                style: GoogleFonts.cairo(
+                                  fontSize: 12,
+                                  color: AppColors.primary,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            );
+                          },
+                        ),
                       ],
                     ),
                     const SizedBox(height: 16),
                     // ── Arabic text ────────────────────────────────────────
-                    Builder(builder: (ctx) {
-                      final isDark = ctx
-                          .read<AppSettingsCubit>()
-                          .state
-                          .darkMode;
-                      return Text(
-                        bookmark['arabicText'] ??
-                            'بِسْمِ ٱللَّهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ',
-                        textAlign: TextAlign.right,
-                        textDirection: TextDirection.rtl,
-                        maxLines: 3,
-                        overflow: TextOverflow.ellipsis,
-                        style: GoogleFonts.amiriQuran(
-                          fontSize: 20,
-                          color: isDark
-                              ? const Color(0xFFE8E8E8)
-                              : AppColors.arabicText,
-                          height: 2.2,
-                        ),
-                      );
-                    }),
+                    Builder(
+                      builder: (ctx) {
+                        final isDark = ctx
+                            .read<AppSettingsCubit>()
+                            .state
+                            .darkMode;
+                        return Text(
+                          bookmark['arabicText'] ??
+                              'بِسْمِ ٱللَّهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ',
+                          textAlign: TextAlign.right,
+                          textDirection: TextDirection.rtl,
+                          maxLines: 3,
+                          overflow: TextOverflow.ellipsis,
+                          style: GoogleFonts.amiriQuran(
+                            fontSize: 20,
+                            color: isDark
+                                ? const Color(0xFFE8E8E8)
+                                : AppColors.arabicText,
+                            height: 2.2,
+                          ),
+                        );
+                      },
+                    ),
                     if (bookmark['note'] != null) ...[
                       const SizedBox(height: 12),
                       Container(
@@ -450,7 +544,7 @@ class BookmarksScreenState extends State<BookmarksScreen> {
             child: InkWell(
               onTap: () {
                 // Navigate to the specific surah and scroll to the ayah or page
-                final surahNumber = bookmark['surahNumber'];
+                final surahNumber = _surahNumberFromBookmark(bookmark);
                 if (surahNumber != null) {
                   final isArabicUi = context
                       .read<AppSettingsCubit>()
@@ -463,18 +557,8 @@ class BookmarksScreenState extends State<BookmarksScreen> {
                     isArabicUi: isArabicUi,
                     savedName: bookmark['surahName'] as String?,
                   );
-                  final ayahNumber = bookmark['ayahNumber'] as int?;
-
-                  // Check if this is a page bookmark
-                  int? pageNumber;
-                  final bookmarkId = bookmark['id'] as String?;
-                  if (bookmarkId != null && bookmarkId.contains(':page:')) {
-                    // Extract page number from ID like "2:page:5"
-                    final parts = bookmarkId.split(':');
-                    if (parts.length == 3) {
-                      pageNumber = int.tryParse(parts[2]);
-                    }
-                  }
+                  final ayahNumber = _ayahNumberFromBookmark(bookmark);
+                  final pageNumber = _pageNumberFromBookmark(bookmark);
 
                   Navigator.push(
                     context,
@@ -507,25 +591,27 @@ class BookmarksScreenState extends State<BookmarksScreen> {
                             color: AppColors.primary.withValues(alpha: 0.1),
                             borderRadius: BorderRadius.circular(20),
                           ),
-                          child: Builder(builder: (ctx) {
-                            final isAr = ctx
-                                .read<AppSettingsCubit>()
-                                .state
-                                .appLanguageCode
-                                .toLowerCase()
-                                .startsWith('ar');
-                            return Text(
-                              _formatBookmarkLabel(bookmark),
-                              textDirection: isAr
-                                  ? TextDirection.rtl
-                                  : TextDirection.ltr,
-                              style: GoogleFonts.cairo(
-                                fontSize: 12,
-                                color: AppColors.primary,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            );
-                          }),
+                          child: Builder(
+                            builder: (ctx) {
+                              final isAr = ctx
+                                  .read<AppSettingsCubit>()
+                                  .state
+                                  .appLanguageCode
+                                  .toLowerCase()
+                                  .startsWith('ar');
+                              return Text(
+                                _formatBookmarkLabel(bookmark),
+                                textDirection: isAr
+                                    ? TextDirection.rtl
+                                    : TextDirection.ltr,
+                                style: GoogleFonts.cairo(
+                                  fontSize: 12,
+                                  color: AppColors.primary,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              );
+                            },
+                          ),
                         ),
                         Icon(
                           Icons.bookmark,
@@ -535,27 +621,29 @@ class BookmarksScreenState extends State<BookmarksScreen> {
                       ],
                     ),
                     const SizedBox(height: 16),
-                    Builder(builder: (context) {
-                      final isDark = context
-                          .read<AppSettingsCubit>()
-                          .state
-                          .darkMode;
-                      return Text(
-                        bookmark['arabicText'] ??
-                            'بِسْمِ ٱللَّهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ',
-                        textAlign: TextAlign.right,
-                        textDirection: TextDirection.rtl,
-                        maxLines: 3,
-                        overflow: TextOverflow.ellipsis,
-                        style: GoogleFonts.amiriQuran(
-                          fontSize: 20,
-                          color: isDark
-                              ? const Color(0xFFE8E8E8)
-                              : AppColors.arabicText,
-                          height: 2.2,
-                        ),
-                      );
-                    }),
+                    Builder(
+                      builder: (context) {
+                        final isDark = context
+                            .read<AppSettingsCubit>()
+                            .state
+                            .darkMode;
+                        return Text(
+                          bookmark['arabicText'] ??
+                              'بِسْمِ ٱللَّهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ',
+                          textAlign: TextAlign.right,
+                          textDirection: TextDirection.rtl,
+                          maxLines: 3,
+                          overflow: TextOverflow.ellipsis,
+                          style: GoogleFonts.amiriQuran(
+                            fontSize: 20,
+                            color: isDark
+                                ? const Color(0xFFE8E8E8)
+                                : AppColors.arabicText,
+                            height: 2.2,
+                          ),
+                        );
+                      },
+                    ),
                     if (bookmark['note'] != null) ...[
                       const SizedBox(height: 12),
                       Container(
@@ -593,10 +681,11 @@ class BookmarksScreenState extends State<BookmarksScreen> {
         .toLowerCase()
         .startsWith('ar');
     final surahName = bookmark['surahName'] as String?;
-    final surahNumber = bookmark['surahNumber'];
-    final ayahNumber = bookmark['ayahNumber'];
+    final surahNumber = _surahNumberFromBookmark(bookmark);
+    final ayahNumber = _ayahNumberFromBookmark(bookmark);
+    final pageNumber = _pageNumberFromBookmark(bookmark);
 
-    final resolvedSurahName = surahNumber is int
+    final resolvedSurahName = surahNumber != null
         ? _surahDisplayName(
             surahNumber: surahNumber,
             isArabicUi: isArabicUi,
@@ -604,24 +693,21 @@ class BookmarksScreenState extends State<BookmarksScreen> {
           )
         : (surahName?.trim().isNotEmpty ?? false)
         ? surahName!.trim()
-        : (isArabicUi ? 'السورة' : 'Surah');
+        : (pageNumber != null
+              ? (isArabicUi ? 'المصحف' : 'Mushaf')
+              : (isArabicUi ? 'السورة' : 'Surah'));
 
     if (ayahNumber != null) {
       return isArabicUi
           ? '$resolvedSurahName • الآية $ayahNumber'
           : '$resolvedSurahName • Ayah $ayahNumber';
     }
-    // Format page bookmark reference (stored as "surahNum:page:pageNum")
-    final reference = bookmark['reference'] as String?;
-    if (reference != null && reference.contains(':page:')) {
-      final parts = reference.split(':');
-      if (parts.length == 3) {
-        final pageNum = parts[2];
-        return isArabicUi
-            ? '$resolvedSurahName • صفحة $pageNum'
-            : '$resolvedSurahName • Page $pageNum';
-      }
+    if (pageNumber != null) {
+      return isArabicUi
+          ? '$resolvedSurahName • صفحة $pageNumber'
+          : '$resolvedSurahName • Page $pageNumber';
     }
+    final reference = bookmark['reference'] as String?;
     return reference ?? (isArabicUi ? 'إشارة' : 'Bookmark');
   }
 }

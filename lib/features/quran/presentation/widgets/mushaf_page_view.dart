@@ -72,38 +72,46 @@ void _showVerseOptionsSheet(
               ),
               const Divider(height: 1),
               // Bookmark
-              StatefulBuilder(builder: (_, setSt) {
-                final isBookmarked = bookmarkService.isBookmarked(bookmarkId);
-                return ListTile(
-                  leading: Icon(
-                    isBookmarked ? Icons.bookmark : Icons.bookmark_border,
-                    color: AppColors.primary,
-                  ),
-                  title: Text(
-                    isBookmarked ? 'إزالة الإشارة' : 'إضافة إشارة',
-                    style: const TextStyle(fontSize: 15),
-                  ),
-                  onTap: () async {
-                    if (isBookmarked) {
-                      await bookmarkService.removeBookmark(bookmarkId);
-                    } else {
-                      await bookmarkService.addBookmark(
-                        id:          bookmarkId,
-                        reference:   '$surah:$verse',
-                        arabicText:  arabicText,
-                        surahName:   surahName,
-                        surahNumber: surah,
-                        ayahNumber:  verse,
-                      );
-                    }
-                    setSt(() {});
-                  },
-                );
-              }),
+              StatefulBuilder(
+                builder: (_, setSt) {
+                  final isBookmarked = bookmarkService.isBookmarked(bookmarkId);
+                  return ListTile(
+                    leading: Icon(
+                      isBookmarked ? Icons.bookmark : Icons.bookmark_border,
+                      color: AppColors.primary,
+                    ),
+                    title: Text(
+                      isBookmarked ? 'إزالة الإشارة' : 'إضافة إشارة',
+                      style: const TextStyle(fontSize: 15),
+                    ),
+                    onTap: () async {
+                      if (isBookmarked) {
+                        await bookmarkService.removeBookmark(bookmarkId);
+                      } else {
+                        await bookmarkService.addBookmark(
+                          id: bookmarkId,
+                          reference: '$surah:$verse',
+                          arabicText: arabicText,
+                          surahName: surahName,
+                          surahNumber: surah,
+                          ayahNumber: verse,
+                        );
+                      }
+                      setSt(() {});
+                    },
+                  );
+                },
+              ),
               // Share as image (QCF Mushaf style)
               ListTile(
-                leading: const Icon(Icons.share_rounded, color: AppColors.primary),
-                title: const Text('مشاركة الآية', style: TextStyle(fontSize: 15)),
+                leading: const Icon(
+                  Icons.share_rounded,
+                  color: AppColors.primary,
+                ),
+                title: const Text(
+                  'مشاركة الآية',
+                  style: TextStyle(fontSize: 15),
+                ),
                 subtitle: const Text(
                   'صورة بخط القرآن الكريم',
                   style: TextStyle(fontSize: 11),
@@ -120,7 +128,10 @@ void _showVerseOptionsSheet(
               ),
               // Tafsir
               ListTile(
-                leading: const Icon(Icons.menu_book_rounded, color: AppColors.primary),
+                leading: const Icon(
+                  Icons.menu_book_rounded,
+                  color: AppColors.primary,
+                ),
                 title: const Text('التفسير', style: TextStyle(fontSize: 15)),
                 onTap: () {
                   Navigator.pop(ctx);
@@ -205,10 +216,7 @@ class _MushafPageViewState extends State<MushafPageView>
   int _getStartPage() {
     if (widget.initialPage != null) return widget.initialPage!;
     try {
-      return getPageNumber(
-        widget.surahNumber,
-        widget.initialAyahNumber ?? 1,
-      );
+      return getPageNumber(widget.surahNumber, widget.initialAyahNumber ?? 1);
     } catch (_) {
       return getPageNumber(widget.surahNumber, 1);
     }
@@ -349,9 +357,10 @@ class _MushafPageViewState extends State<MushafPageView>
     // screen always receives proper Unicode text (not QCF-encoded glyph IDs).
     String arabicText = '';
     try {
-      final raw = await rootBundle
-          .loadString('assets/offline/surah_$surah.json');
-      final data  = jsonDecode(raw) as Map<String, dynamic>;
+      final raw = await rootBundle.loadString(
+        'assets/offline/surah_$surah.json',
+      );
+      final data = jsonDecode(raw) as Map<String, dynamic>;
       final ayahs = data['ayahs'] as List<dynamic>;
       for (final a in ayahs) {
         if ((a as Map<dynamic, dynamic>)['numberInSurah'] == verse) {
@@ -363,19 +372,19 @@ class _MushafPageViewState extends State<MushafPageView>
 
     if (!mounted) return;
 
-    final surahName      = SurahNames.getArabicName(surah);
-    final surahNameEn    = SurahNames.getEnglishName(surah);
-    final bookmarkId     = 'surah_${surah}_ayah_$verse';
-    final capturedText   = arabicText;
+    final surahName = SurahNames.getArabicName(surah);
+    final surahNameEn = SurahNames.getEnglishName(surah);
+    final bookmarkId = 'surah_${surah}_ayah_$verse';
+    final capturedText = arabicText;
 
     // ignore: use_build_context_synchronously
     _showVerseOptionsSheet(
       context,
-      surah:           surah,
-      verse:           verse,
-      surahName:       surahName,
-      arabicText:      capturedText,
-      bookmarkId:      bookmarkId,
+      surah: surah,
+      verse: verse,
+      surahName: surahName,
+      arabicText: capturedText,
+      bookmarkId: bookmarkId,
       bookmarkService: _bookmarkService,
       onTafsir: () {
         if (!mounted) return;
@@ -384,11 +393,11 @@ class _MushafPageViewState extends State<MushafPageView>
             builder: (_) => BlocProvider(
               create: (_) => di.sl<TafsirCubit>(),
               child: TafsirScreen(
-                surahNumber:      surah,
-                ayahNumber:       verse,
-                surahName:        surahName,
+                surahNumber: surah,
+                ayahNumber: verse,
+                surahName: surahName,
                 surahEnglishName: surahNameEn,
-                arabicAyahText:   capturedText,
+                arabicAyahText: capturedText,
               ),
             ),
           ),
@@ -413,10 +422,10 @@ class _MushafPageViewState extends State<MushafPageView>
     const double kPlayerHeight = 220.0;
     // kPlayerCollapsedHeight removed — minimized player now floats over content.
 
-    final bgColor =
-        isDark ? const Color(0xFF0E1A12) : const Color(0xFFFFF9ED);
-    final textColor =
-        isDark ? const Color(0xFFE8E8E8) : const Color(0xFF1A1A1A);
+    final bgColor = isDark ? const Color(0xFF0E1A12) : const Color(0xFFFFF9ED);
+    final textColor = isDark
+        ? const Color(0xFFE8E8E8)
+        : const Color(0xFF1A1A1A);
 
     return BlocListener<AyahAudioCubit, AyahAudioState>(
       listener: (_, state) => _syncAudioHighlights(state),
@@ -425,208 +434,233 @@ class _MushafPageViewState extends State<MushafPageView>
         body: SafeArea(
           bottom: false,
           child: Container(
-          color: bgColor,
-          child: Stack(
-            children: [
-              Positioned.fill(
-                child: CustomPaint(
-                  painter: IslamicPatternPainter(
-                    color: isDark ? const Color(0xFFC8A84B) : AppColors.primary,
+            color: bgColor,
+            child: Stack(
+              children: [
+                Positioned.fill(
+                  child: CustomPaint(
+                    painter: IslamicPatternPainter(
+                      color: isDark
+                          ? const Color(0xFFC8A84B)
+                          : AppColors.primary,
+                    ),
                   ),
                 ),
-              ),
-              Positioned.fill(
-                child: CustomPaint(
-                  painter: BorderOrnamentPainter(
-                    color: isDark ? const Color(0xFFC8A84B) : AppColors.primary,
+                Positioned.fill(
+                  child: CustomPaint(
+                    painter: BorderOrnamentPainter(
+                      color: isDark
+                          ? const Color(0xFFC8A84B)
+                          : AppColors.primary,
+                    ),
                   ),
                 ),
-              ),
-              // ── Quran page – always fills the full body area ──────
-              // Using Positioned.fill guarantees the page occupies the
-              // entire available space regardless of any overlay widgets.
-              // When the audio player is visible, shrink from the bottom
-              // so the page content is never covered by the player.
-              ValueListenableBuilder<bool>(
-                valueListenable: _playerCollapsed,
-                builder: (ctx, isCollapsed, child) => Positioned.fill(
-                  // When minimized the pill floats over the content.
-                  // Only push content up when the full player is expanded.
-                  bottom: playerVisible
-                      ? (isCollapsed ? 0.0 : kPlayerHeight)
-                      : 0.0,
-                  child: Directionality(
-                  textDirection: TextDirection.rtl,
-                  child: PageView.builder(
-                    controller: _pageController,
-                    itemCount: 604,
-                    itemBuilder: (ctx, index) {
-                      final pageNum = index + 1;
-                      // Use regular-font fallback for pages whose QCF glyph
-                      // calibration is known to overflow the container.
-                      if (kEnableQcfFallback &&
-                          kQcfProblematicPages.contains(pageNum)) {
-                        return QcfFallbackPage(
-                          key: ValueKey('fb_$pageNum'),
-                          pageNumber: pageNum,
-                        );
-                      }
-                      return Column(
-                        children: [
-                          Directionality(
-                            textDirection: TextDirection.ltr,
-                            child: _buildTopBar(isDark, pageNum),
-                          ),
-                          Expanded(
-                            child: GestureDetector(
-                              // Page-level long press → show options sheet for
-                              // the verse the user's finger is touching.
-                              // _tapDownSurah/_tapDownVerse are set by QcfPage's
-                              // onTapDown which fires on pointer-down (before
-                              // the gesture arena resolves), so the correct verse
-                              // is always known by the time onLongPress fires.
-                              onLongPress: () {
-                                int? s, v;
-                                if (_tapDownSurah != null && _tapDownVerse != null) {
-                                  // Primary source: the verse the finger is on.
-                                  s = _tapDownSurah;
-                                  v = _tapDownVerse;
-                                } else if (_audioHighlight != null) {
-                                  s = _audioHighlight!.surah;
-                                  v = _audioHighlight!.verseNumber;
-                                } else if (_navHighlight != null) {
-                                  s = _navHighlight!.surah;
-                                  v = _navHighlight!.verseNumber;
-                                } else {
-                                  // Last resort: first verse on the page.
-                                  try {
-                                    final ranges = getPageData(pageNum);
-                                    if (ranges.isNotEmpty) {
-                                      final r = ranges.first as Map;
-                                      s = int.parse(r['surah'].toString());
-                                      v = int.parse(r['start'].toString());
-                                    }
-                                  } catch (_) {}
-                                }
-                                if (s != null && v != null) _onLongPress(s, v);
-                              },
-                              child: ValueListenableBuilder<List<_HighlightVerse>>(
-                                valueListenable: _highlightsNotifier,
-                                builder: (_, highlights, child) =>
-                                    LayoutBuilder(
-                                  builder: (lbCtx, constraints) {
-                                  // Use the same formula as the reference app
-                                  // (flutter_screenutil 1.sp / 1.h):
-                                  //   sp = screenWidth  / designWidth
-                                  //   h  = screenHeight / designHeight
-                                  // Using full MediaQuery dimensions (not
-                                  // constraints) intentionally matches the
-                                  // reference app and makes the 15-line grid
-                                  // fill the visible page naturally.
-                                  const double kDesignWidth  = 392.72727272727275;
-                                  const double kDesignHeight = 800.7272727272727;
-                                    final Size screen = MediaQuery.of(lbCtx).size;
-                                  final double effectiveWidth =
-                                      constraints.maxWidth.isFinite && constraints.maxWidth > 0
-                                          ? constraints.maxWidth
-                                          : screen.width;
-                                  // ---------- sp / font-size safety explanation ----------
-                                  // The qcf_quran package calibrates its page fonts for a
-                                  // reference device of ≈393 dp width.  Some pages (e.g.
-                                  // 387, 504, 579 …) were accidentally omitted from
-                                  // getFontSize()'s special-case list and get the default
-                                  // 23.1 px, which is too large – their QCF glyphs were
-                                  // designed for a slightly smaller size.  On a 393 dp
-                                  // phone sp ≈ 1.0 so capping at 1.0 does nothing; the
-                                  // overflow is baked into the font calibration itself.
-                                  //
-                                  // Fix: add a 20 dp safety margin to the design width
-                                  // denominator. This gives sp ≈ 0.952 on a 393 dp phone,
-                                  // reducing every font size by ~4.8 %.  Lines that exactly
-                                  // filled the container now span ~374 dp and sit centred
-                                  // with 9-10 dp breathing room each side – visually
-                                  // identical to a printed Mushaf page which also has
-                                  // slight margins.  For tablets (≥ 600 dp) getFontSize
-                                  // already returns 15 and needs sp > 1, so the margin is
-                                  // not applied there.
-                                  const double kSafeMargin = 20.0;
-                                  final bool isPhone = effectiveWidth < 600;
-                                  final double rawSp = effectiveWidth /
-                                      (isPhone ? kDesignWidth + kSafeMargin : kDesignWidth);
-                                  final double sp = rawSp;
-                                  final double h  = screen.height / kDesignHeight;
-                                    // Wrap in MediaQuery to neutralise the
-                                    // system font-size setting (the user may
-                                    // have Samsung font set to Large/Huge).
-                                    // Without this, Flutter applies the system
-                                    // textScaler to the QCF font, making every
-                                    // line wider than the container and
-                                    // clipping the first (rightmost) character.
-                                    return MediaQuery(
-                                      data: MediaQuery.of(lbCtx).copyWith(
-                                        textScaler: TextScaler.linear(1.0),
-                                      ),
-                                      child: AppQcfPage(
-                                      pageNumber: pageNum,
-                                      sp: sp,
-                                      h: h,
-                                      theme: QcfThemeData(
-                                        verseTextColor: textColor,
-                                        pageBackgroundColor: Colors.transparent,
-                                        basmalaColor: textColor,
-                                        customHeaderBuilder: (surahNum) =>
-                                            _buildSurahHeader(surahNum, isDark),
-                                      ),
-                                      verseBackgroundColor: (surah, verse) {
-                                        for (final h in highlights) {
-                                          if (h.surah == surah &&
-                                              h.verseNumber == verse) {
-                                            return h.color
-                                                .withValues(alpha: 0.3);
-                                          }
+                // ── Quran page – always fills the full body area ──────
+                // Using Positioned.fill guarantees the page occupies the
+                // entire available space regardless of any overlay widgets.
+                // When the audio player is visible, shrink from the bottom
+                // so the page content is never covered by the player.
+                ValueListenableBuilder<bool>(
+                  valueListenable: _playerCollapsed,
+                  builder: (ctx, isCollapsed, child) => Positioned.fill(
+                    // When minimized the pill floats over the content.
+                    // Only push content up when the full player is expanded.
+                    bottom: playerVisible
+                        ? (isCollapsed ? 0.0 : kPlayerHeight)
+                        : 0.0,
+                    child: Directionality(
+                      textDirection: TextDirection.rtl,
+                      child: PageView.builder(
+                        controller: _pageController,
+                        itemCount: 604,
+                        itemBuilder: (ctx, index) {
+                          final pageNum = index + 1;
+                          // Use regular-font fallback for pages whose QCF glyph
+                          // calibration is known to overflow the container.
+                          if (kEnableQcfFallback &&
+                              kQcfProblematicPages.contains(pageNum)) {
+                            return QcfFallbackPage(
+                              key: ValueKey('fb_$pageNum'),
+                              pageNumber: pageNum,
+                            );
+                          }
+                          return Column(
+                            children: [
+                              Directionality(
+                                textDirection: TextDirection.ltr,
+                                child: _buildTopBar(isDark, pageNum),
+                              ),
+                              Expanded(
+                                child: GestureDetector(
+                                  // Page-level long press → show options sheet for
+                                  // the verse the user's finger is touching.
+                                  // _tapDownSurah/_tapDownVerse are set by QcfPage's
+                                  // onTapDown which fires on pointer-down (before
+                                  // the gesture arena resolves), so the correct verse
+                                  // is always known by the time onLongPress fires.
+                                  onLongPress: () {
+                                    int? s, v;
+                                    if (_tapDownSurah != null &&
+                                        _tapDownVerse != null) {
+                                      // Primary source: the verse the finger is on.
+                                      s = _tapDownSurah;
+                                      v = _tapDownVerse;
+                                    } else if (_audioHighlight != null) {
+                                      s = _audioHighlight!.surah;
+                                      v = _audioHighlight!.verseNumber;
+                                    } else if (_navHighlight != null) {
+                                      s = _navHighlight!.surah;
+                                      v = _navHighlight!.verseNumber;
+                                    } else {
+                                      // Last resort: first verse on the page.
+                                      try {
+                                        final ranges = getPageData(pageNum);
+                                        if (ranges.isNotEmpty) {
+                                          final r = ranges.first as Map;
+                                          s = int.parse(r['surah'].toString());
+                                          v = int.parse(r['start'].toString());
                                         }
-                                        return null;
-                                      },
-                                      onTap: _onTap,
-                                      onTapDown: (s, v, _) {
-                                        _tapDownSurah = s;
-                                        _tapDownVerse = v;
+                                      } catch (_) {}
+                                    }
+                                    if (s != null && v != null) {
+                                      _onLongPress(s, v);
+                                    }
+                                  },
+                                  child: ValueListenableBuilder<List<_HighlightVerse>>(
+                                    valueListenable: _highlightsNotifier,
+                                    builder: (_, highlights, child) => LayoutBuilder(
+                                      builder: (lbCtx, constraints) {
+                                        // Use the same formula as the reference app
+                                        // (flutter_screenutil 1.sp / 1.h):
+                                        //   sp = screenWidth  / designWidth
+                                        //   h  = screenHeight / designHeight
+                                        // Using full MediaQuery dimensions (not
+                                        // constraints) intentionally matches the
+                                        // reference app and makes the 15-line grid
+                                        // fill the visible page naturally.
+                                        const double kDesignWidth =
+                                            392.72727272727275;
+                                        const double kDesignHeight =
+                                            800.7272727272727;
+                                        final Size screen = MediaQuery.of(
+                                          lbCtx,
+                                        ).size;
+                                        final double effectiveWidth =
+                                            constraints.maxWidth.isFinite &&
+                                                constraints.maxWidth > 0
+                                            ? constraints.maxWidth
+                                            : screen.width;
+                                        // ---------- sp / font-size safety explanation ----------
+                                        // The qcf_quran package calibrates its page fonts for a
+                                        // reference device of ≈393 dp width.  Some pages (e.g.
+                                        // 387, 504, 579 …) were accidentally omitted from
+                                        // getFontSize()'s special-case list and get the default
+                                        // 23.1 px, which is too large – their QCF glyphs were
+                                        // designed for a slightly smaller size.  On a 393 dp
+                                        // phone sp ≈ 1.0 so capping at 1.0 does nothing; the
+                                        // overflow is baked into the font calibration itself.
+                                        //
+                                        // Fix: add a 20 dp safety margin to the design width
+                                        // denominator. This gives sp ≈ 0.952 on a 393 dp phone,
+                                        // reducing every font size by ~4.8 %.  Lines that exactly
+                                        // filled the container now span ~374 dp and sit centred
+                                        // with 9-10 dp breathing room each side – visually
+                                        // identical to a printed Mushaf page which also has
+                                        // slight margins.  For tablets (≥ 600 dp) getFontSize
+                                        // already returns 15 and needs sp > 1, so the margin is
+                                        // not applied there.
+                                        const double kSafeMargin = 20.0;
+                                        final bool isPhone =
+                                            effectiveWidth < 600;
+                                        final double rawSp =
+                                            effectiveWidth /
+                                            (isPhone
+                                                ? kDesignWidth + kSafeMargin
+                                                : kDesignWidth);
+                                        final double sp = rawSp;
+                                        final double h =
+                                            screen.height / kDesignHeight;
+                                        // Wrap in MediaQuery to neutralise the
+                                        // system font-size setting (the user may
+                                        // have Samsung font set to Large/Huge).
+                                        // Without this, Flutter applies the system
+                                        // textScaler to the QCF font, making every
+                                        // line wider than the container and
+                                        // clipping the first (rightmost) character.
+                                        return MediaQuery(
+                                          data: MediaQuery.of(lbCtx).copyWith(
+                                            textScaler: TextScaler.linear(1.0),
+                                          ),
+                                          child: AppQcfPage(
+                                            pageNumber: pageNum,
+                                            sp: sp,
+                                            h: h,
+                                            theme: QcfThemeData(
+                                              verseTextColor: textColor,
+                                              pageBackgroundColor:
+                                                  Colors.transparent,
+                                              basmalaColor: textColor,
+                                              customHeaderBuilder: (surahNum) =>
+                                                  _buildSurahHeader(
+                                                    surahNum,
+                                                    isDark,
+                                                  ),
+                                            ),
+                                            verseBackgroundColor:
+                                                (surah, verse) {
+                                                  for (final h in highlights) {
+                                                    if (h.surah == surah &&
+                                                        h.verseNumber ==
+                                                            verse) {
+                                                      return h.color.withValues(
+                                                        alpha: 0.3,
+                                                      );
+                                                    }
+                                                  }
+                                                  return null;
+                                                },
+                                            onTap: _onTap,
+                                            onTapDown: (s, v, _) {
+                                              _tapDownSurah = s;
+                                              _tapDownVerse = v;
+                                            },
+                                          ),
+                                        );
                                       },
                                     ),
-                                    );
-                                  },
+                                  ),
                                 ),
                               ),
-                            ),
-                          ),
-                          Directionality(
-                            textDirection: TextDirection.ltr,
-                            child: _buildDecorativeFooter(pageNum,
-                                isDarkMode: isDark),
-                          ),
-                        ],
-                      );
-                    },
+                              Directionality(
+                                textDirection: TextDirection.ltr,
+                                child: _buildDecorativeFooter(
+                                  pageNum,
+                                  isDarkMode: isDark,
+                                ),
+                              ),
+                            ],
+                          );
+                        },
+                      ),
+                    ),
                   ),
                 ),
-              ),
-              ),
-              // ── Floating audio player ──────────────────────────────
-              // Positioned at the bottom so it never participates in
-              // layout and never compresses the Quran page above it.
-              // Returns SizedBox.shrink() when audio is idle.
-              Positioned(
-                bottom: 0,
-                left: 0,
-                right: 0,
-                child: IslamicAudioPlayer(
-                  isArabicUi: widget.isArabicUi,
-                  collapsedNotifier: _playerCollapsed,
+                // ── Floating audio player ──────────────────────────────
+                // Positioned at the bottom so it never participates in
+                // layout and never compresses the Quran page above it.
+                // Returns SizedBox.shrink() when audio is idle.
+                Positioned(
+                  bottom: 0,
+                  left: 0,
+                  right: 0,
+                  child: IslamicAudioPlayer(
+                    isArabicUi: widget.isArabicUi,
+                    collapsedNotifier: _playerCollapsed,
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
-        ),
         ),
       ),
     );
@@ -639,12 +673,15 @@ class _MushafPageViewState extends State<MushafPageView>
       builder: (ctx, constraints) {
         final isPortrait =
             MediaQuery.of(ctx).orientation == Orientation.portrait;
-        final headerWidth =
-            isPortrait ? constraints.maxWidth * 0.95 : constraints.maxWidth * 0.8;
-        final fontSize =
-            isPortrait ? headerWidth * 0.075 : constraints.maxWidth * 0.05;
-        final nameColor =
-            isDark ? const Color(0xFFE8C46A) : const Color(0xFF3D2000);
+        final headerWidth = isPortrait
+            ? constraints.maxWidth * 0.95
+            : constraints.maxWidth * 0.8;
+        final fontSize = isPortrait
+            ? headerWidth * 0.075
+            : constraints.maxWidth * 0.05;
+        final nameColor = isDark
+            ? const Color(0xFFE8C46A)
+            : const Color(0xFF3D2000);
 
         return Padding(
           padding: const EdgeInsets.symmetric(vertical: 4),
@@ -706,11 +743,14 @@ class _MushafPageViewState extends State<MushafPageView>
             final isArabicUi = widget.isArabicUi;
             if (isBookmarked) {
               _bookmarkService.removeBookmark(pageId);
-              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                content: Text(
-                    isArabicUi ? 'تم حذف الإشارة' : 'Bookmark removed'),
-                duration: const Duration(seconds: 1),
-              ));
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(
+                    isArabicUi ? 'تم حذف الإشارة' : 'Bookmark removed',
+                  ),
+                  duration: const Duration(seconds: 1),
+                ),
+              );
             } else {
               _bookmarkService.addBookmark(
                 id: pageId,
@@ -719,12 +759,16 @@ class _MushafPageViewState extends State<MushafPageView>
                 surahName: actualSurahName,
                 surahNumber: actualSurahNumber,
                 ayahNumber: null,
+                pageNumber: pageNumber,
               );
-              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                content: Text(
-                    isArabicUi ? 'تمت إضافة إشارة' : 'Bookmark added'),
-                duration: const Duration(seconds: 1),
-              ));
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(
+                    isArabicUi ? 'تمت إضافة إشارة' : 'Bookmark added',
+                  ),
+                  duration: const Duration(seconds: 1),
+                ),
+              );
             }
             setLocalState(() {});
           },
@@ -816,16 +860,39 @@ class _MushafPageViewState extends State<MushafPageView>
   // ── Decorative widgets ─────────────────────────────────────────────────────
 
   // ── Juz approximation (standard 20-page/juz Medina layout) ──────────────
-  int _juzForPage(int page) =>
-      ((page - 1) ~/ 20).clamp(0, 29) + 1;
+  int _juzForPage(int page) => ((page - 1) ~/ 20).clamp(0, 29) + 1;
 
   static const _kJuzNames = [
-    'الأول', 'الثاني', 'الثالث', 'الرابع', 'الخامس',
-    'السادس', 'السابع', 'الثامن', 'التاسع', 'العاشر',
-    'الحادي عشر', 'الثاني عشر', 'الثالث عشر', 'الرابع عشر', 'الخامس عشر',
-    'السادس عشر', 'السابع عشر', 'الثامن عشر', 'التاسع عشر', 'العشرون',
-    'الحادي والعشرون', 'الثاني والعشرون', 'الثالث والعشرون', 'الرابع والعشرون', 'الخامس والعشرون',
-    'السادس والعشرون', 'السابع والعشرون', 'الثامن والعشرون', 'التاسع والعشرون', 'الثلاثون',
+    'الأول',
+    'الثاني',
+    'الثالث',
+    'الرابع',
+    'الخامس',
+    'السادس',
+    'السابع',
+    'الثامن',
+    'التاسع',
+    'العاشر',
+    'الحادي عشر',
+    'الثاني عشر',
+    'الثالث عشر',
+    'الرابع عشر',
+    'الخامس عشر',
+    'السادس عشر',
+    'السابع عشر',
+    'الثامن عشر',
+    'التاسع عشر',
+    'العشرون',
+    'الحادي والعشرون',
+    'الثاني والعشرون',
+    'الثالث والعشرون',
+    'الرابع والعشرون',
+    'الخامس والعشرون',
+    'السادس والعشرون',
+    'السابع والعشرون',
+    'الثامن والعشرون',
+    'التاسع والعشرون',
+    'الثلاثون',
   ];
 
   String _juzName(int juz) =>
@@ -836,8 +903,7 @@ class _MushafPageViewState extends State<MushafPageView>
       final ranges = getPageData(page);
       if (ranges.isNotEmpty) {
         final m = ranges.first as Map<dynamic, dynamic>;
-        return SurahNames.getArabicName(
-            int.parse(m['surah'].toString()));
+        return SurahNames.getArabicName(int.parse(m['surah'].toString()));
       }
     } catch (_) {}
     return widget.surah.name;
@@ -874,8 +940,7 @@ class _MushafPageViewState extends State<MushafPageView>
             child: Center(
               child: Text(
                 '❧',
-                style: TextStyle(
-                    color: dividerColor, fontSize: 14, height: 1),
+                style: TextStyle(color: dividerColor, fontSize: 14, height: 1),
               ),
             ),
           ),
@@ -910,13 +975,10 @@ class _MushafPageViewState extends State<MushafPageView>
               Image.asset(
                 'assets/logo/files/transparent/label.png',
                 height: 18,
-                color: isDarkMode
-                    ? Colors.white.withValues(alpha: 0.80)
-                    : null,
+                color: isDarkMode ? Colors.white.withValues(alpha: 0.80) : null,
               ),
               Padding(
-                padding: const EdgeInsets.fromLTRB(0,0,0,2)
-                ,
+                padding: const EdgeInsets.fromLTRB(0, 0, 0, 2),
                 // TODO: consider adding a subtle drop shadow to the text in light mode for better contrast against the decorative background.
                 child: Text(
                   _toArabicNumerals(pageNumber),
@@ -939,9 +1001,7 @@ class _MushafPageViewState extends State<MushafPageView>
   // ── Ornament helpers ───────────────────────────────────────────────────────
 
   String _toArabicNumerals(int number) {
-    const arabicDigits = [
-      '٠', '١', '٢', '٣', '٤', '٥', '٦', '٧', '٨', '٩'
-    ];
+    const arabicDigits = ['٠', '١', '٢', '٣', '٤', '٥', '٦', '٧', '٨', '٩'];
     return number
         .toString()
         .split('')
@@ -1029,10 +1089,26 @@ class BorderOrnamentPainter extends CustomPainter {
     const innerMargin = 14.0;
 
     // Horizontal lines only (top + bottom) — vertical sides removed
-    canvas.drawLine(Offset(margin, margin), Offset(size.width - margin, margin), outerPaint);
-    canvas.drawLine(Offset(margin, size.height - margin), Offset(size.width - margin, size.height - margin), outerPaint);
-    canvas.drawLine(Offset(innerMargin, innerMargin), Offset(size.width - innerMargin, innerMargin), innerPaint);
-    canvas.drawLine(Offset(innerMargin, size.height - innerMargin), Offset(size.width - innerMargin, size.height - innerMargin), innerPaint);
+    canvas.drawLine(
+      Offset(margin, margin),
+      Offset(size.width - margin, margin),
+      outerPaint,
+    );
+    canvas.drawLine(
+      Offset(margin, size.height - margin),
+      Offset(size.width - margin, size.height - margin),
+      outerPaint,
+    );
+    canvas.drawLine(
+      Offset(innerMargin, innerMargin),
+      Offset(size.width - innerMargin, innerMargin),
+      innerPaint,
+    );
+    canvas.drawLine(
+      Offset(innerMargin, size.height - innerMargin),
+      Offset(size.width - innerMargin, size.height - innerMargin),
+      innerPaint,
+    );
 
     // Medallion ornaments at every corner
     const medallionR = 14.0;
@@ -1048,8 +1124,14 @@ class BorderOrnamentPainter extends CustomPainter {
   }
 
   /// Draws a circular medallion with an 8-pointed star — classical Islamic manuscript style.
-  void _drawMedallion(Canvas canvas, Offset center, double r, Paint outer,
-      Paint inner, Paint fill) {
+  void _drawMedallion(
+    Canvas canvas,
+    Offset center,
+    double r,
+    Paint outer,
+    Paint inner,
+    Paint fill,
+  ) {
     // Filled background circle
     canvas.drawCircle(center, r, fill);
     // Outer ring

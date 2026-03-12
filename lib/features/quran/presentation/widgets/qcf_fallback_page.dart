@@ -46,7 +46,17 @@ const bool kEnableQcfFallback = true;
 /// code change is needed; [QcfFallbackPage] is automatically used for every
 /// page number present here (when [kEnableQcfFallback] is `true`).
 const Set<int> kQcfProblematicPages = {
-  377, 387, 498, 504, 510, 523, 530, 535, 555, 579, 591,
+  377,
+  387,
+  498,
+  504,
+  510,
+  523,
+  530,
+  535,
+  555,
+  579,
+  591,
 };
 
 // ─── Internal data model ───────────────────────────────────────────────────
@@ -102,7 +112,8 @@ String _stripBasmalaPrefix(String text) {
 
   while (origIdx < text.length && normCount < basLen) {
     final cp = text.codeUnitAt(origIdx);
-    final isDiacritic = (cp >= 0x064B && cp <= 0x065F) ||
+    final isDiacritic =
+        (cp >= 0x064B && cp <= 0x065F) ||
         cp == 0x0670 ||
         (cp >= 0x06D6 && cp <= 0x06DC) ||
         (cp >= 0x06DF && cp <= 0x06E4) ||
@@ -118,7 +129,8 @@ String _stripBasmalaPrefix(String text) {
   // its trailing harakat at origIdx.
   while (origIdx < text.length) {
     final cp2 = text.codeUnitAt(origIdx);
-    final trailing = (cp2 >= 0x064B && cp2 <= 0x065F) ||
+    final trailing =
+        (cp2 >= 0x064B && cp2 <= 0x065F) ||
         cp2 == 0x0670 ||
         (cp2 >= 0x06D6 && cp2 <= 0x06DC) ||
         (cp2 >= 0x06DF && cp2 <= 0x06E4) ||
@@ -169,18 +181,21 @@ Future<List<_Verse>> _loadFromBundledAssets(int page) async {
   final results = <_Verse>[];
   for (final surahNum in surahNumbers) {
     try {
-      final raw =
-          await rootBundle.loadString('assets/offline/surah_$surahNum.json');
+      final raw = await rootBundle.loadString(
+        'assets/offline/surah_$surahNum.json',
+      );
       final data = jsonDecode(raw) as Map<String, dynamic>;
       final ayahs = data['ayahs'] as List;
       for (final ayah in ayahs) {
         if ((ayah['page'] as int?) == page) {
-          results.add(_Verse(
-            verseKey: '$surahNum:${ayah["numberInSurah"]}',
-            surah: surahNum,
-            ayah: ayah['numberInSurah'] as int,
-            text: (ayah['text'] as String?) ?? '',
-          ));
+          results.add(
+            _Verse(
+              verseKey: '$surahNum:${ayah["numberInSurah"]}',
+              surah: surahNum,
+              ayah: ayah['numberInSurah'] as int,
+              text: (ayah['text'] as String?) ?? '',
+            ),
+          );
         }
       }
     } catch (_) {}
@@ -277,9 +292,19 @@ class _QcfFallbackPageState extends State<QcfFallbackPage> {
   Future<void> _load() async {
     try {
       final verses = await _fetchPage(widget.pageNumber);
-      if (mounted) setState(() { _verses = verses; _loading = false; });
+      if (mounted) {
+        setState(() {
+          _verses = verses;
+          _loading = false;
+        });
+      }
     } catch (e) {
-      if (mounted) setState(() { _error = e; _loading = false; });
+      if (mounted) {
+        setState(() {
+          _error = e;
+          _loading = false;
+        });
+      }
     }
   }
 
@@ -288,8 +313,7 @@ class _QcfFallbackPageState extends State<QcfFallbackPage> {
     final isDark = context.select<AppSettingsCubit, bool>(
       (c) => c.state.darkMode,
     );
-    final bgColor =
-        isDark ? const Color(0xFF0E1A12) : const Color(0xFFF5F0E4);
+    final bgColor = isDark ? const Color(0xFF0E1A12) : const Color(0xFFF5F0E4);
 
     if (_loading) {
       return Container(
@@ -299,7 +323,9 @@ class _QcfFallbackPageState extends State<QcfFallbackPage> {
             mainAxisSize: MainAxisSize.min,
             children: [
               const CircularProgressIndicator(
-                  color: AppColors.primary, strokeWidth: 3),
+                color: AppColors.primary,
+                strokeWidth: 3,
+              ),
               const SizedBox(height: 14),
               Text(
                 'جارٍ تحميل الصفحة ${widget.pageNumber}…',
@@ -324,27 +350,33 @@ class _QcfFallbackPageState extends State<QcfFallbackPage> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.wifi_off_rounded,
-                  size: 56,
-                  color: isDark
-                      ? const Color(0xFF6B6B6B)
-                      : AppColors.textSecondary),
+              Icon(
+                Icons.wifi_off_rounded,
+                size: 56,
+                color: isDark
+                    ? const Color(0xFF6B6B6B)
+                    : AppColors.textSecondary,
+              ),
               const SizedBox(height: 12),
-              Text('تعذّر تحميل الصفحة',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: isDark
-                        ? const Color(0xFF9E9E9E)
-                        : AppColors.textSecondary,
-                  )),
+              Text(
+                'تعذّر تحميل الصفحة',
+                style: TextStyle(
+                  fontSize: 14,
+                  color: isDark
+                      ? const Color(0xFF9E9E9E)
+                      : AppColors.textSecondary,
+                ),
+              ),
               const SizedBox(height: 12),
               TextButton.icon(
                 icon: const Icon(Icons.refresh_rounded),
                 label: const Text('إعادة المحاولة'),
-                style:
-                    TextButton.styleFrom(foregroundColor: AppColors.primary),
+                style: TextButton.styleFrom(foregroundColor: AppColors.primary),
                 onPressed: () {
-                  setState(() { _loading = true; _error = null; });
+                  setState(() {
+                    _loading = true;
+                    _error = null;
+                  });
                   _load();
                 },
               ),
@@ -360,13 +392,17 @@ class _QcfFallbackPageState extends State<QcfFallbackPage> {
         Expanded(
           child: BlocBuilder<AyahAudioCubit, AyahAudioState>(
             builder: (ctx, audioState) {
-              final playerVisible =
-                  audioState.status != AyahAudioStatus.idle;
+              final playerVisible = audioState.status != AyahAudioStatus.idle;
               return SingleChildScrollView(
                 physics: const BouncingScrollPhysics(
-                    parent: AlwaysScrollableScrollPhysics()),
+                  parent: AlwaysScrollableScrollPhysics(),
+                ),
                 padding: EdgeInsets.fromLTRB(
-                    16, 8, 16, playerVisible ? 220.0 : 8),
+                  16,
+                  8,
+                  16,
+                  playerVisible ? 220.0 : 8,
+                ),
                 child: _FbPageText(verses: verses),
               );
             },
@@ -385,26 +421,50 @@ class _FbTopBar extends StatelessWidget {
   final List<_Verse> verses;
   final bool isDark;
 
-  const _FbTopBar(
-      {required this.page, required this.verses, required this.isDark});
+  const _FbTopBar({
+    required this.page,
+    required this.verses,
+    required this.isDark,
+  });
 
   static const _kJuzNames = [
-    'الأول', 'الثاني', 'الثالث', 'الرابع', 'الخامس',
-    'السادس', 'السابع', 'الثامن', 'التاسع', 'العاشر',
-    'الحادي عشر', 'الثاني عشر', 'الثالث عشر', 'الرابع عشر', 'الخامس عشر',
-    'السادس عشر', 'السابع عشر', 'الثامن عشر', 'التاسع عشر', 'العشرون',
-    'الحادي والعشرون', 'الثاني والعشرون', 'الثالث والعشرون',
-    'الرابع والعشرون', 'الخامس والعشرون', 'السادس والعشرون',
-    'السابع والعشرون', 'الثامن والعشرون', 'التاسع والعشرون', 'الثلاثون',
+    'الأول',
+    'الثاني',
+    'الثالث',
+    'الرابع',
+    'الخامس',
+    'السادس',
+    'السابع',
+    'الثامن',
+    'التاسع',
+    'العاشر',
+    'الحادي عشر',
+    'الثاني عشر',
+    'الثالث عشر',
+    'الرابع عشر',
+    'الخامس عشر',
+    'السادس عشر',
+    'السابع عشر',
+    'الثامن عشر',
+    'التاسع عشر',
+    'العشرون',
+    'الحادي والعشرون',
+    'الثاني والعشرون',
+    'الثالث والعشرون',
+    'الرابع والعشرون',
+    'الخامس والعشرون',
+    'السادس والعشرون',
+    'السابع والعشرون',
+    'الثامن والعشرون',
+    'التاسع والعشرون',
+    'الثلاثون',
   ];
 
   int get _juz => ((page - 1) ~/ 20).clamp(0, 29) + 1;
 
   String get _juzLabel {
     final j = _juz;
-    return j >= 1 && j <= 30
-        ? 'الجزء ${_kJuzNames[j - 1]}'
-        : 'الجزء $j';
+    return j >= 1 && j <= 30 ? 'الجزء ${_kJuzNames[j - 1]}' : 'الجزء $j';
   }
 
   String get _surahLabel {
@@ -422,29 +482,36 @@ class _FbTopBar extends StatelessWidget {
         ? Colors.white.withValues(alpha: 0.18)
         : const Color(0xFFC8A84B).withValues(alpha: 0.55);
     final labelStyle = GoogleFonts.amiriQuran(
-        fontSize: 12, fontWeight: FontWeight.w700, color: textColor);
+      fontSize: 12,
+      fontWeight: FontWeight.w700,
+      color: textColor,
+    );
 
     return Container(
       height: 36,
       padding: const EdgeInsets.symmetric(horizontal: 4),
       decoration: BoxDecoration(
-          border: Border(
-              bottom: BorderSide(color: dividerColor, width: 0.8))),
+        border: Border(bottom: BorderSide(color: dividerColor, width: 0.8)),
+      ),
       child: Row(
         children: [
           _FbPlayButton(page: page, verses: verses),
           Expanded(
-            child: Text(_juzLabel,
-                style: labelStyle,
-                textAlign: TextAlign.right,
-                textDirection: TextDirection.rtl),
+            child: Text(
+              _juzLabel,
+              style: labelStyle,
+              textAlign: TextAlign.right,
+              textDirection: TextDirection.rtl,
+            ),
           ),
           const SizedBox(width: 8),
           Expanded(
-            child: Text(_surahLabel,
-                style: labelStyle,
-                textAlign: TextAlign.left,
-                textDirection: TextDirection.rtl),
+            child: Text(
+              _surahLabel,
+              style: labelStyle,
+              textAlign: TextAlign.left,
+              textDirection: TextDirection.rtl,
+            ),
           ),
           _FbBookmarkButton(page: page),
         ],
@@ -469,7 +536,8 @@ class _FbPlayButton extends StatelessWidget {
         final sv = verses.where((v) => v.surah == firstSurah).toList();
         final startAyah = sv.first.ayah;
         final endAyah = sv.last.ayah;
-        final isActive = audioState.surahNumber == firstSurah &&
+        final isActive =
+            audioState.surahNumber == firstSurah &&
             audioState.ayahNumber != null &&
             audioState.ayahNumber! >= startAyah &&
             audioState.ayahNumber! <= endAyah;
@@ -486,9 +554,10 @@ class _FbPlayButton extends StatelessWidget {
               cubit.resume();
             } else {
               cubit.playAyahRange(
-                  surahNumber: firstSurah,
-                  startAyah: startAyah,
-                  endAyah: endAyah);
+                surahNumber: firstSurah,
+                startAyah: startAyah,
+                endAyah: endAyah,
+              );
             }
           },
           padding: EdgeInsets.zero,
@@ -528,7 +597,15 @@ class _FbBookmarkButtonState extends State<_FbBookmarkButton> {
 
   @override
   Widget build(BuildContext context) {
-    final pageId = 'mushaf:page:${widget.page}';
+    final surahNumbers = kMushafPageToSurahs[widget.page];
+    final actualSurahNumber = surahNumbers != null && surahNumbers.isNotEmpty
+        ? surahNumbers.first
+        : 1;
+    final actualSurahName =
+        actualSurahNumber >= 1 && actualSurahNumber <= _kSurahNames.length
+        ? _kSurahNames[actualSurahNumber - 1]
+        : '';
+    final pageId = '$actualSurahNumber:page:${widget.page}';
     final isBookmarked = _bm.isBookmarked(pageId);
     return IconButton(
       onPressed: () async {
@@ -539,9 +616,10 @@ class _FbBookmarkButtonState extends State<_FbBookmarkButton> {
             id: pageId,
             reference: pageId,
             arabicText: 'صفحة ${widget.page}',
-            surahName: '',
-            surahNumber: 0,
+            surahName: actualSurahName,
+            surahNumber: actualSurahNumber,
             ayahNumber: null,
+            pageNumber: widget.page,
           );
         }
         if (mounted) setState(() {});
@@ -577,8 +655,8 @@ class _FbFooter extends StatelessWidget {
         Container(
           height: 24,
           decoration: BoxDecoration(
-              border: Border(
-                  top: BorderSide(color: dividerColor, width: 0.8))),
+            border: Border(top: BorderSide(color: dividerColor, width: 0.8)),
+          ),
           alignment: Alignment.center,
           child: Stack(
             alignment: Alignment.center,
@@ -586,9 +664,7 @@ class _FbFooter extends StatelessWidget {
               Image.asset(
                 'assets/logo/files/transparent/label.png',
                 height: 18,
-                color: isDark
-                    ? Colors.white.withValues(alpha: 0.80)
-                    : null,
+                color: isDark ? Colors.white.withValues(alpha: 0.80) : null,
               ),
               Padding(
                 padding: const EdgeInsets.fromLTRB(0, 0, 0, 2),
@@ -656,18 +732,20 @@ class _FbPageTextState extends State<_FbPageText> {
       bookmarkService: di.sl<BookmarkService>(),
       onTafsir: () {
         if (!mounted) return;
-        Navigator.of(context).push(MaterialPageRoute(
-          builder: (_) => BlocProvider(
-            create: (_) => di.sl<TafsirCubit>(),
-            child: TafsirScreen(
-              surahNumber: v.surah,
-              ayahNumber: v.ayah,
-              surahName: name,
-              surahEnglishName: '',
-              arabicAyahText: v.text,
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => BlocProvider(
+              create: (_) => di.sl<TafsirCubit>(),
+              child: TafsirScreen(
+                surahNumber: v.surah,
+                ayahNumber: v.ayah,
+                surahName: name,
+                surahEnglishName: '',
+                arabicAyahText: v.text,
+              ),
             ),
           ),
-        ));
+        );
       },
     );
   }
@@ -691,10 +769,10 @@ class _FbPageTextState extends State<_FbPageText> {
               height: 2.2,
             );
 
-            final highlightColor =
-                AppColors.secondary.withValues(alpha: 0.28);
+            final highlightColor = AppColors.secondary.withValues(alpha: 0.28);
 
-            final playKey = (audioState.hasTarget &&
+            final playKey =
+                (audioState.hasTarget &&
                     audioState.status != AyahAudioStatus.idle)
                 ? '${audioState.surahNumber}:${audioState.ayahNumber}'
                 : null;
@@ -719,14 +797,15 @@ class _FbPageTextState extends State<_FbPageText> {
                   section.verses.first.ayah == 1 &&
                   section.surahNum != 1 &&
                   section.surahNum != 9) {
-                children.add(_FbSurahHeader(
-                    surahNum: section.surahNum,
-                    isDark: isDark));
+                children.add(
+                  _FbSurahHeader(surahNum: section.surahNum, isDark: isDark),
+                );
               }
 
               // Whether we showed a basmala header for this section.
               // If yes, strip the embedded basmala from verse 1's text.
-              final bool hasBasmalaHeader = section.verses.isNotEmpty &&
+              final bool hasBasmalaHeader =
+                  section.verses.isNotEmpty &&
                   section.verses.first.ayah == 1 &&
                   section.surahNum != 1 &&
                   section.surahNum != 9;
@@ -740,7 +819,9 @@ class _FbPageTextState extends State<_FbPageText> {
                 // gesture arena resolves) — so _lastTouched is always set
                 // by the time GestureDetector.onLongPress fires below.
                 final tap = TapGestureRecognizer()
-                  ..onTapDown = (_) { _lastTouched = v; }
+                  ..onTapDown = (_) {
+                    _lastTouched = v;
+                  }
                   ..onTap = () {
                     final cubit = ctx.read<AyahAudioCubit>();
                     if (audioState.surahNumber == v.surah &&
@@ -748,8 +829,7 @@ class _FbPageTextState extends State<_FbPageText> {
                         audioState.status == AyahAudioStatus.playing) {
                       cubit.pause();
                     } else {
-                      cubit.playAyah(
-                          surahNumber: v.surah, ayahNumber: v.ayah);
+                      cubit.playAyah(surahNumber: v.surah, ayahNumber: v.ayah);
                     }
                   };
                 _recognizers.add(tap);
@@ -761,38 +841,38 @@ class _FbPageTextState extends State<_FbPageText> {
                     'QCF_P${versePage.toString().padLeft(3, '0')}';
                 final verseNumColor = isHighlighted
                     ? AppColors.secondary
-                    : (isDark
-                        ? const Color(0xFFC8A84B)
-                        : AppColors.primary);
+                    : (isDark ? const Color(0xFFC8A84B) : AppColors.primary);
 
                 final displayText = (hasBasmalaHeader && v.ayah == 1)
                     ? _stripBasmalaPrefix(v.text)
                     : v.text;
 
-                spans.add(TextSpan(
-                  children: [
-                    TextSpan(
-                      text: displayText,
-                      recognizer: tap,
-                      style: baseStyle.copyWith(
-                        backgroundColor: isHighlighted
-                            ? highlightColor
-                            : Colors.transparent,
+                spans.add(
+                  TextSpan(
+                    children: [
+                      TextSpan(
+                        text: displayText,
+                        recognizer: tap,
+                        style: baseStyle.copyWith(
+                          backgroundColor: isHighlighted
+                              ? highlightColor
+                              : Colors.transparent,
+                        ),
                       ),
-                    ),
-                    TextSpan(
-                      text: verseNumGlyph,
-                      style: TextStyle(
-                        fontFamily: versePageFont,
-                        package: 'qcf_quran',
-                        fontSize: baseStyle.fontSize,
-                        color: verseNumColor,
-                        height: baseStyle.height,
+                      TextSpan(
+                        text: verseNumGlyph,
+                        style: TextStyle(
+                          fontFamily: versePageFont,
+                          package: 'qcf_quran',
+                          fontSize: baseStyle.fontSize,
+                          color: verseNumColor,
+                          height: baseStyle.height,
+                        ),
                       ),
-                    ),
-                    const TextSpan(text: ' '),
-                  ],
-                ));
+                      const TextSpan(text: ' '),
+                    ],
+                  ),
+                );
               }
 
               // Long-press is handled at section level so it works even when
@@ -800,17 +880,19 @@ class _FbPageTextState extends State<_FbPageText> {
               // LongPressGestureRecognizer that competes in the arena with
               // each TextSpan's TapGestureRecognizer; for long presses the
               // tap recognizer times out and this one wins.
-              children.add(GestureDetector(
-                onLongPress: () {
-                  _openOptions(_lastTouched ?? sectionFirstVerse);
-                },
-                child: Text.rich(
-                  TextSpan(children: spans),
-                  textDirection: TextDirection.rtl,
-                  textAlign: TextAlign.justify,
-                  style: baseStyle,
+              children.add(
+                GestureDetector(
+                  onLongPress: () {
+                    _openOptions(_lastTouched ?? sectionFirstVerse);
+                  },
+                  child: Text.rich(
+                    TextSpan(children: spans),
+                    textDirection: TextDirection.rtl,
+                    textAlign: TextAlign.justify,
+                    style: baseStyle,
+                  ),
                 ),
-              ));
+              );
             }
 
             return Column(
@@ -847,10 +929,10 @@ class _FbSurahHeader extends StatelessWidget {
       builder: (ctx, constraints) {
         final bool portrait =
             MediaQuery.of(ctx).orientation == Orientation.portrait;
-        final double w =
-            portrait ? constraints.maxWidth * 0.95 : constraints.maxWidth * 0.8;
-        final double fs =
-            portrait ? w * 0.075 : constraints.maxWidth * 0.05;
+        final double w = portrait
+            ? constraints.maxWidth * 0.95
+            : constraints.maxWidth * 0.8;
+        final double fs = portrait ? w * 0.075 : constraints.maxWidth * 0.05;
         return Padding(
           padding: const EdgeInsets.symmetric(vertical: 4),
           child: Stack(
@@ -887,8 +969,9 @@ class _FbSurahHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final Color nameColor =
-        isDark ? const Color(0xFFE8C46A) : const Color(0xFF3D2000);
+    final Color nameColor = isDark
+        ? const Color(0xFFE8C46A)
+        : const Color(0xFF3D2000);
     final Color basmalaColor = isDark
         ? const Color(0xFFD4AF37)
         : AppColors.primary.withValues(alpha: 0.9);
@@ -932,10 +1015,11 @@ class _FbVerseNumber extends StatelessWidget {
   final bool isHighlighted;
   final VoidCallback onLongPress;
 
-  const _FbVerseNumber(
-      {required this.verse,
-      required this.isHighlighted,
-      required this.onLongPress});
+  const _FbVerseNumber({
+    required this.verse,
+    required this.isHighlighted,
+    required this.onLongPress,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -959,9 +1043,10 @@ class _FbVerseNumber extends StatelessWidget {
           child: Text(
             '${verse.ayah}',
             style: TextStyle(
-                fontSize: 9,
-                color: color,
-                fontWeight: FontWeight.bold),
+              fontSize: 9,
+              color: color,
+              fontWeight: FontWeight.bold,
+            ),
           ),
         ),
       ),
@@ -984,7 +1069,8 @@ void _showFbVerseOptionsSheet(
   showModalBottomSheet<void>(
     context: context,
     shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+    ),
     builder: (ctx) {
       return SafeArea(
         child: Directionality(
@@ -997,34 +1083,35 @@ void _showFbVerseOptionsSheet(
                 width: 40,
                 height: 4,
                 decoration: BoxDecoration(
-                    color: Colors.grey[300],
-                    borderRadius: BorderRadius.circular(2)),
+                  color: Colors.grey[300],
+                  borderRadius: BorderRadius.circular(2),
+                ),
               ),
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
                 child: Text(
                   '$surahName — آية $verse',
                   style: GoogleFonts.amiriQuran(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.primary),
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.primary,
+                  ),
                   textDirection: TextDirection.rtl,
                 ),
               ),
               const Divider(height: 1),
               StatefulBuilder(
                 builder: (_, setSt) {
-                  final isBookmarked =
-                      bookmarkService.isBookmarked(bookmarkId);
+                  final isBookmarked = bookmarkService.isBookmarked(bookmarkId);
                   return ListTile(
                     leading: Icon(
-                        isBookmarked
-                            ? Icons.bookmark
-                            : Icons.bookmark_border,
-                        color: AppColors.primary),
+                      isBookmarked ? Icons.bookmark : Icons.bookmark_border,
+                      color: AppColors.primary,
+                    ),
                     title: Text(
-                        isBookmarked ? 'إزالة الإشارة' : 'إضافة إشارة',
-                        style: const TextStyle(fontSize: 15)),
+                      isBookmarked ? 'إزالة الإشارة' : 'إضافة إشارة',
+                      style: const TextStyle(fontSize: 15),
+                    ),
                     onTap: () async {
                       if (isBookmarked) {
                         await bookmarkService.removeBookmark(bookmarkId);
@@ -1044,26 +1131,34 @@ void _showFbVerseOptionsSheet(
                 },
               ),
               ListTile(
-                leading: const Icon(Icons.share_rounded,
-                    color: AppColors.primary),
-                title: const Text('مشاركة الآية',
-                    style: TextStyle(fontSize: 15)),
-                subtitle: const Text('صورة بخط القرآن الكريم',
-                    style: TextStyle(fontSize: 11)),
+                leading: const Icon(
+                  Icons.share_rounded,
+                  color: AppColors.primary,
+                ),
+                title: const Text(
+                  'مشاركة الآية',
+                  style: TextStyle(fontSize: 15),
+                ),
+                subtitle: const Text(
+                  'صورة بخط القرآن الكريم',
+                  style: TextStyle(fontSize: 11),
+                ),
                 onTap: () {
                   Navigator.pop(ctx);
                   showAyahShareDialog(
-                      context: context,
-                      surahNumber: surah,
-                      initialVerse: verse,
-                      surahName: surahName);
+                    context: context,
+                    surahNumber: surah,
+                    initialVerse: verse,
+                    surahName: surahName,
+                  );
                 },
               ),
               ListTile(
-                leading: const Icon(Icons.menu_book_rounded,
-                    color: AppColors.primary),
-                title: const Text('التفسير',
-                    style: TextStyle(fontSize: 15)),
+                leading: const Icon(
+                  Icons.menu_book_rounded,
+                  color: AppColors.primary,
+                ),
+                title: const Text('التفسير', style: TextStyle(fontSize: 15)),
                 onTap: () {
                   Navigator.pop(ctx);
                   onTafsir();
@@ -1089,27 +1184,118 @@ String _toArabicNum(int n) {
 }
 
 const List<String> _kSurahNames = [
-  'الفاتحة', 'البقرة', 'آل عمران', 'النساء', 'المائدة',
-  'الأنعام', 'الأعراف', 'الأنفال', 'التوبة', 'يونس',
-  'هود', 'يوسف', 'الرعد', 'إبراهيم', 'الحجر',
-  'النحل', 'الإسراء', 'الكهف', 'مريم', 'طه',
-  'الأنبياء', 'الحج', 'المؤمنون', 'النور', 'الفرقان',
-  'الشعراء', 'النمل', 'القصص', 'العنكبوت', 'الروم',
-  'لقمان', 'السجدة', 'الأحزاب', 'سبأ', 'فاطر',
-  'يس', 'الصافات', 'ص', 'الزمر', 'غافر',
-  'فصلت', 'الشورى', 'الزخرف', 'الدخان', 'الجاثية',
-  'الأحقاف', 'محمد', 'الفتح', 'الحجرات', 'ق',
-  'الذاريات', 'الطور', 'النجم', 'القمر', 'الرحمن',
-  'الواقعة', 'الحديد', 'المجادلة', 'الحشر', 'الممتحنة',
-  'الصف', 'الجمعة', 'المنافقون', 'التغابن', 'الطلاق',
-  'التحريم', 'الملك', 'القلم', 'الحاقة', 'المعارج',
-  'نوح', 'الجن', 'المزمل', 'المدثر', 'القيامة',
-  'الإنسان', 'المرسلات', 'النبأ', 'النازعات', 'عبس',
-  'التكوير', 'الانفطار', 'المطففين', 'الانشقاق', 'البروج',
-  'الطارق', 'الأعلى', 'الغاشية', 'الفجر', 'البلد',
-  'الشمس', 'الليل', 'الضحى', 'الشرح', 'التين',
-  'العلق', 'القدر', 'البينة', 'الزلزلة', 'العاديات',
-  'القارعة', 'التكاثر', 'العصر', 'الهمزة', 'الفيل',
-  'قريش', 'الماعون', 'الكوثر', 'الكافرون', 'النصر',
-  'المسد', 'الإخلاص', 'الفلق', 'الناس',
+  'الفاتحة',
+  'البقرة',
+  'آل عمران',
+  'النساء',
+  'المائدة',
+  'الأنعام',
+  'الأعراف',
+  'الأنفال',
+  'التوبة',
+  'يونس',
+  'هود',
+  'يوسف',
+  'الرعد',
+  'إبراهيم',
+  'الحجر',
+  'النحل',
+  'الإسراء',
+  'الكهف',
+  'مريم',
+  'طه',
+  'الأنبياء',
+  'الحج',
+  'المؤمنون',
+  'النور',
+  'الفرقان',
+  'الشعراء',
+  'النمل',
+  'القصص',
+  'العنكبوت',
+  'الروم',
+  'لقمان',
+  'السجدة',
+  'الأحزاب',
+  'سبأ',
+  'فاطر',
+  'يس',
+  'الصافات',
+  'ص',
+  'الزمر',
+  'غافر',
+  'فصلت',
+  'الشورى',
+  'الزخرف',
+  'الدخان',
+  'الجاثية',
+  'الأحقاف',
+  'محمد',
+  'الفتح',
+  'الحجرات',
+  'ق',
+  'الذاريات',
+  'الطور',
+  'النجم',
+  'القمر',
+  'الرحمن',
+  'الواقعة',
+  'الحديد',
+  'المجادلة',
+  'الحشر',
+  'الممتحنة',
+  'الصف',
+  'الجمعة',
+  'المنافقون',
+  'التغابن',
+  'الطلاق',
+  'التحريم',
+  'الملك',
+  'القلم',
+  'الحاقة',
+  'المعارج',
+  'نوح',
+  'الجن',
+  'المزمل',
+  'المدثر',
+  'القيامة',
+  'الإنسان',
+  'المرسلات',
+  'النبأ',
+  'النازعات',
+  'عبس',
+  'التكوير',
+  'الانفطار',
+  'المطففين',
+  'الانشقاق',
+  'البروج',
+  'الطارق',
+  'الأعلى',
+  'الغاشية',
+  'الفجر',
+  'البلد',
+  'الشمس',
+  'الليل',
+  'الضحى',
+  'الشرح',
+  'التين',
+  'العلق',
+  'القدر',
+  'البينة',
+  'الزلزلة',
+  'العاديات',
+  'القارعة',
+  'التكاثر',
+  'العصر',
+  'الهمزة',
+  'الفيل',
+  'قريش',
+  'الماعون',
+  'الكوثر',
+  'الكافرون',
+  'النصر',
+  'المسد',
+  'الإخلاص',
+  'الفلق',
+  'الناس',
 ];

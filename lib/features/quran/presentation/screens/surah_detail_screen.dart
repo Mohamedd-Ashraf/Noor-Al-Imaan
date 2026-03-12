@@ -242,7 +242,7 @@ class _SurahDetailScreenState extends State<SurahDetailScreen> {
                 return MushafPageScreen(
                   initialPage: initialPage,
                   focusSurahNumber: widget.surahNumber,
-                  focusAyahNumber: widget.initialAyahNumber ?? 1,
+                  focusAyahNumber: widget.initialAyahNumber,
                   playerCollapsedNotifier: _playerCollapsed,
                 );
               } else if (state is SurahError) {
