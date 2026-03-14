@@ -54,7 +54,53 @@ class IbnKathirRemoteDataSource {
       throw ServerException();
     }
   }
+  /// Returns the Ibn Kathir tafsir Arabic text for all ayahs in a [surahNumber].
+  /// Returns a map of ayahNumber -> cleaned tafsir text.
+  /// Throws [ServerException] on network or parse failures.
+  Future<Map<int, String>> getTafsirForSurah(int surahNumber) async {
+    final uri = Uri.parse(
+      '${ApiConstants.quranComBaseUrl}/tafsirs'
+      '/${ApiConstants.ibnKathirTafsirId}'
+      '/by_chapter/$surahNumber?per_page=300', // S2 has 286 ayahs max
+    );
 
+    try {
+      final response = await client.get(
+        uri,
+        headers: {
+          'Accept': 'application/json',
+          'User-Agent': 'QuranApp/1.0',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final decoded = json.decode(response.body) as Map<String, dynamic>;
+        final tafsirs = decoded['tafsirs'] as List<dynamic>? ?? [];
+        
+        final Map<int, String> result = {};
+        for (var t in tafsirs) {
+          final verseKey = t['verse_key'] as String?;
+          if (verseKey != null) {
+            final parts = verseKey.split(':');
+            if (parts.length == 2) {
+              final ayahNum = int.tryParse(parts[1]);
+              if (ayahNum != null) {
+                final htmlText = (t['text'] as String?) ?? '';
+                result[ayahNum] = _stripHtml(htmlText);
+              }
+            }
+          }
+        }
+        return result;
+      } else {
+        throw ServerException();
+      }
+    } on ServerException {
+      rethrow;
+    } catch (_) {
+      throw ServerException();
+    }
+  }
   // ─── Helpers ────────────────────────────────────────────────────────────
 
   /// Strips HTML tags/entities from the quran.com tafsir response and

@@ -1,4 +1,4 @@
-﻿import 'dart:convert';
+import 'dart:convert';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -161,7 +161,7 @@ class _Verse {
 }
 
 // ─── Persistent page cache ────────────────────────────────────────────────────
-const String _mushafCachePrefix = 'mushaf_page_v1_';
+const String _mushafCachePrefix = 'mushaf_page_v2_';
 
 Future<List<_Verse>?> _loadPageFromDiskCache(int page) async {
   final prefs = await SharedPreferences.getInstance();
@@ -194,8 +194,9 @@ Future<void> _savePageToDiskCache(int page, List<_Verse> verses) async {
 
 /// Load verses for [page] from the bundled offline JSON assets (always available).
 Future<List<_Verse>> _fetchPageFromBundledAssets(int page) async {
-  final surahNumbers = kMushafPageToSurahs[page];
-  if (surahNumbers == null || surahNumbers.isEmpty) return [];
+  final pageData = getPageData(page);
+  final surahNumbers = pageData.map((e) => (e as Map)['surah'] as int).toSet();
+  if (surahNumbers.isEmpty) return [];
 
   final results = <_Verse>[];
   for (final surahNum in surahNumbers) {
@@ -206,7 +207,18 @@ Future<List<_Verse>> _fetchPageFromBundledAssets(int page) async {
       final data = jsonDecode(raw) as Map<String, dynamic>;
       final ayahs = data['ayahs'] as List;
       for (final ayah in ayahs) {
-        if ((ayah['page'] as int?) == page) {
+        final ayahNum = ayah['numberInSurah'] as int;
+        bool inRange = false;
+        for (final r in pageData) {
+          final bounds = r as Map;
+          if (bounds['surah'] == surahNum &&
+              ayahNum >= (bounds['start'] as int) &&
+              ayahNum <= (bounds['end'] as int)) {
+            inRange = true;
+            break;
+          }
+        }
+        if (inRange) {
           results.add(
             _Verse(
               verseKey: '$surahNum:${ayah["numberInSurah"]}',
@@ -221,6 +233,13 @@ Future<List<_Verse>> _fetchPageFromBundledAssets(int page) async {
       // skip if asset missing
     }
   }
+
+  // Sort the results so they appear in correct Mushaf order (Surah -> Ayah)
+  results.sort((a, b) {
+    if (a.surah != b.surah) return a.surah.compareTo(b.surah);
+    return a.ayah.compareTo(b.ayah);
+  });
+
   return results;
 }
 
@@ -251,17 +270,37 @@ Future<List<_Verse>> _fetchPage(int page) async {
 
   final data = jsonDecode(res.body) as Map<String, dynamic>;
   final vList = data['verses'] as List;
+  final pageData = getPageData(page);
 
-  final verses = vList.map((v) {
+  final verses = <_Verse>[];
+  for (final v in vList) {
     final key = v['verse_key'] as String;
     final sp = key.split(':');
-    return _Verse(
-      verseKey: key,
-      surah: int.parse(sp[0]),
-      ayah: int.parse(sp[1]),
-      text: (v['text_uthmani'] as String?) ?? '',
-    );
-  }).toList();
+    final surahNum = int.parse(sp[0]);
+    final ayahNum = int.parse(sp[1]);
+
+    bool inRange = false;
+    for (final r in pageData) {
+      final bounds = r as Map;
+      if (bounds['surah'] == surahNum &&
+          ayahNum >= (bounds['start'] as int) &&
+          ayahNum <= (bounds['end'] as int)) {
+        inRange = true;
+        break;
+      }
+    }
+
+    if (inRange) {
+      verses.add(
+        _Verse(
+          verseKey: key,
+          surah: surahNum,
+          ayah: ayahNum,
+          text: (v['text_uthmani'] as String?) ?? '',
+        ),
+      );
+    }
+  }
 
   // Save to disk cache
   _savePageToDiskCache(page, verses);

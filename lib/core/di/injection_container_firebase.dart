@@ -9,6 +9,7 @@ import '../../features/quran/data/datasources/quran_remote_data_source.dart';
 import '../../features/quran/data/datasources/quran_local_data_source.dart';
 import '../../features/quran/data/datasources/quran_bundled_data_source.dart';
 import '../../features/quran/data/datasources/ibn_kathir_remote_data_source.dart';
+import '../../features/quran/data/datasources/quran_local_tafsir_data_source.dart';
 import '../../features/quran/data/repositories/quran_repository_impl.dart';
 import '../../features/quran/domain/repositories/quran_repository.dart';
 import '../../features/quran/domain/usecases/get_all_surahs.dart';
@@ -19,6 +20,7 @@ import '../../features/quran/presentation/bloc/surah/surah_bloc.dart';
 import '../services/quran_cache_warmup_service.dart';
 import '../../features/quran/presentation/bloc/ayah/ayah_bloc.dart';
 import '../../features/quran/presentation/bloc/tafsir/tafsir_cubit.dart';
+import '../../features/quran/presentation/bloc/tafsir/tafsir_download_cubit.dart';
 import '../audio/ayah_audio_cubit.dart';
 import '../network/network_info.dart';
 import '../services/settings_service.dart';
@@ -28,6 +30,8 @@ import '../services/ayah_audio_service.dart';
 import '../services/audio_edition_service.dart';
 import '../services/audio_download_state_service.dart';
 import '../services/audio_download_notification_service.dart';
+import '../services/tafsir_auto_download_service.dart';
+import '../services/tafsir_download_state_service.dart';
 import '../services/location_service.dart';
 import '../services/adhan_notification_service.dart';
 import '../services/prayer_times_cache_service.dart';
@@ -65,7 +69,11 @@ Future<void> init() async {
   );
 
   sl.registerFactory(
-    () => TafsirCubit(sl(), sl()),
+    () => TafsirCubit(sl(), sl(), sl()),
+  );
+
+  sl.registerFactory(
+    () => TafsirDownloadCubit(sl(), sl(), sl(), sl()),
   );
 
   // Use cases
@@ -102,6 +110,10 @@ Future<void> init() async {
     () => IbnKathirRemoteDataSource(client: sl()),
   );
 
+  sl.registerLazySingleton<QuranLocalTafsirDataSource>(
+    () => QuranLocalTafsirDataSourceImpl(),
+  );
+
   //! Core
   sl.registerLazySingleton<NetworkInfo>(() => NetworkInfoImpl(sl()));
 
@@ -127,6 +139,10 @@ Future<void> init() async {
   sl.registerLazySingleton(() => WirdNotificationService(sl(), sl()));
   sl.registerFactory(() => WirdCubit(sl(), sl()));
   sl.registerLazySingleton(() => AudioDownloadStateService(sl()));
+  sl.registerLazySingleton(() => TafsirDownloadStateService(sl()));
+  sl.registerLazySingleton(
+    () => TafsirAutoDownloadService(sl(), sl(), sl(), sl(), sl()),
+  );
   sl.registerLazySingleton(
     () => AudioDownloadNotificationService(sl(), sl()),
   );

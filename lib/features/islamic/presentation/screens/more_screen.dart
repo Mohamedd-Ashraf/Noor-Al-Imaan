@@ -16,7 +16,9 @@ import 'prayer_times_screen.dart';
 import 'qiblah_screen.dart';
 import '../../../adhkar/presentation/screens/tasbeeh_screen.dart';
 import '../../../quran/presentation/screens/feedback_screen.dart';
+import '../../../quran/presentation/screens/offline_tafsir_screen.dart';
 import '../../../ruqyah/presentation/screens/ruqyah_screen.dart';
+import 'package:qcf_quran/qcf_quran.dart';
 
 class MoreScreen extends StatelessWidget {
   const MoreScreen({super.key});
@@ -56,7 +58,8 @@ class MoreScreen extends StatelessWidget {
           Card(
             margin: const EdgeInsets.only(bottom: 4),
             shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(20)),
+              borderRadius: BorderRadius.circular(20),
+            ),
             clipBehavior: Clip.hardEdge,
             elevation: 2,
             child: Column(
@@ -65,13 +68,12 @@ class MoreScreen extends StatelessWidget {
                 Container(
                   width: double.infinity,
                   padding: const EdgeInsets.symmetric(
-                      horizontal: 16, vertical: 12),
+                    horizontal: 16,
+                    vertical: 12,
+                  ),
                   decoration: const BoxDecoration(
                     gradient: LinearGradient(
-                      colors: [
-                        AppColors.gradientStart,
-                        AppColors.gradientEnd
-                      ],
+                      colors: [AppColors.gradientStart, AppColors.gradientEnd],
                       begin: Alignment.centerLeft,
                       end: Alignment.centerRight,
                     ),
@@ -90,18 +92,19 @@ class MoreScreen extends StatelessWidget {
                 // Logo body
                 Padding(
                   padding: const EdgeInsets.symmetric(
-                      vertical: 22, horizontal: 24),
+                    vertical: 22,
+                    horizontal: 24,
+                  ),
                   child: Column(
                     children: [
                       IslamicLogo(size: 90, darkTheme: isDark),
                       const SizedBox(height: 12),
                       Text(
                         isArabicUi ? 'الخدمات الإسلامية' : 'Islamic Services',
-                        style:
-                            Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                  color: AppColors.textSecondary,
-                                  fontWeight: FontWeight.w500,
-                                ),
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: AppColors.textSecondary,
+                          fontWeight: FontWeight.w500,
+                        ),
                       ),
                     ],
                   ),
@@ -114,7 +117,8 @@ class MoreScreen extends StatelessWidget {
           // ── Quran Playlist Banner ──────────────────────────────────────
           BlocBuilder<SurahBloc, SurahState>(
             builder: (context, surahState) {
-              if (surahState is! SurahListLoaded) return const SizedBox.shrink();
+              if (surahState is! SurahListLoaded)
+                return const SizedBox.shrink();
               return Padding(
                 padding: const EdgeInsets.only(bottom: 8),
                 child: _QuranPlaylistBanner(
@@ -132,13 +136,12 @@ class MoreScreen extends StatelessWidget {
               children: [
                 Container(
                   padding: const EdgeInsets.symmetric(
-                      horizontal: 14, vertical: 7),
+                    horizontal: 14,
+                    vertical: 7,
+                  ),
                   decoration: BoxDecoration(
                     gradient: const LinearGradient(
-                      colors: [
-                        AppColors.gradientStart,
-                        AppColors.gradientEnd
-                      ],
+                      colors: [AppColors.gradientStart, AppColors.gradientEnd],
                       begin: Alignment.centerLeft,
                       end: Alignment.centerRight,
                     ),
@@ -154,13 +157,14 @@ class MoreScreen extends StatelessWidget {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(Icons.grid_view_rounded,
-                          color: Colors.white, size: 14),
+                      const Icon(
+                        Icons.grid_view_rounded,
+                        color: Colors.white,
+                        size: 14,
+                      ),
                       const SizedBox(width: 7),
                       Text(
-                        isArabicUi
-                            ? 'الخدمات الإسلامية'
-                            : 'Islamic Services',
+                        isArabicUi ? 'الخدمات الإسلامية' : 'Islamic Services',
                         style: const TextStyle(
                           color: Colors.white,
                           fontSize: 12,
@@ -212,9 +216,9 @@ class MoreScreen extends StatelessWidget {
                 : 'Islamic supplications & remembrances',
             icon: Icons.menu_book,
             onTap: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const DuaaScreen()),
-              );
+              Navigator.of(
+                context,
+              ).push(MaterialPageRoute(builder: (_) => const DuaaScreen()));
             },
           ),
           _NavCard(
@@ -225,9 +229,9 @@ class MoreScreen extends StatelessWidget {
             icon: Icons.feedback_outlined,
             badge: 'BETA',
             onTap: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const FeedbackScreen()),
-              );
+              Navigator.of(
+                context,
+              ).push(MaterialPageRoute(builder: (_) => const FeedbackScreen()));
             },
           ),
           _NavCard(
@@ -237,8 +241,22 @@ class MoreScreen extends StatelessWidget {
                 : 'Dhikr counter with multiple presets',
             icon: Icons.apps_rounded,
             onTap: () {
+              Navigator.of(
+                context,
+              ).push(MaterialPageRoute(builder: (_) => const TasbeehScreen()));
+            },
+          ),
+          _NavCard(
+            title: isArabicUi ? 'تحميل التفسير أوفلاين' : 'Offline Tafsir',
+            subtitle: isArabicUi
+                ? 'تنزيل وإدارة التفاسير مع استكمال من آخر نقطة'
+                : 'Download and manage tafsir with resume support',
+            icon: Icons.menu_book_rounded,
+            imagePath: 'assets/logo/button icons/Tafsir-icon-mono.png',
+            monochromeImage: false,
+            onTap: () {
               Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const TasbeehScreen()),
+                MaterialPageRoute(builder: (_) => const OfflineTafsirScreen()),
               );
             },
           ),
@@ -249,11 +267,11 @@ class MoreScreen extends StatelessWidget {
                 : 'Quranic verses for healing & protection',
             icon: Icons.healing_rounded,
             imagePath: 'assets/logo/button icons/Roqia.png',
-            monochromeImage: true,
+            monochromeImage: false,
             onTap: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const RuqyahScreen()),
-              );
+              Navigator.of(
+                context,
+              ).push(MaterialPageRoute(builder: (_) => const RuqyahScreen()));
             },
           ),
           _NavCard(
@@ -264,9 +282,9 @@ class MoreScreen extends StatelessWidget {
             icon: Icons.explore,
             badge: isArabicUi ? 'قريباً' : 'SOON',
             onTap: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const QiblahScreen()),
-              );
+              Navigator.of(
+                context,
+              ).push(MaterialPageRoute(builder: (_) => const QiblahScreen()));
             },
           ),
         ],
@@ -283,10 +301,7 @@ class _QuranPlaylistBanner extends StatelessWidget {
   final bool isArabicUi;
   final List<Surah> surahs;
 
-  const _QuranPlaylistBanner({
-    required this.isArabicUi,
-    required this.surahs,
-  });
+  const _QuranPlaylistBanner({required this.isArabicUi, required this.surahs});
 
   void _playAll(BuildContext context) {
     final queue = surahs
@@ -313,10 +328,8 @@ class _QuranPlaylistBanner extends StatelessWidget {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => _SelectSurahsSheet(
-        surahs: surahs,
-        isArabicUi: isArabicUi,
-      ),
+      builder: (_) =>
+          _SelectSurahsSheet(surahs: surahs, isArabicUi: isArabicUi),
     );
     if (selected == null || selected.isEmpty) return;
     if (!context.mounted) return;
@@ -341,10 +354,7 @@ class _QuranPlaylistBanner extends StatelessWidget {
                   AppColors.gradientStart.withValues(alpha: 0.85),
                   AppColors.gradientEnd.withValues(alpha: 0.70),
                 ]
-              : [
-                  AppColors.gradientStart,
-                  AppColors.gradientEnd,
-                ],
+              : [AppColors.gradientStart, AppColors.gradientEnd],
         ),
         boxShadow: [
           BoxShadow(
@@ -377,8 +387,11 @@ class _QuranPlaylistBanner extends StatelessWidget {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(Icons.headphones_rounded,
-                          color: AppColors.secondary, size: 20),
+                      Icon(
+                        Icons.headphones_rounded,
+                        color: AppColors.secondary,
+                        size: 20,
+                      ),
                       const SizedBox(width: 8),
                       Text(
                         isArabicUi
@@ -392,8 +405,11 @@ class _QuranPlaylistBanner extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(width: 8),
-                      Icon(Icons.headphones_rounded,
-                          color: AppColors.secondary, size: 20),
+                      Icon(
+                        Icons.headphones_rounded,
+                        color: AppColors.secondary,
+                        size: 20,
+                      ),
                     ],
                   ),
                   const SizedBox(height: 12),
@@ -403,26 +419,33 @@ class _QuranPlaylistBanner extends StatelessWidget {
                         child: Container(
                           height: 1,
                           decoration: BoxDecoration(
-                            gradient: LinearGradient(colors: [
-                              Colors.transparent,
-                              AppColors.secondary.withValues(alpha: 0.6),
-                            ]),
+                            gradient: LinearGradient(
+                              colors: [
+                                Colors.transparent,
+                                AppColors.secondary.withValues(alpha: 0.6),
+                              ],
+                            ),
                           ),
                         ),
                       ),
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 8),
-                        child: Icon(Icons.star_rounded,
-                            color: AppColors.secondary, size: 14),
+                        child: Icon(
+                          Icons.star_rounded,
+                          color: AppColors.secondary,
+                          size: 14,
+                        ),
                       ),
                       Expanded(
                         child: Container(
                           height: 1,
                           decoration: BoxDecoration(
-                            gradient: LinearGradient(colors: [
-                              AppColors.secondary.withValues(alpha: 0.6),
-                              Colors.transparent,
-                            ]),
+                            gradient: LinearGradient(
+                              colors: [
+                                AppColors.secondary.withValues(alpha: 0.6),
+                                Colors.transparent,
+                              ],
+                            ),
                           ),
                         ),
                       ),
@@ -444,8 +467,7 @@ class _QuranPlaylistBanner extends StatelessWidget {
                       const SizedBox(width: 10),
                       Expanded(
                         child: _BannerButton(
-                          label:
-                              isArabicUi ? 'اختر سوراً' : 'Select Surahs',
+                          label: isArabicUi ? 'اختر سوراً' : 'Select Surahs',
                           icon: Icons.playlist_add_check_rounded,
                           filled: false,
                           onPressed: () => _selectSurahs(context),
@@ -484,17 +506,19 @@ class _BannerButton extends StatelessWidget {
         icon: Icon(icon, size: 18),
         label: FittedBox(
           fit: BoxFit.scaleDown,
-          child: Text(label, maxLines: 1,
-              style: const TextStyle(
-                  fontWeight: FontWeight.w700, fontSize: 13)),
+          child: Text(
+            label,
+            maxLines: 1,
+            style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+          ),
         ),
         style: ElevatedButton.styleFrom(
           backgroundColor: AppColors.secondary,
           foregroundColor: AppColors.onBackground,
-          padding:
-              const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
           shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(14)),
+            borderRadius: BorderRadius.circular(14),
+          ),
           elevation: 0,
         ),
       );
@@ -504,18 +528,22 @@ class _BannerButton extends StatelessWidget {
         icon: Icon(icon, size: 18, color: AppColors.secondary),
         label: FittedBox(
           fit: BoxFit.scaleDown,
-          child: Text(label, maxLines: 1,
-              style: const TextStyle(
-                  color: AppColors.onPrimary,
-                  fontWeight: FontWeight.w700,
-                  fontSize: 13)),
+          child: Text(
+            label,
+            maxLines: 1,
+            style: const TextStyle(
+              color: AppColors.onPrimary,
+              fontWeight: FontWeight.w700,
+              fontSize: 13,
+            ),
+          ),
         ),
         style: OutlinedButton.styleFrom(
-          padding:
-              const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
           side: const BorderSide(color: AppColors.secondary, width: 1.5),
           shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(14)),
+            borderRadius: BorderRadius.circular(14),
+          ),
         ),
       );
     }
@@ -530,10 +558,7 @@ class _SelectSurahsSheet extends StatefulWidget {
   final List<Surah> surahs;
   final bool isArabicUi;
 
-  const _SelectSurahsSheet({
-    required this.surahs,
-    required this.isArabicUi,
-  });
+  const _SelectSurahsSheet({required this.surahs, required this.isArabicUi});
 
   @override
   State<_SelectSurahsSheet> createState() => _SelectSurahsSheetState();
@@ -579,8 +604,7 @@ class _SelectSurahsSheetState extends State<_SelectSurahsSheet> {
         return Container(
           decoration: BoxDecoration(
             color: isDark ? AppColors.darkSurface : AppColors.surface,
-            borderRadius:
-                const BorderRadius.vertical(top: Radius.circular(24)),
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
             boxShadow: [
               BoxShadow(
                 color: AppColors.primary.withValues(alpha: 0.3),
@@ -605,7 +629,9 @@ class _SelectSurahsSheetState extends State<_SelectSurahsSheet> {
               Container(
                 margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
                 padding: const EdgeInsets.symmetric(
-                    horizontal: 16, vertical: 12),
+                  horizontal: 16,
+                  vertical: 12,
+                ),
                 decoration: BoxDecoration(
                   gradient: const LinearGradient(
                     colors: [AppColors.gradientStart, AppColors.gradientEnd],
@@ -618,8 +644,11 @@ class _SelectSurahsSheetState extends State<_SelectSurahsSheet> {
                 ),
                 child: Row(
                   children: [
-                    Icon(Icons.playlist_add_check_rounded,
-                        color: AppColors.secondary, size: 24),
+                    Icon(
+                      Icons.playlist_add_check_rounded,
+                      color: AppColors.secondary,
+                      size: 24,
+                    ),
                     const SizedBox(width: 10),
                     Expanded(
                       child: Text(
@@ -635,11 +664,15 @@ class _SelectSurahsSheetState extends State<_SelectSurahsSheet> {
                       onPressed: _toggleAll,
                       style: TextButton.styleFrom(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 10, vertical: 6),
-                        backgroundColor:
-                            AppColors.secondary.withValues(alpha: 0.2),
+                          horizontal: 10,
+                          vertical: 6,
+                        ),
+                        backgroundColor: AppColors.secondary.withValues(
+                          alpha: 0.2,
+                        ),
                         shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10)),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
                       ),
                       child: Text(
                         _selected.length == widget.surahs.length
@@ -659,25 +692,26 @@ class _SelectSurahsSheetState extends State<_SelectSurahsSheet> {
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
                 child: TextField(
-                  textDirection:
-                      isAr ? TextDirection.rtl : TextDirection.ltr,
+                  textDirection: isAr ? TextDirection.rtl : TextDirection.ltr,
                   decoration: InputDecoration(
-                    hintText:
-                        isAr ? 'ابحث عن سورة…' : 'Search surah…',
+                    hintText: isAr ? 'ابحث عن سورة…' : 'Search surah…',
                     hintStyle: TextStyle(
                       color: isDark
                           ? const Color(0xFF8A9BAB)
                           : AppColors.textSecondary,
                     ),
-                    prefixIcon: const Icon(Icons.search_rounded,
-                        color: AppColors.primary),
+                    prefixIcon: const Icon(
+                      Icons.search_rounded,
+                      color: AppColors.primary,
+                    ),
                     filled: true,
                     fillColor: isDark
                         ? AppColors.darkCard
                         : AppColors.surfaceVariant,
                     border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(14),
-                        borderSide: BorderSide.none),
+                      borderRadius: BorderRadius.circular(14),
+                      borderSide: BorderSide.none,
+                    ),
                     enabledBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(14),
                       borderSide: BorderSide(
@@ -688,10 +722,14 @@ class _SelectSurahsSheetState extends State<_SelectSurahsSheet> {
                     focusedBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(14),
                       borderSide: const BorderSide(
-                          color: AppColors.primary, width: 1.5),
+                        color: AppColors.primary,
+                        width: 1.5,
+                      ),
                     ),
                     contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 12),
+                      horizontal: 16,
+                      vertical: 12,
+                    ),
                   ),
                   onChanged: (v) => setState(() => _query = v),
                 ),
@@ -711,13 +749,11 @@ class _SelectSurahsSheetState extends State<_SelectSurahsSheet> {
                       )
                     : ListView.builder(
                         controller: scrollController,
-                        padding:
-                            const EdgeInsets.symmetric(horizontal: 16),
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
                         itemCount: filtered.length,
                         itemBuilder: (ctx, i) {
                           final surah = filtered[i];
-                          final isChecked =
-                              _selected.contains(surah.number);
+                          final isChecked = _selected.contains(surah.number);
                           return _SurahCheckTile(
                             surah: surah,
                             isArabicUi: isAr,
@@ -746,14 +782,14 @@ class _SelectSurahsSheetState extends State<_SelectSurahsSheet> {
                       if (selectedCount > 0)
                         Container(
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 14, vertical: 10),
+                            horizontal: 14,
+                            vertical: 10,
+                          ),
                           decoration: BoxDecoration(
-                            color:
-                                AppColors.primary.withValues(alpha: 0.1),
+                            color: AppColors.primary.withValues(alpha: 0.1),
                             borderRadius: BorderRadius.circular(14),
                             border: Border.all(
-                              color: AppColors.primary
-                                  .withValues(alpha: 0.3),
+                              color: AppColors.primary.withValues(alpha: 0.3),
                               width: 1,
                             ),
                           ),
@@ -773,34 +809,38 @@ class _SelectSurahsSheetState extends State<_SelectSurahsSheet> {
                               ? null
                               : () {
                                   final orderedSelected = widget.surahs
-                                      .where((s) =>
-                                          _selected.contains(s.number))
+                                      .where(
+                                        (s) => _selected.contains(s.number),
+                                      )
                                       .toList();
-                                  Navigator.of(context)
-                                      .pop(orderedSelected);
+                                  Navigator.of(context).pop(orderedSelected);
                                 },
-                          icon: const Icon(Icons.play_arrow_rounded,
-                              size: 20),
+                          icon: const Icon(Icons.play_arrow_rounded, size: 20),
                           label: Text(
                             selectedCount == 0
                                 ? (isAr
-                                    ? 'اختر سورة أولاً'
-                                    : 'Select a surah first')
+                                      ? 'اختر سورة أولاً'
+                                      : 'Select a surah first')
                                 : (isAr
-                                    ? 'تشغيل $selectedCount ${selectedCount == 1 ? 'سورة' : 'سور'}'
-                                    : 'Play $selectedCount ${selectedCount == 1 ? 'Surah' : 'Surahs'}'),
+                                      ? 'تشغيل $selectedCount ${selectedCount == 1 ? 'سورة' : 'سور'}'
+                                      : 'Play $selectedCount ${selectedCount == 1 ? 'Surah' : 'Surahs'}'),
                             style: const TextStyle(
-                                fontWeight: FontWeight.w700, fontSize: 14),
+                              fontWeight: FontWeight.w700,
+                              fontSize: 14,
+                            ),
                           ),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: AppColors.primary,
                             foregroundColor: AppColors.onPrimary,
-                            disabledBackgroundColor:
-                                AppColors.primary.withValues(alpha: 0.3),
+                            disabledBackgroundColor: AppColors.primary
+                                .withValues(alpha: 0.3),
                             padding: const EdgeInsets.symmetric(
-                                horizontal: 20, vertical: 14),
+                              horizontal: 20,
+                              vertical: 14,
+                            ),
                             shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(14)),
+                              borderRadius: BorderRadius.circular(14),
+                            ),
                             elevation: 0,
                           ),
                         ),
@@ -852,11 +892,9 @@ class _SurahCheckTile extends StatelessWidget {
         onTap: () => onChanged(!isChecked),
         borderRadius: BorderRadius.circular(14),
         child: Padding(
-          padding:
-              const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
           child: Row(
-            textDirection:
-                isArabicUi ? TextDirection.rtl : TextDirection.ltr,
+            textDirection: isArabicUi ? TextDirection.rtl : TextDirection.ltr,
             children: [
               Container(
                 width: 38,
@@ -865,10 +903,7 @@ class _SurahCheckTile extends StatelessWidget {
                   gradient: const LinearGradient(
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
-                    colors: [
-                      AppColors.gradientStart,
-                      AppColors.gradientEnd,
-                    ],
+                    colors: [AppColors.gradientStart, AppColors.gradientEnd],
                   ),
                   shape: BoxShape.circle,
                   border: Border.all(
@@ -894,18 +929,31 @@ class _SurahCheckTile extends StatelessWidget {
                       ? CrossAxisAlignment.end
                       : CrossAxisAlignment.start,
                   children: [
+                    // IMPORTANT: Do not change this back to normal text. The user explicitly requested the specialized Quran font for Arabic Surah names.
                     Text(
-                      isArabicUi ? surah.name : surah.englishName,
+                      isArabicUi
+                          ? 'surah${surah.number.toString().padLeft(3, '0')}'
+                          : surah.englishName,
                       textDirection: isArabicUi
                           ? TextDirection.rtl
                           : TextDirection.ltr,
-                      style: TextStyle(
-                        fontWeight: FontWeight.w700,
-                        fontSize: isArabicUi ? 16 : 14,
-                        color: isDark
-                            ? AppColors.onPrimary
-                            : AppColors.textPrimary,
-                      ),
+                      locale: isArabicUi ? const Locale('ar') : null,
+                      style: isArabicUi
+                          ? TextStyle(
+                              fontFamily: SurahFontHelper.fontFamily,
+                              package: 'qcf_quran',
+                              fontSize: 32,
+                              color: isDark
+                                  ? AppColors.onPrimary
+                                  : AppColors.textPrimary,
+                            )
+                          : TextStyle(
+                              fontWeight: FontWeight.w700,
+                              fontSize: 14,
+                              color: isDark
+                                  ? AppColors.onPrimary
+                                  : AppColors.textPrimary,
+                            ),
                     ),
                     const SizedBox(height: 2),
                     Text(
@@ -936,8 +984,11 @@ class _SurahCheckTile extends StatelessWidget {
                   ),
                 ),
                 child: isChecked
-                    ? const Icon(Icons.check_rounded,
-                        size: 16, color: Colors.white)
+                    ? const Icon(
+                        Icons.check_rounded,
+                        size: 16,
+                        color: Colors.white,
+                      )
                     : null,
               ),
             ],
@@ -1011,6 +1062,7 @@ class _NavCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       child: InkWell(
@@ -1025,10 +1077,7 @@ class _NavCard extends StatelessWidget {
                 height: 48,
                 decoration: BoxDecoration(
                   gradient: const LinearGradient(
-                    colors: [
-                      AppColors.gradientStart,
-                      AppColors.gradientEnd,
-                    ],
+                    colors: [AppColors.gradientStart, AppColors.gradientEnd],
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                   ),
@@ -1044,25 +1093,51 @@ class _NavCard extends StatelessWidget {
                 child: imagePath != null
                     ? ClipRRect(
                         borderRadius: BorderRadius.circular(13),
-                        child: ColorFiltered(
-                          colorFilter: monochromeImage
-                              ? const ColorFilter.matrix([
-                                  0.2126, 0.7152, 0.0722, 0, 0,
-                                  0.2126, 0.7152, 0.0722, 0, 0,
-                                  0.2126, 0.7152, 0.0722, 0, 0,
-                                  0, 0, 0, 1, 0,
-                                ])
-                              : const ColorFilter.mode(
-                                  Colors.transparent,
-                                  BlendMode.dst,
+                        child: monochromeImage
+                            ? ColorFiltered(
+                                // Convert near-white backgrounds to transparent,
+                                // then tint remaining icon shape in black/white.
+                                colorFilter: const ColorFilter.matrix([
+                                  1,
+                                  0,
+                                  0,
+                                  0,
+                                  0,
+                                  0,
+                                  1,
+                                  0,
+                                  0,
+                                  0,
+                                  0,
+                                  0,
+                                  1,
+                                  0,
+                                  0,
+                                  -0.2126,
+                                  -0.7152,
+                                  -0.0722,
+                                  0,
+                                  1,
+                                ]),
+                                child: Image.asset(
+                                  imagePath!,
+                                  width: 48,
+                                  height: 48,
+                                  fit: BoxFit.contain,
+                                  color: isDark ? Colors.white : Colors.black,
+                                  colorBlendMode: BlendMode.srcIn,
+                                  errorBuilder: (context, error, stackTrace) =>
+                                      Icon(icon, color: Colors.white, size: 22),
                                 ),
-                          child: Image.asset(
-                            imagePath!,
-                            width: 48,
-                            height: 48,
-                            fit: BoxFit.cover,
-                          ),
-                        ),
+                              )
+                            : Image.asset(
+                                imagePath!,
+                                width: 48,
+                                height: 48,
+                                fit: BoxFit.contain,
+                                errorBuilder: (context, error, stackTrace) =>
+                                    Icon(icon, color: Colors.white, size: 22),
+                              ),
                       )
                     : Icon(icon, color: Colors.white, size: 22),
               ),
@@ -1076,9 +1151,7 @@ class _NavCard extends StatelessWidget {
                         Flexible(
                           child: Text(
                             title,
-                            style: Theme.of(context)
-                                .textTheme
-                                .titleMedium
+                            style: Theme.of(context).textTheme.titleMedium
                                 ?.copyWith(fontWeight: FontWeight.w700),
                           ),
                         ),
@@ -1086,10 +1159,13 @@ class _NavCard extends StatelessWidget {
                           const SizedBox(width: 8),
                           Container(
                             padding: const EdgeInsets.symmetric(
-                                horizontal: 7, vertical: 2),
+                              horizontal: 7,
+                              vertical: 2,
+                            ),
                             decoration: BoxDecoration(
-                              color: AppColors.secondary
-                                  .withValues(alpha: 0.15),
+                              color: AppColors.secondary.withValues(
+                                alpha: 0.15,
+                              ),
                               borderRadius: BorderRadius.circular(5),
                             ),
                             child: Text(
@@ -1108,10 +1184,9 @@ class _NavCard extends StatelessWidget {
                     const SizedBox(height: 4),
                     Text(
                       subtitle,
-                      style: Theme.of(context)
-                          .textTheme
-                          .bodySmall
-                          ?.copyWith(color: AppColors.textSecondary),
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: AppColors.textSecondary,
+                      ),
                     ),
                   ],
                 ),

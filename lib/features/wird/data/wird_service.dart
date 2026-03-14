@@ -3,17 +3,23 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 enum WirdType { ramadan, regular }
 
+enum WirdPlanMode { days, pages }
+
 /// Represents an active wird (daily recitation) plan.
 class WirdPlan {
   final WirdType type;
   final DateTime startDate;
   final int targetDays;
+  final WirdPlanMode planMode;
+  final int? pagesPerDay;
   final List<int> completedDays; // 1-indexed day numbers
 
   const WirdPlan({
     required this.type,
     required this.startDate,
     required this.targetDays,
+    this.planMode = WirdPlanMode.days,
+    this.pagesPerDay,
     required this.completedDays,
   });
 
@@ -21,27 +27,30 @@ class WirdPlan {
   int get currentDay {
     final today = DateTime.now();
     final todayOnly = DateTime(today.year, today.month, today.day);
-    final startOnly =
-        DateTime(startDate.year, startDate.month, startDate.day);
+    final startOnly = DateTime(startDate.year, startDate.month, startDate.day);
     final diff = todayOnly.difference(startOnly).inDays + 1;
     return diff.clamp(1, targetDays);
   }
 
   bool get isComplete => completedDays.length >= targetDays;
 
-  double get progressPercent =>
-      targetDays == 0
-          ? 0.0
-          : (completedDays.length / targetDays).clamp(0.0, 1.0);
+  double get progressPercent => targetDays == 0
+      ? 0.0
+      : (completedDays.length / targetDays).clamp(0.0, 1.0);
 
   bool isDayComplete(int day) => completedDays.contains(day);
 
+  bool get isPagesBased =>
+      planMode == WirdPlanMode.pages && pagesPerDay != null;
+
   WirdPlan copyWith({List<int>? completedDays}) => WirdPlan(
-        type: type,
-        startDate: startDate,
-        targetDays: targetDays,
-        completedDays: completedDays ?? this.completedDays,
-      );
+    type: type,
+    startDate: startDate,
+    targetDays: targetDays,
+    planMode: planMode,
+    pagesPerDay: pagesPerDay,
+    completedDays: completedDays ?? this.completedDays,
+  );
 }
 
 /// Service for persisting and managing the daily wird plan.
@@ -49,17 +58,20 @@ class WirdService {
   static const String _keyType = 'wird_type';
   static const String _keyStartDate = 'wird_start_date';
   static const String _keyTargetDays = 'wird_target_days';
+  static const String _keyPlanMode = 'wird_plan_mode';
+  static const String _keyPagesPerDay = 'wird_pages_per_day';
   static const String _keyCompletedDays = 'wird_completed_days';
   static const String _keyReminderHour = 'wird_reminder_hour';
   static const String _keyReminderMinute = 'wird_reminder_minute';
   static const String _keyNotificationsEnabled = 'wird_notifications_enabled';
-  static const String _keyFollowUpIntervalHours = 'wird_followup_interval_hours';
+  static const String _keyFollowUpIntervalHours =
+      'wird_followup_interval_hours';
   static const String _keyLastReadSurah = 'wird_last_read_surah';
   static const String _keyLastReadAyah = 'wird_last_read_ayah';
   // Makeup wird bookmark
-  static const String _keyMakeupDay   = 'wird_makeup_day';
+  static const String _keyMakeupDay = 'wird_makeup_day';
   static const String _keyMakeupSurah = 'wird_makeup_surah';
-  static const String _keyMakeupAyah  = 'wird_makeup_ayah';
+  static const String _keyMakeupAyah = 'wird_makeup_ayah';
 
   final SharedPreferences _prefs;
 
@@ -73,8 +85,7 @@ class WirdService {
     final typeStr = _prefs.getString(_keyType);
     if (typeStr == null) return null;
 
-    final type =
-        typeStr == 'ramadan' ? WirdType.ramadan : WirdType.regular;
+    final type = typeStr == 'ramadan' ? WirdType.ramadan : WirdType.regular;
 
     final startDateStr = _prefs.getString(_keyStartDate);
     if (startDateStr == null) return null;
@@ -87,13 +98,19 @@ class WirdService {
     }
 
     final targetDays = _prefs.getInt(_keyTargetDays) ?? 30;
+    final planModeStr = _prefs.getString(_keyPlanMode) ?? 'days';
+    final planMode = planModeStr == 'pages'
+        ? WirdPlanMode.pages
+        : WirdPlanMode.days;
+    final pagesPerDay = _prefs.getInt(_keyPagesPerDay);
 
     List<int> completedDays = [];
     final completedJson = _prefs.getString(_keyCompletedDays);
     if (completedJson != null) {
       try {
-        completedDays =
-            (jsonDecode(completedJson) as List).cast<int>().toList();
+        completedDays = (jsonDecode(completedJson) as List)
+            .cast<int>()
+            .toList();
       } catch (_) {}
     }
 
@@ -101,6 +118,8 @@ class WirdService {
       type: type,
       startDate: startDate,
       targetDays: targetDays,
+      planMode: planMode,
+      pagesPerDay: pagesPerDay,
       completedDays: completedDays,
     );
   }
@@ -110,17 +129,32 @@ class WirdService {
     required WirdType type,
     required DateTime startDate,
     required int targetDays,
+    WirdPlanMode planMode = WirdPlanMode.days,
+    int? pagesPerDay,
     List<int> completedDays = const [],
     int? reminderHour,
     int? reminderMinute,
   }) async {
-    final dateOnly =
-        DateTime(startDate.year, startDate.month, startDate.day);
+    final dateOnly = DateTime(startDate.year, startDate.month, startDate.day);
     await _prefs.setString(
-        _keyType, type == WirdType.ramadan ? 'ramadan' : 'regular');
+      _keyType,
+      type == WirdType.ramadan ? 'ramadan' : 'regular',
+    );
     await _prefs.setString(_keyStartDate, dateOnly.toIso8601String());
     await _prefs.setInt(_keyTargetDays, targetDays);
-    await _prefs.setString(_keyCompletedDays, jsonEncode(completedDays.toList()));
+    await _prefs.setString(
+      _keyPlanMode,
+      planMode == WirdPlanMode.pages ? 'pages' : 'days',
+    );
+    if (pagesPerDay != null) {
+      await _prefs.setInt(_keyPagesPerDay, pagesPerDay);
+    } else {
+      await _prefs.remove(_keyPagesPerDay);
+    }
+    await _prefs.setString(
+      _keyCompletedDays,
+      jsonEncode(completedDays.toList()),
+    );
     if (reminderHour != null) {
       await _prefs.setInt(_keyReminderHour, reminderHour);
     }
@@ -153,6 +187,8 @@ class WirdService {
     await _prefs.remove(_keyType);
     await _prefs.remove(_keyStartDate);
     await _prefs.remove(_keyTargetDays);
+    await _prefs.remove(_keyPlanMode);
+    await _prefs.remove(_keyPagesPerDay);
     await _prefs.remove(_keyCompletedDays);
     await _prefs.remove(_keyLastReadSurah);
     await _prefs.remove(_keyLastReadAyah);
@@ -231,19 +267,19 @@ class WirdService {
 
   /// The plan-day number saved as the makeup bookmark (which missed day the
   /// user was working on). Null if no makeup bookmark exists.
-  int? get makeupBookmarkDay   => _prefs.getInt(_keyMakeupDay);
+  int? get makeupBookmarkDay => _prefs.getInt(_keyMakeupDay);
 
   /// Surah number of the saved makeup position.
   int? get makeupBookmarkSurah => _prefs.getInt(_keyMakeupSurah);
 
   /// Ayah number of the saved makeup position.
-  int? get makeupBookmarkAyah  => _prefs.getInt(_keyMakeupAyah);
+  int? get makeupBookmarkAyah => _prefs.getInt(_keyMakeupAyah);
 
   /// Saves the user's makeup reading position.
   Future<void> saveMakeupBookmark(int day, int surah, int ayah) async {
-    await _prefs.setInt(_keyMakeupDay,   day);
+    await _prefs.setInt(_keyMakeupDay, day);
     await _prefs.setInt(_keyMakeupSurah, surah);
-    await _prefs.setInt(_keyMakeupAyah,  ayah);
+    await _prefs.setInt(_keyMakeupAyah, ayah);
   }
 
   /// Clears the makeup bookmark (call when the makeup day is marked complete).
@@ -277,8 +313,11 @@ class WirdService {
   }
 
   /// Human-readable description of today's reading for a given juz/day setup.
-  static String getDayDescription(int day, int targetDays,
-      {required bool isArabic}) {
+  static String getDayDescription(
+    int day,
+    int targetDays, {
+    required bool isArabic,
+  }) {
     final juzList = getJuzForDay(day, targetDays);
     if (juzList.isEmpty) return '';
 

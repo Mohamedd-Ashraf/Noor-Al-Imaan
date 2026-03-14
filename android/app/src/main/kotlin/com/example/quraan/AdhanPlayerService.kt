@@ -386,6 +386,7 @@ class AdhanPlayerService : Service() {
 
             val prefs  = getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
             val volume = readVolumeFromPrefs(prefs, volumeKey)
+            Log.d(TAG, "Volume resolved: key=$volumeKey raw=${prefs.all[volumeKey]} parsed=$volume")
 
             /** Common post-prepare: set volume, start, register receiver, set short-mode timer. */
             fun startPlayback(mp: MediaPlayer) {
@@ -394,6 +395,14 @@ class AdhanPlayerService : Service() {
                 mp.start()
                 mediaPlayer = mp
                 isPlaying = true
+                
+                // Notify widget to update immediately when adhan starts
+                try {
+                    val updateIntent = Intent("com.example.quraan.ADHAN_STARTED")
+                    this@AdhanPlayerService.sendBroadcast(updateIntent)
+                } catch (_: Exception) {
+                }
+                
                 // Only register the volume stopper for adhan sounds.
                 // Iqama / approaching / salawat pass disableVolumeStopper=true so they play
                 // fully regardless of spurious VOLUME_CHANGED_ACTION from OEMs.
@@ -438,11 +447,14 @@ class AdhanPlayerService : Service() {
                         return@setOnPreparedListener
                     }
                     if (!requestAudioFocus(audioAttrs)) {
-                        Log.w(TAG, "Audio focus denied (streaming) — aborting")
-                        mp.release()
-                        releaseWakeLock()
-                        stopSelf()
-                        return@setOnPreparedListener
+                        if (!disableVolumeStopper) {
+                            Log.w(TAG, "Audio focus denied (streaming) — aborting")
+                            mp.release()
+                            releaseWakeLock()
+                            stopSelf()
+                            return@setOnPreparedListener
+                        }
+                        Log.w(TAG, "Audio focus denied (streaming) for reminder — continuing playback")
                     }
                     startPlayback(mp)
                 }
@@ -450,11 +462,14 @@ class AdhanPlayerService : Service() {
             } else {
                 player.prepare()
                 if (!requestAudioFocus(audioAttrs)) {
-                    Log.w(TAG, "Audio focus denied — aborting adhan playback")
-                    player.release()
-                    releaseWakeLock()
-                    stopSelf()
-                    return
+                    if (!disableVolumeStopper) {
+                        Log.w(TAG, "Audio focus denied — aborting adhan playback")
+                        player.release()
+                        releaseWakeLock()
+                        stopSelf()
+                        return
+                    }
+                    Log.w(TAG, "Audio focus denied for reminder — continuing playback")
                 }
                 startPlayback(player)
             }
@@ -498,21 +513,29 @@ class AdhanPlayerService : Service() {
 
         val knownPrefixes = listOf(
             "This is the prefix for a double.",
+            "This is the prefix for Double.",
             // Base64 of the same prefix used by some plugin versions/migrations.
-            "VGhpcyBpcyB0aGUgcHJlZml4IGZvciBhIGRvdWJsZS4"
+            "VGhpcyBpcyB0aGUgcHJlZml4IGZvciBhIGRvdWJsZS4",
+            // Base64 variant observed on device logs (capital D in Double).
+            "VGhpcyBpcyB0aGUgcHJlZml4IGZvciBEb3VibGUu"
         )
 
         for (prefix in knownPrefixes) {
             if (raw.startsWith(prefix)) {
-                raw.removePrefix(prefix).toFloatOrNull()?.let { return it }
+                val suffix = raw.removePrefix(prefix).trim()
+                // Some plugin variants prefix the numeric part with a marker (e.g. "u0.1").
+                val cleaned = suffix
+                    .removePrefix("u")
+                    .removePrefix("U")
+                    .trim()
+                cleaned.toFloatOrNull()?.let { return it }
             }
         }
 
-        // Last-resort: extract first numeric token from mixed-content string.
-        val number = Regex("[-+]?\\d*\\.?\\d+(?:[eE][-+]?\\d+)?")
-            .find(raw)
-            ?.value
-        return number?.toFloatOrNull()
+        // Do not guess from arbitrary mixed strings (e.g. base64 blobs) because this
+        // can incorrectly resolve to 0.0 and mute alarms. Return null so caller falls
+        // back to the safe default.
+        return null
     }
 
     private fun stopAdhan() {
@@ -914,7 +937,7 @@ class AdhanPlayerService : Service() {
                 setSound(null, null)          // audio comes from MediaPlayer, not the notification
                 enableVibration(false)
                 setShowBadge(false)
-                lockscreenVisibility = Notification.VISIBILITY_SECRET  // hidden on lock screen
+                lockscreenVisibility = Notification.VISIBILITY_PUBLIC  // show stop controls on lock screen
             }
             getSystemService(NotificationManager::class.java)?.createNotificationChannel(channel)
         }

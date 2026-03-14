@@ -105,6 +105,7 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen> {
       await di.sl<PrayerTimesCacheService>().cachePrayerTimes(
         pos.latitude,
         pos.longitude,
+        locationName: null,
       );
 
       // Auto-detect calculation method if user hasn't manually overridden it
@@ -171,7 +172,15 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen> {
       coords.longitude,
       arabic: isArabic,
     );
-    if (mounted && name != null) setState(() => _placeName = name);
+    if (mounted && name != null) {
+      setState(() => _placeName = name);
+      // Save location name to cache after it's fetched
+      await di.sl<PrayerTimesCacheService>().cachePrayerTimes(
+        coords.latitude,
+        coords.longitude,
+        locationName: name,
+      );
+    }
   }
 
   String _permissionError(LocationPermissionState state) {

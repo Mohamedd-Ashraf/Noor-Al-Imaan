@@ -4,6 +4,10 @@
 /// Egyptian (Cairo) muṣḥaf — the most widely used edition worldwide.
 library;
 
+import 'package:qcf_quran/qcf_quran.dart' show getPageData;
+
+const int _kMushafTotalPages = 604;
+
 // ── Data classes ─────────────────────────────────────────────────────────────
 
 /// An exact position inside the Quran (surah + ayah, both 1-based).
@@ -35,22 +39,30 @@ class ReadingRange {
   bool get isSingleSurah => start.surah == end.surah;
 }
 
+/// Inclusive page span for a single reading day.
+class PageReadingRange {
+  final int startPage;
+  final int endPage;
+
+  const PageReadingRange({required this.startPage, required this.endPage});
+}
+
 // ── Surah ayah counts (Hafs ʿan ʿĀṣim, 6,236 ayahs total) ──────────────────
 
 /// Number of ayahs in each of the 114 surahs (index 0 = surah 1).
 const List<int> kSurahAyahCounts = [
-  7,   286, 200, 176, 120, 165, 206, 75,  129, 109, // 1–10
-  123, 111, 43,  52,  99,  128, 111, 110, 98,  135, // 11–20
-  112, 78,  118, 64,  77,  227, 93,  88,  69,  60,  // 21–30
-  34,  30,  73,  54,  45,  83,  182, 88,  75,  85,  // 31–40
-  54,  53,  89,  59,  37,  35,  38,  29,  18,  45,  // 41–50
-  60,  49,  62,  55,  78,  96,  29,  22,  24,  13,  // 51–60
-  14,  11,  11,  18,  12,  12,  30,  52,  52,  44,  // 61–70
-  28,  28,  20,  56,  40,  31,  50,  40,  46,  42,  // 71–80
-  29,  19,  36,  25,  22,  17,  19,  26,  30,  20,  // 81–90
-  15,  21,  11,  8,   8,   19,  5,   8,   8,   11,  // 91–100
-  11,  8,   3,   9,   5,   4,   7,   3,   6,   3,   // 101–110
-  5,   4,   5,   6,                                  // 111–114
+  7, 286, 200, 176, 120, 165, 206, 75, 129, 109, // 1–10
+  123, 111, 43, 52, 99, 128, 111, 110, 98, 135, // 11–20
+  112, 78, 118, 64, 77, 227, 93, 88, 69, 60, // 21–30
+  34, 30, 73, 54, 45, 83, 182, 88, 75, 85, // 31–40
+  54, 53, 89, 59, 37, 35, 38, 29, 18, 45, // 41–50
+  60, 49, 62, 55, 78, 96, 29, 22, 24, 13, // 51–60
+  14, 11, 11, 18, 12, 12, 30, 52, 52, 44, // 61–70
+  28, 28, 20, 56, 40, 31, 50, 40, 46, 42, // 71–80
+  29, 19, 36, 25, 22, 17, 19, 26, 30, 20, // 81–90
+  15, 21, 11, 8, 8, 19, 5, 8, 8, 11, // 91–100
+  11, 8, 3, 9, 5, 4, 7, 3, 6, 3, // 101–110
+  5, 4, 5, 6, // 111–114
 ];
 
 // ── Juz start positions ───────────────────────────────────────────────────────
@@ -60,36 +72,36 @@ const List<int> kSurahAyahCounts = [
 // with standard Egyptian muṣḥaf hizb markings.
 
 const List<QuranPosition> kJuzStarts = [
-  QuranPosition(1,  1),   // Juz  1: Al-Fatiha 1:1
-  QuranPosition(2,  142), // Juz  2: Al-Baqarah 2:142
-  QuranPosition(2,  253), // Juz  3: Al-Baqarah 2:253
-  QuranPosition(3,  93),  // Juz  4: Aal-Imran 3:93
-  QuranPosition(4,  24),  // Juz  5: An-Nisa 4:24
-  QuranPosition(4,  148), // Juz  6: An-Nisa 4:148
-  QuranPosition(5,  82),  // Juz  7: Al-Maidah 5:82
-  QuranPosition(6,  111), // Juz  8: Al-Anam 6:111
-  QuranPosition(7,  88),  // Juz  9: Al-Araf 7:88
-  QuranPosition(8,  41),  // Juz 10: Al-Anfal 8:41
-  QuranPosition(9,  93),  // Juz 11: At-Tawbah 9:93
-  QuranPosition(11, 6),   // Juz 12: Hud 11:6
-  QuranPosition(12, 53),  // Juz 13: Yusuf 12:53
-  QuranPosition(15, 1),   // Juz 14: Al-Hijr 15:1
-  QuranPosition(17, 1),   // Juz 15: Al-Isra 17:1
-  QuranPosition(18, 75),  // Juz 16: Al-Kahf 18:75
-  QuranPosition(21, 1),   // Juz 17: Al-Anbiya 21:1
-  QuranPosition(23, 1),   // Juz 18: Al-Muminun 23:1
-  QuranPosition(25, 21),  // Juz 19: Al-Furqan 25:21
-  QuranPosition(27, 56),  // Juz 20: An-Naml 27:56
-  QuranPosition(29, 46),  // Juz 21: Al-Ankabut 29:46
-  QuranPosition(33, 31),  // Juz 22: Al-Ahzab 33:31
-  QuranPosition(36, 28),  // Juz 23: Ya-Sin 36:28
-  QuranPosition(39, 32),  // Juz 24: Az-Zumar 39:32
-  QuranPosition(41, 47),  // Juz 25: Fussilat 41:47
-  QuranPosition(46, 1),   // Juz 26: Al-Ahqaf 46:1
-  QuranPosition(51, 31),  // Juz 27: Adh-Dhariyat 51:31
-  QuranPosition(58, 1),   // Juz 28: Al-Mujadila 58:1
-  QuranPosition(67, 1),   // Juz 29: Al-Mulk 67:1
-  QuranPosition(78, 1),   // Juz 30: An-Naba 78:1
+  QuranPosition(1, 1), // Juz  1: Al-Fatiha 1:1
+  QuranPosition(2, 142), // Juz  2: Al-Baqarah 2:142
+  QuranPosition(2, 253), // Juz  3: Al-Baqarah 2:253
+  QuranPosition(3, 93), // Juz  4: Aal-Imran 3:93
+  QuranPosition(4, 24), // Juz  5: An-Nisa 4:24
+  QuranPosition(4, 148), // Juz  6: An-Nisa 4:148
+  QuranPosition(5, 82), // Juz  7: Al-Maidah 5:82
+  QuranPosition(6, 111), // Juz  8: Al-Anam 6:111
+  QuranPosition(7, 88), // Juz  9: Al-Araf 7:88
+  QuranPosition(8, 41), // Juz 10: Al-Anfal 8:41
+  QuranPosition(9, 93), // Juz 11: At-Tawbah 9:93
+  QuranPosition(11, 6), // Juz 12: Hud 11:6
+  QuranPosition(12, 53), // Juz 13: Yusuf 12:53
+  QuranPosition(15, 1), // Juz 14: Al-Hijr 15:1
+  QuranPosition(17, 1), // Juz 15: Al-Isra 17:1
+  QuranPosition(18, 75), // Juz 16: Al-Kahf 18:75
+  QuranPosition(21, 1), // Juz 17: Al-Anbiya 21:1
+  QuranPosition(23, 1), // Juz 18: Al-Muminun 23:1
+  QuranPosition(25, 21), // Juz 19: Al-Furqan 25:21
+  QuranPosition(27, 56), // Juz 20: An-Naml 27:56
+  QuranPosition(29, 46), // Juz 21: Al-Ankabut 29:46
+  QuranPosition(33, 31), // Juz 22: Al-Ahzab 33:31
+  QuranPosition(36, 28), // Juz 23: Ya-Sin 36:28
+  QuranPosition(39, 32), // Juz 24: Az-Zumar 39:32
+  QuranPosition(41, 47), // Juz 25: Fussilat 41:47
+  QuranPosition(46, 1), // Juz 26: Al-Ahqaf 46:1
+  QuranPosition(51, 31), // Juz 27: Adh-Dhariyat 51:31
+  QuranPosition(58, 1), // Juz 28: Al-Mujadila 58:1
+  QuranPosition(67, 1), // Juz 29: Al-Mulk 67:1
+  QuranPosition(78, 1), // Juz 30: An-Naba 78:1
 ];
 
 /// The final ayah of the Quran (end of juz 30).
@@ -159,7 +171,7 @@ ReadingRange getReadingRangeForDay(int day, int targetDays) {
     // ── Whole-juz (or multi-juz) per day ──────────────────────────────────
     // Use the juz-boundary table directly — exact traditional positions.
     final int startJuz = ((clampedDay - 1) * 30 ~/ targetDays) + 1;
-    final int endJuz   = ((clampedDay * 30) ~/ targetDays).clamp(1, 30);
+    final int endJuz = ((clampedDay * 30) ~/ targetDays).clamp(1, 30);
     return ReadingRange(
       start: kJuzStarts[startJuz - 1],
       end: juzEndPosition(endJuz),
@@ -170,21 +182,24 @@ ReadingRange getReadingRangeForDay(int day, int targetDays) {
     final int segmentsPerJuz = (targetDays / 30).round().clamp(1, 100);
 
     // Which juz does this day fall into? (0-indexed)
-    final int juzIndex = ((clampedDay - 1) / segmentsPerJuz).floor().clamp(0, 29);
+    final int juzIndex = ((clampedDay - 1) / segmentsPerJuz).floor().clamp(
+      0,
+      29,
+    );
     // Which segment within that juz? (0-indexed)
     final int segIndex = (clampedDay - 1) % segmentsPerJuz;
 
     final QuranPosition juzStart = kJuzStarts[juzIndex];
-    final QuranPosition juzEnd   = juzEndPosition(juzIndex + 1);
+    final QuranPosition juzEnd = juzEndPosition(juzIndex + 1);
 
     final int linearJuzStart = posToLinear(juzStart);
-    final int linearJuzEnd   = posToLinear(juzEnd);
-    final int totalAyahs     = linearJuzEnd - linearJuzStart + 1;
+    final int linearJuzEnd = posToLinear(juzEnd);
+    final int totalAyahs = linearJuzEnd - linearJuzStart + 1;
 
     // Divide the juz ayahs evenly among segments, with any remainder
     // distributed to the first segments.
-    final int baseSize    = totalAyahs ~/ segmentsPerJuz;
-    final int extraAyahs  = totalAyahs % segmentsPerJuz;
+    final int baseSize = totalAyahs ~/ segmentsPerJuz;
+    final int extraAyahs = totalAyahs % segmentsPerJuz;
 
     // Compute cumulative offset to the start of segIndex
     int offset = 0;
@@ -194,11 +209,11 @@ ReadingRange getReadingRangeForDay(int day, int targetDays) {
     final int segSize = baseSize + (segIndex < extraAyahs ? 1 : 0);
 
     final int linearStart = linearJuzStart + offset;
-    final int linearEnd   = linearStart + segSize - 1;
+    final int linearEnd = linearStart + segSize - 1;
 
     return ReadingRange(
       start: linearToPos(linearStart),
-      end:   linearToPos(linearEnd.clamp(1, posToLinear(kQuranEnd))),
+      end: linearToPos(linearEnd.clamp(1, posToLinear(kQuranEnd))),
     );
   }
 }
@@ -222,7 +237,7 @@ String positionLabelEn(QuranPosition pos, Map<int, String> surahNamesEn) {
 ///  "البقرة ١٤٢ – ٢٥٢"               (same surah)
 String rangeLabelAr(ReadingRange range, Map<int, String> surahNames) {
   final sn = surahNames[range.start.surah] ?? 'سورة ${range.start.surah}';
-  final en = surahNames[range.end.surah]   ?? 'سورة ${range.end.surah}';
+  final en = surahNames[range.end.surah] ?? 'سورة ${range.end.surah}';
   if (range.isSingleSurah) {
     return '$sn ${_arabicNumerals(range.start.ayah)} – ${_arabicNumerals(range.end.ayah)}';
   }
@@ -234,7 +249,7 @@ String rangeLabelAr(ReadingRange range, Map<int, String> surahNames) {
 ///  "Al-Baqarah 142–252"
 String rangeLabelEn(ReadingRange range, Map<int, String> surahNamesEn) {
   final sn = surahNamesEn[range.start.surah] ?? 'Surah ${range.start.surah}';
-  final en = surahNamesEn[range.end.surah]   ?? 'Surah ${range.end.surah}';
+  final en = surahNamesEn[range.end.surah] ?? 'Surah ${range.end.surah}';
   if (range.isSingleSurah) {
     return '$sn ${range.start.ayah}–${range.end.ayah}';
   }
@@ -244,4 +259,44 @@ String rangeLabelEn(ReadingRange range, Map<int, String> surahNamesEn) {
 String _arabicNumerals(int n) {
   const d = ['٠', '١', '٢', '٣', '٤', '٥', '٦', '٧', '٨', '٩'];
   return n.toString().split('').map((c) => d[int.parse(c)]).join();
+}
+
+// ── Page-based helpers ─────────────────────────────────────────────────────
+
+/// Returns the page range assigned to [day] when the user reads [pagesPerDay].
+PageReadingRange getPageRangeForDay(int day, int pagesPerDay) {
+  final safePagesPerDay = pagesPerDay.clamp(1, _kMushafTotalPages).toInt();
+  final targetDays = (_kMushafTotalPages / safePagesPerDay).ceil();
+  final clampedDay = day.clamp(1, targetDays);
+
+  final startPage = ((clampedDay - 1) * safePagesPerDay) + 1;
+  final endPage = (startPage + safePagesPerDay - 1)
+      .clamp(1, _kMushafTotalPages)
+      .toInt();
+
+  return PageReadingRange(startPage: startPage, endPage: endPage);
+}
+
+/// First ayah position on a given Mushaf page.
+QuranPosition pageStartPosition(int pageNumber) {
+  final rows = getPageData(pageNumber);
+  final first = rows.first as Map;
+  return QuranPosition(first['surah'] as int, first['start'] as int);
+}
+
+/// Last ayah position on a given Mushaf page.
+QuranPosition pageEndPosition(int pageNumber) {
+  final rows = getPageData(pageNumber);
+  final last = rows.last as Map;
+  return QuranPosition(last['surah'] as int, last['end'] as int);
+}
+
+/// Converts an inclusive page span to an exact ayah [ReadingRange].
+ReadingRange getReadingRangeForPages(int startPage, int endPage) {
+  final safeStart = startPage.clamp(1, _kMushafTotalPages);
+  final safeEnd = endPage.clamp(1, _kMushafTotalPages);
+  final from = safeStart <= safeEnd ? safeStart : safeEnd;
+  final to = safeStart <= safeEnd ? safeEnd : safeStart;
+
+  return ReadingRange(start: pageStartPosition(from), end: pageEndPosition(to));
 }

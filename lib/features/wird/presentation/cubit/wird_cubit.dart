@@ -7,8 +7,7 @@ class WirdCubit extends Cubit<WirdState> {
   final WirdService _wirdService;
   final WirdNotificationService _notifService;
 
-  WirdCubit(this._wirdService, this._notifService)
-      : super(const WirdInitial());
+  WirdCubit(this._wirdService, this._notifService) : super(const WirdInitial());
 
   // ── Test notification ─────────────────────────────────────────────────
 
@@ -22,24 +21,28 @@ class WirdCubit extends Cubit<WirdState> {
     final notifEnabled = _wirdService.notificationsEnabled;
     final followUpInterval = _wirdService.followUpIntervalHours;
     if (plan == null) {
-      emit(WirdNoPlan(
-        notificationsEnabled: notifEnabled,
-        followUpIntervalHours: followUpInterval,
-      ));
+      emit(
+        WirdNoPlan(
+          notificationsEnabled: notifEnabled,
+          followUpIntervalHours: followUpInterval,
+        ),
+      );
     } else {
       final rt = _wirdService.getReminderTime();
-      emit(WirdPlanLoaded(
-        plan,
-        reminderHour: rt?['hour'],
-        reminderMinute: rt?['minute'],
-        notificationsEnabled: notifEnabled,
-        followUpIntervalHours: followUpInterval,
-        lastReadSurah: _wirdService.lastReadSurah,
-        lastReadAyah: _wirdService.lastReadAyah,
-        makeupBookmarkDay:   _wirdService.makeupBookmarkDay,
-        makeupBookmarkSurah: _wirdService.makeupBookmarkSurah,
-        makeupBookmarkAyah:  _wirdService.makeupBookmarkAyah,
-      ));
+      emit(
+        WirdPlanLoaded(
+          plan,
+          reminderHour: rt?['hour'],
+          reminderMinute: rt?['minute'],
+          notificationsEnabled: notifEnabled,
+          followUpIntervalHours: followUpInterval,
+          lastReadSurah: _wirdService.lastReadSurah,
+          lastReadAyah: _wirdService.lastReadAyah,
+          makeupBookmarkDay: _wirdService.makeupBookmarkDay,
+          makeupBookmarkSurah: _wirdService.makeupBookmarkSurah,
+          makeupBookmarkAyah: _wirdService.makeupBookmarkAyah,
+        ),
+      );
     }
   }
 
@@ -50,6 +53,8 @@ class WirdCubit extends Cubit<WirdState> {
     required WirdType type,
     required int targetDays,
     required DateTime startDate,
+    WirdPlanMode planMode = WirdPlanMode.days,
+    int? pagesPerDay,
     List<int> completedDays = const [],
     int? reminderHour,
     int? reminderMinute,
@@ -58,6 +63,8 @@ class WirdCubit extends Cubit<WirdState> {
       type: type,
       targetDays: targetDays,
       startDate: startDate,
+      planMode: planMode,
+      pagesPerDay: pagesPerDay,
       completedDays: completedDays,
       reminderHour: reminderHour,
       reminderMinute: reminderMinute,

@@ -409,7 +409,7 @@ class HomeScreenState extends State<HomeScreen>
                                               ? GoogleFonts.amiriQuran(
                                                   fontSize: 22,
                                                   fontWeight: FontWeight.w700,
-                                                  height: 1.6,
+                                                  height: 1.6050,
                                                   color: Theme.of(context)
                                                       .textTheme
                                                       .titleMedium

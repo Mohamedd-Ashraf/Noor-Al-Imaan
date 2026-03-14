@@ -7,6 +7,7 @@ import android.appwidget.AppWidgetProvider
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.location.Geocoder
 import android.graphics.Color
 import android.os.Build
 import android.widget.RemoteViews
@@ -20,7 +21,8 @@ import java.util.TimeZone
 private const val PREFS_NAME = "FlutterSharedPreferences"
 private const val KEY_CACHED_CONTENT = "flutter.cached_prayer_times"
 private const val ACTION_UPDATE_WIDGET = "com.example.quraan.PRAYER_WIDGET_UPDATE"
-private const val UPDATE_INTERVAL_MS = 15 * 60 * 1000L
+private const val ACTION_ADHAN_STARTED = "com.example.quraan.ADHAN_STARTED"
+private const val UPDATE_INTERVAL_MS = 1 * 60 * 1000L  // 1 minute instead of 15 minutes
 
 object PrayerWidgetUpdateDispatcher {
     fun refreshAll(context: Context) {
@@ -73,7 +75,9 @@ abstract class BasePrayerTimesWidget : AppWidgetProvider() {
         try {
             when (intent.action) {
                 ACTION_UPDATE_WIDGET,
+                ACTION_ADHAN_STARTED,
                 Intent.ACTION_BOOT_COMPLETED,
+                Intent.ACTION_USER_PRESENT,
                 Intent.ACTION_MY_PACKAGE_REPLACED,
                 "android.intent.action.QUICKBOOT_POWERON",
                 "com.htc.intent.action.QUICKBOOT_POWERON" -> {
@@ -148,8 +152,8 @@ abstract class BasePrayerTimesWidget : AppWidgetProvider() {
         try {
             val views = RemoteViews(context.packageName, layoutResId)
             attachLaunchIntent(context, views)
-            bindHeader(context, views)
             val bundle = loadPrayerBundle(context)
+            bindHeader(context, views, bundle?.locationName)
             if (bundle != null) {
                 renderPrayerData(views, bundle, Date())
             } else {
@@ -182,11 +186,12 @@ abstract class BasePrayerTimesWidget : AppWidgetProvider() {
         }
     }
 
-    private fun bindHeader(context: Context, views: RemoteViews) {
+    private fun bindHeader(context: Context, views: RemoteViews, locationName: String?) {
         val now = Date()
         val arabicFormatter = SimpleDateFormat("EEEE، d MMMM yyyy", Locale("ar"))
         views.setTextViewText(R.id.widget_date, arabicFormatter.format(now))
         views.setTextViewText(R.id.widget_hijri_date, formatHijriDate(context, now))
+        views.setTextViewText(R.id.widget_location, locationName ?: "الموقع المحفوظ")
     }
 
     private fun renderPrayerData(views: RemoteViews, bundle: PrayerBundle, now: Date) {
@@ -222,19 +227,10 @@ abstract class BasePrayerTimesWidget : AppWidgetProvider() {
             }
         }
 
-        // Card shows current prayer when active, otherwise shows next prayer
-        val cardName: String?
-        val cardTime: Date?
-        val cardLabel: String
-        if (currentName != null) {
-            cardName = currentName
-            cardTime = currentTime
-            cardLabel = "الصلاة الجارية"
-        } else {
-            cardName = nextName
-            cardTime = nextTime
-            cardLabel = if (isTomorrow) "القادمة غدًا" else "الصلاة القادمة"
-        }
+        // Card always shows next prayer
+        val cardName: String? = nextName
+        val cardTime: Date? = nextTime
+        val cardLabel: String = if (isTomorrow) "القادمة غدًا" else "الصلاة القادمة"
 
         views.setTextViewText(R.id.label_next_prayer, cardLabel)
         views.setTextViewText(R.id.next_prayer_name, cardName ?: "—")
@@ -243,7 +239,6 @@ abstract class BasePrayerTimesWidget : AppWidgetProvider() {
             R.id.next_prayer_countdown,
             when {
                 nextTime != null -> formatCountdown(nextTime.time - now.time)
-                currentName != null -> "انتهت"
                 else -> "—"
             },
         )
@@ -378,6 +373,7 @@ abstract class BasePrayerTimesWidget : AppWidgetProvider() {
     private data class PrayerBundle(
         val today: PrayerData,
         val tomorrow: PrayerData?,
+        val locationName: String?,
     )
 
     /**
@@ -413,7 +409,111 @@ abstract class BasePrayerTimesWidget : AppWidgetProvider() {
             PrayerBundle(
                 today = parsePrayerData(todayJson) ?: return null,
                 tomorrow = times.optJSONObject(calToKey(tomorrowCal))?.let(::parsePrayerData),
+                locationName = resolveLocationName(context, prefs, root),
             )
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    private fun resolveLocationName(
+        context: Context,
+        prefs: android.content.SharedPreferences,
+        root: JSONObject,
+    ): String? {
+        val directCandidates = listOf(
+            root.optString("locationName", ""),
+            root.optString("location", ""),
+            root.optString("city", ""),
+            root.optString("area", ""),
+            root.optString("address", ""),
+            prefs.getString("flutter.location_name", "") ?: "",
+            prefs.getString("flutter.last_place_name", "") ?: "",
+            prefs.getString("flutter.place_name", "") ?: "",
+            prefs.getString("flutter.cached_location_name", "") ?: "",
+        )
+        val direct = directCandidates
+            .map { it.trim() }
+            .firstOrNull { it.isNotEmpty() }
+        if (direct != null) return direct
+
+        val cachedLat = readNullableDouble(root, "latitude")
+            ?: readNullableDoubleFromPrefs(prefs, "flutter.last_known_lat")
+        val cachedLng = readNullableDouble(root, "longitude")
+            ?: readNullableDoubleFromPrefs(prefs, "flutter.last_known_lng")
+
+        if (cachedLat != null && cachedLng != null) {
+            reverseGeocodePlaceName(context, cachedLat, cachedLng)?.let { return it }
+            return "الموقع المحفوظ"
+        }
+
+        return null
+    }
+
+    private fun readNullableDouble(root: JSONObject, key: String): Double? {
+        if (!root.has(key)) return null
+        val value = root.optDouble(key, Double.NaN)
+        return if (value.isNaN()) null else value
+    }
+
+    private fun readNullableDoubleFromPrefs(
+        prefs: android.content.SharedPreferences,
+        key: String,
+    ): Double? {
+        if (!prefs.contains(key)) return null
+        val raw = prefs.all[key] ?: return null
+        return when (raw) {
+            is Double -> raw
+            is Float -> raw.toDouble()
+            is Int -> raw.toDouble()
+            is Long -> raw.toDouble()
+            is String -> parseFlutterDoubleString(raw)
+            else -> null
+        }
+    }
+
+    private fun parseFlutterDoubleString(raw: String): Double? {
+        raw.toDoubleOrNull()?.let { return it }
+
+        val knownPrefixes = listOf(
+            "This is the prefix for a double.",
+            "This is the prefix for Double.",
+            "VGhpcyBpcyB0aGUgcHJlZml4IGZvciBhIGRvdWJsZS4",
+            "VGhpcyBpcyB0aGUgcHJlZml4IGZvciBEb3VibGUu",
+        )
+
+        for (prefix in knownPrefixes) {
+            if (raw.startsWith(prefix)) {
+                val suffix = raw.removePrefix(prefix).trim()
+                val cleaned = suffix
+                    .removePrefix("u")
+                    .removePrefix("U")
+                    .trim()
+                cleaned.toDoubleOrNull()?.let { return it }
+            }
+        }
+        return null
+    }
+
+    private fun reverseGeocodePlaceName(context: Context, lat: Double, lng: Double): String? {
+        return try {
+            if (!Geocoder.isPresent()) return null
+            val geocoder = Geocoder(context, Locale("ar"))
+            @Suppress("DEPRECATION")
+            val results = geocoder.getFromLocation(lat, lng, 1)
+            val address = results?.firstOrNull() ?: return null
+            val city = listOf(
+                address.locality,
+                address.subAdminArea,
+                address.adminArea,
+            ).firstOrNull { !it.isNullOrBlank() }?.trim()
+            val country = address.countryName?.trim()
+            when {
+                !city.isNullOrBlank() && !country.isNullOrBlank() -> "$city، $country"
+                !city.isNullOrBlank() -> city
+                !country.isNullOrBlank() -> country
+                else -> null
+            }
         } catch (_: Exception) {
             null
         }

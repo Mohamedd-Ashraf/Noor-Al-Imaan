@@ -418,7 +418,7 @@ class BookmarksScreenState extends State<BookmarksScreen> {
                                 textDirection: isAr
                                     ? TextDirection.rtl
                                     : TextDirection.ltr,
-                                style: GoogleFonts.cairo(
+                                style: GoogleFonts.amiri(
                                   fontSize: 12,
                                   color: AppColors.primary,
                                   fontWeight: FontWeight.bold,
@@ -604,7 +604,7 @@ class BookmarksScreenState extends State<BookmarksScreen> {
                                 textDirection: isAr
                                     ? TextDirection.rtl
                                     : TextDirection.ltr,
-                                style: GoogleFonts.cairo(
+                                style: GoogleFonts.amiri(
                                   fontSize: 12,
                                   color: AppColors.primary,
                                   fontWeight: FontWeight.bold,

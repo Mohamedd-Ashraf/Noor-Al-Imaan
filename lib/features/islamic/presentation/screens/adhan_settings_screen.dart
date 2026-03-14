@@ -115,6 +115,8 @@ class _AdhanSettingsScreenState extends State<AdhanSettingsScreen>
   bool _isTesting = false;
   bool _schedulingTest = false;
   bool _batteryUnrestricted = false;
+  bool _showAdhanTestButtons = false;
+  final Map<String, bool> _testingPrayer = {};  // Track loading state per prayer
   Timer? _debounce;
   late TabController _tabController;
   /// Show the "جديد / New" badge next to Short Adhan only for version 1.0.7.
@@ -190,6 +192,8 @@ class _AdhanSettingsScreenState extends State<AdhanSettingsScreen>
       _salawatVolume     = _settings.getSalawatVolume();
       _iqamaVolume       = _settings.getIqamaVolume();
       _approachingVolume = _settings.getApproachingVolume();
+      // Test buttons visibility
+      _showAdhanTestButtons = _settings.getShowAdhanTestButtons();
     });
   }
 
@@ -614,6 +618,15 @@ class _AdhanSettingsScreenState extends State<AdhanSettingsScreen>
     _debounce = Timer(delay, _save);
   }
 
+  Future<void> _saveReminderVolumesOnly() async {
+    _debounce?.cancel();
+    await Future.wait<bool>([
+      _settings.setSalawatVolume(_salawatVolume),
+      _settings.setIqamaVolume(_iqamaVolume),
+      _settings.setApproachingVolume(_approachingVolume),
+    ]);
+  }
+
   Future<void> _save() async {
     if (!mounted) return;
     setState(() => _isSaving = true);
@@ -817,6 +830,7 @@ class _AdhanSettingsScreenState extends State<AdhanSettingsScreen>
   Widget _buildReminderVolumeSlider({
     required double value,
     required ValueChanged<double> onChanged,
+    ValueChanged<double>? onChangeEnd,
     required bool isAr,
     required Color color,
     required String labelAr,
@@ -856,6 +870,7 @@ class _AdhanSettingsScreenState extends State<AdhanSettingsScreen>
                     divisions: 10,
                     label: '${(value * 100).round()}%',
                     onChanged: onChanged,
+                    onChangeEnd: onChangeEnd,
                   ),
                 ),
               ],
@@ -915,7 +930,9 @@ class _AdhanSettingsScreenState extends State<AdhanSettingsScreen>
                 value: _approachingVolume,
                 onChanged: (v) {
                   setState(() => _approachingVolume = v);
-                  _autoSave();
+                },
+                onChangeEnd: (_) async {
+                  await _saveReminderVolumesOnly();
                 },
                 isAr: isAr,
                 color: Colors.orange,
@@ -949,7 +966,9 @@ class _AdhanSettingsScreenState extends State<AdhanSettingsScreen>
                 value: _iqamaVolume,
                 onChanged: (v) {
                   setState(() => _iqamaVolume = v);
-                  _autoSave();
+                },
+                onChangeEnd: (_) async {
+                  await _saveReminderVolumesOnly();
                 },
                 isAr: isAr,
                 color: Colors.teal,
@@ -980,7 +999,7 @@ class _AdhanSettingsScreenState extends State<AdhanSettingsScreen>
                 labelAr: 'كل كم دقيقة؟',
                 labelEn: 'Every (minutes)',
                 value: _salawatMinutes,
-                options: const [15, 30, 60, 120],
+                options: const [5, 15, 30, 60, 120],
                 isAr: isAr,
                 onChanged: (v) {
                   setState(() => _salawatMinutes = v);
@@ -1009,7 +1028,9 @@ class _AdhanSettingsScreenState extends State<AdhanSettingsScreen>
                 value: _salawatVolume,
                 onChanged: (v) {
                   setState(() => _salawatVolume = v);
-                  _autoSave();
+                },
+                onChangeEnd: (_) async {
+                  await _saveReminderVolumesOnly();
                 },
                 isAr: isAr,
                 color: Colors.pink,
@@ -2293,11 +2314,119 @@ class _AdhanSettingsScreenState extends State<AdhanSettingsScreen>
             },
           )),
         ]),
+        // ── Show/Hide individual prayer test buttons toggle ──────────────────
+        const SizedBox(height: 16),
+        Row(children: [
+          Expanded(child: Text(
+            isAr ? 'اختبار كل أذان على حدة' : 'Test Individual Prayers',
+            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: _textPrimary),
+          )),
+          Switch.adaptive(
+            value: _showAdhanTestButtons,
+            onChanged: (v) async {
+              setState(() => _showAdhanTestButtons = v);
+              await _settings.setShowAdhanTestButtons(v);
+            },
+          ),
+        ]),
+        // ── Individual prayer test buttons ──────────────────────────────────
+        if (_showAdhanTestButtons) ...[
+          const SizedBox(height: 12),
+          Text(
+            isAr ? 'اختبر الأذان لكل صلاة كأنها جاءت الآن' : 'Test adhan for each prayer as if it just arrived',
+            style: TextStyle(fontSize: 11, color: _textSecondary, height: 1.4),
+          ),
+          const SizedBox(height: 10),
+          _buildPrayerTestButton(isAr, 'fajr', 'الفجر', Icons.nights_stay_rounded, const Color(0xFF6A5ACD)),
+          const SizedBox(height: 8),
+          _buildPrayerTestButton(isAr, 'dhuhr', 'الظهر', Icons.wb_sunny_rounded, const Color(0xFFF4B400)),
+          const SizedBox(height: 8),
+          _buildPrayerTestButton(isAr, 'asr', 'العصر', Icons.wb_cloudy_rounded, AppColors.primary),
+          const SizedBox(height: 8),
+          _buildPrayerTestButton(isAr, 'maghrib', 'المغرب', Icons.wb_twilight_rounded, const Color(0xFFFF7043)),
+          const SizedBox(height: 8),
+          _buildPrayerTestButton(isAr, 'isha', 'العشاء', Icons.bedtime_rounded, const Color(0xFF1565C0)),
+        ],
       ]),
     );
   }
 
-  // ─── Schedule dialog ─────────────────────────────────────────────────────
+  /// Build a test button for a specific prayer
+  Widget _buildPrayerTestButton(
+    bool isAr,
+    String prayerKey,
+    String prayerArabic,
+    IconData icon,
+    Color color,
+  ) {
+    final isLoading = _testingPrayer[prayerKey] ?? false;
+    final prayerEnglish = {
+      'fajr': 'Fajr',
+      'dhuhr': 'Dhuhr',
+      'asr': 'Asr',
+      'maghrib': 'Maghrib',
+      'isha': 'Isha',
+    }[prayerKey] ?? prayerKey;
+
+    return Container(
+      decoration: BoxDecoration(
+        border: Border.all(color: _cardBorder),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Material(
+        color: _cardSurface,
+        borderRadius: BorderRadius.circular(10),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(10),
+          onTap: isLoading
+              ? null
+              : () async {
+                  setState(() => _testingPrayer[prayerKey] = true);
+                  try {
+                    await _adhanService.testAdhanForPrayer(prayerKey);
+                    _showSnack(
+                      isAr
+                          ? 'يعمل أذان $prayerArabic الآن 🔊'
+                          : 'Testing $prayerEnglish adhan now 🔊',
+                      AppColors.success,
+                    );
+                  } catch (e) {
+                    _showSnack(
+                      isAr ? 'خطأ في التشغيل' : 'Playback error',
+                      AppColors.error,
+                    );
+                  } finally {
+                    if (mounted) {
+                      setState(() => _testingPrayer[prayerKey] = false);
+                    }
+                  }
+                },
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            child: Row(children: [
+              Icon(icon, size: 18, color: color),
+              const SizedBox(width: 10),
+              Expanded(child: Text(
+                isAr ? prayerArabic : prayerEnglish,
+                style: TextStyle(fontSize: 13, color: _textPrimary, fontWeight: FontWeight.w500),
+              )),
+              if (isLoading)
+                SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    valueColor: AlwaysStoppedAnimation<Color>(color),
+                  ),
+                )
+              else
+                Icon(Icons.play_arrow_rounded, size: 18, color: color),
+            ]),
+          ),
+        ),
+      ),
+    );
+  }
 
   Future<void> _showScheduleDialog({
     required bool isAr,

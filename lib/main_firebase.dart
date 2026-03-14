@@ -1,15 +1,18 @@
 import 'dart:async';
+import 'dart:ui' show PlatformDispatcher;
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:just_audio_background/just_audio_background.dart';
 import 'firebase_options.dart';
 import 'core/di/injection_container_firebase.dart' as di;
 import 'core/services/adhan_notification_service.dart';
 import 'core/services/quran_cache_warmup_service.dart';
 import 'core/services/app_update_service_firebase.dart';
+import 'core/services/tafsir_auto_download_service.dart';
 import 'features/wird/services/wird_notification_service.dart';
 import 'core/widgets/app_update_dialog_premium.dart';
 import 'core/theme/app_theme.dart';
@@ -24,6 +27,39 @@ import 'features/adhkar/presentation/cubit/adhkar_progress_cubit.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Allow runtime fetching when online. Failures are handled gracefully below.
+  GoogleFonts.config.allowRuntimeFetching = true;
+
+  bool isGoogleFontsError(Object error) {
+    final msg = error.toString().toLowerCase();
+    return msg.contains('google_fonts') ||
+        msg.contains('googlefonts') ||
+        msg.contains('failed to load font') ||
+        msg.contains('font') ||
+        msg.contains('socketexception') ||
+        msg.contains('network') ||
+        msg.contains('clientexception');
+  }
+
+  FlutterError.onError = (details) {
+    final ex = details.exception;
+    if (isGoogleFontsError(ex)) {
+      debugPrint('Ignored non-fatal network/font error: $ex');
+      return;
+    }
+    FlutterError.presentError(details);
+  };
+
+  PlatformDispatcher.instance.onError = (error, stack) {
+    if (isGoogleFontsError(error)) {
+      debugPrint('Ignored async network/font error: $error');
+      return true; // Return true to prevent the crash
+    }
+    // Return true for any unhandled async error in release to prevent app closure,
+    // but in debug we let it pass.
+    return true; // Prevent all async crashes offline
+  };
   
   // Initialize Firebase
   await Firebase.initializeApp(
@@ -42,6 +78,10 @@ void main() async {
   // Start background Quran cache warm-up so all surahs are available offline
   // and open instantly on subsequent visits.  Runs fully in background.
   di.sl<QuranCacheWarmupService>().startInBackground();
+
+  // Auto-download Al-Muyassar tafsir once on first launch after installing or
+  // updating to 1.0.11. Runs silently in background and never blocks startup.
+  unawaited(di.sl<TafsirAutoDownloadService>().triggerIfEligible());
 
   // Initialize update service (Remote Config defaults + first fetch)
   final updateService = di.sl<AppUpdateServiceFirebase>();

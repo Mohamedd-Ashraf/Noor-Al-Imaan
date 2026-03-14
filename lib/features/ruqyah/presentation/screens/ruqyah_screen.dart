@@ -44,11 +44,27 @@ class _PlayAllFab extends StatelessWidget {
   const _PlayAllFab({required this.isArabicUi});
 
   void _playAll(BuildContext context) {
-    context.read<AyahAudioCubit>().playQueue(RuqyahData.essentialQueue.toList());
+    final List<AyahAudioQueueItem> queueItems =
+        RuqyahData.sections.map<AyahAudioQueueItem>((section) {
+      final audio = section.audio;
+      if (audio.type == RuqyahAudioType.fullSurah) {
+        return AyahAudioQueueItem.fullSurah(
+          surahNumber: audio.surahNumber,
+          numberOfAyahs: audio.numberOfAyahs!,
+        );
+      }
+      return AyahAudioQueueItem.ayahRange(
+        surahNumber: audio.surahNumber,
+        startAyah: audio.startAyah!,
+        endAyah: audio.endAyah!,
+      );
+    }).toList(growable: false);
+
+    context.read<AyahAudioCubit>().playStructuredQueue(queueItems);
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
-          isArabicUi ? 'يتم الآن تشغيل الرقية الشرعية ✨' : 'Playing essential Ruqyah ✨',
+          isArabicUi ? 'يتم الآن تشغيل الرقية الشرعية كاملة ✨' : 'Playing full Ruqyah ✨',
           textDirection: isArabicUi ? TextDirection.rtl : TextDirection.ltr,
         ),
         duration: const Duration(seconds: 3),
@@ -102,7 +118,7 @@ class _PlayAllFab extends StatelessWidget {
                     Text(
                       isActive
                           ? (isArabicUi ? 'إيقاف التشغيل' : 'Stop')
-                          : (isArabicUi ? 'تشغيل الرقية الأساسية' : 'Play Essential Ruqyah'),
+                          : (isArabicUi ? 'تشغيل الرقية كاملة' : 'Play Full Ruqyah'),
                       style: const TextStyle(
                         color: Colors.white,
                         fontWeight: FontWeight.w800,

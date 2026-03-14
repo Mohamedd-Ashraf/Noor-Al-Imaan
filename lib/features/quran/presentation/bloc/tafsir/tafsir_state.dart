@@ -7,12 +7,22 @@ class TafsirState extends Equatable {
   final String selectedEdition;
   final String tafsirText;
   final String errorMessage;
+  final bool isOfflineContent;
+  final bool isDownloadingOffline;
+  final int downloadDone;
+  final int downloadTotal;
+  final String downloadStatusText;
 
   const TafsirState({
     required this.status,
     required this.selectedEdition,
     this.tafsirText = '',
     this.errorMessage = '',
+    this.isOfflineContent = false,
+    this.isDownloadingOffline = false,
+    this.downloadDone = 0,
+    this.downloadTotal = 0,
+    this.downloadStatusText = '',
   });
 
   factory TafsirState.initial(String edition) => TafsirState(
@@ -25,16 +35,36 @@ class TafsirState extends Equatable {
     String? selectedEdition,
     String? tafsirText,
     String? errorMessage,
+    bool? isOfflineContent,
+    bool? isDownloadingOffline,
+    int? downloadDone,
+    int? downloadTotal,
+    String? downloadStatusText,
   }) {
     return TafsirState(
       status: status ?? this.status,
       selectedEdition: selectedEdition ?? this.selectedEdition,
       tafsirText: tafsirText ?? this.tafsirText,
       errorMessage: errorMessage ?? this.errorMessage,
+      isOfflineContent: isOfflineContent ?? this.isOfflineContent,
+      isDownloadingOffline: isDownloadingOffline ?? this.isDownloadingOffline,
+      downloadDone: downloadDone ?? this.downloadDone,
+      downloadTotal: downloadTotal ?? this.downloadTotal,
+      downloadStatusText: downloadStatusText ?? this.downloadStatusText,
     );
   }
 
   @override
   List<Object?> get props =>
-      [status, selectedEdition, tafsirText, errorMessage];
+      [
+        status,
+        selectedEdition,
+        tafsirText,
+        errorMessage,
+        isOfflineContent,
+        isDownloadingOffline,
+        downloadDone,
+        downloadTotal,
+        downloadStatusText,
+      ];
 }

@@ -243,7 +243,7 @@ class MainActivity : AudioServiceFragmentActivity() {
                     "getAlarmVolume" -> {
                         val am      = getSystemService(AUDIO_SERVICE) as AudioManager
                         val prefs   = getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
-                        val isAlarm = prefs.getString("flutter.adhan_audio_stream", "ringtone") == "alarm"
+                        val isAlarm = prefs.getString("flutter.adhan_audio_stream", "alarm") == "alarm"
                         val stream  = if (isAlarm) AudioManager.STREAM_ALARM else AudioManager.STREAM_RING
                         val current = am.getStreamVolume(stream)
                         val max     = am.getStreamMaxVolume(stream)

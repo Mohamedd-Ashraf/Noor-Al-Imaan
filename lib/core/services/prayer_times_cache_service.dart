@@ -10,7 +10,7 @@ class PrayerTimesCacheService {
   PrayerTimesCacheService(this._settings);
 
   /// Pre-calculate and store prayer times for the next 30 days.
-  Future<void> cachePrayerTimes(double latitude, double longitude) async {
+  Future<void> cachePrayerTimes(double latitude, double longitude, {String? locationName}) async {
     final coords = Coordinates(latitude, longitude);
     
     // Get user's preferred calculation method
@@ -48,6 +48,7 @@ class PrayerTimesCacheService {
       'cachedAt': DateTime.now().toIso8601String(),
       'latitude': latitude,
       'longitude': longitude,
+      'locationName': locationName ?? '',
       'times': cachedTimes,
     };
 
@@ -112,6 +113,20 @@ class PrayerTimesCacheService {
         latitude: data['latitude'] as double,
         longitude: data['longitude'] as double,
       );
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /// Get cached location name if available.
+  String? getCachedLocationName() {
+    final cached = _settings.getCachedPrayerTimes();
+    if (cached == null) return null;
+
+    try {
+      final data = jsonDecode(cached) as Map<String, dynamic>;
+      final name = data['locationName'] as String?;
+      return (name?.isNotEmpty == true) ? name : null;
     } catch (e) {
       return null;
     }

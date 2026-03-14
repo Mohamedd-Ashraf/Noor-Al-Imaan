@@ -1,4 +1,4 @@
-import 'dart:math' as math;
+﻿import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -373,8 +373,52 @@ const Map<String, List<_WhatsNewEntry>> _changelog = {
       descAr:
           'أضفنا ويدجت لمواقيت الصلاة يعرض الصلاة الحالية والقادمة وتاريخ اليوم، مع أكثر من شكل ليتناسب مع واجهة هاتفك.',
       descEn:
-          'A new Prayer Times home-screen widget shows the current and upcoming prayer along with today\'s date, with multiple styles to match your device theme.',
+          'A new Prayer Times home-screen widget shows the current and upcoming prayer along with today''s date, with multiple styles to match your device theme.',
       color: const Color(0xFF5D4037),
+    ),
+  ],
+  // ─── v1.0.11 ─────────────────────────────────────────────────────────────────
+  '1.0.11': [
+ 
+    _WhatsNewEntry(
+      icon: Icons.widgets_rounded,
+      titleAr: 'ويدجت مواقيت الصلاة',
+      titleEn: 'Prayer Times Widget',
+      descAr:
+          'تم تحسين ويدجت عرض مواقيت الصلاة والصلاة القادمة التي من الممكن إضافتها الآن في الصفحة الرئيسية للهاتف.',
+      descEn:
+          'Improved the prayer times and next prayer widget that can now be added to your phone\'s home screen.',
+      color: const Color(0xFF5D4037),
+    ),
+    _WhatsNewEntry(
+      icon: Icons.download_for_offline_rounded,
+      titleAr: 'تحميل التفسير بدون إنترنت',
+      titleEn: 'Offline Tafsir Download',
+      descAr:
+          'تم إضافة صفحة لتحميل تفاسير القرآن الكريم لتعمل بدون اتصال إنترنت.',
+      descEn:
+          'Added a page to download Quran Tafsirs to work offline without an internet connection.',
+      color: const Color(0xFF00838F),
+    ),
+    _WhatsNewEntry(
+      icon: Icons.healing_rounded,
+      titleAr: 'إصلاحات الرقية الشرعية',
+      titleEn: 'Ruqyah Shariah Fixes',
+      descAr:
+          'تم إصلاح بعض المشاكل في صفحة الرقية الشرعية لضمان تجربة أفضل.',
+      descEn:
+          'Fixed issues in the Ruqyah screen to ensure a seamless experience.',
+      color: const Color(0xFF8E6C1F),
+    ),
+    _WhatsNewEntry(
+      icon: Icons.sync_problem_rounded,
+      titleAr: 'معالجة صلاحيات التنبيهات',
+      titleEn: 'Enhanced Notifications Permission',
+      descAr:
+          'تم تطوير معالجة التنبيهات المستمرة في الخلفية لضمان وصول الأذان في الوقت المحدد ودون انقطاع من النظام.',
+      descEn:
+          'Advanced handling for background processing and permissions to keep Adhan and continuous notifications uninterrupted.',
+      color: const Color(0xFFD84315),
     ),
   ],
 };
@@ -1191,3 +1235,4 @@ class _BorderPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant _BorderPainter old) => old.color != color;
 }
+

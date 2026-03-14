@@ -17,6 +17,7 @@ import '../../../../core/settings/app_settings_cubit.dart';
 import '../bloc/tafsir/tafsir_cubit.dart';
 import '../../../../core/utils/arabic_text_style_helper.dart';
 import '../bloc/tafsir/tafsir_state.dart';
+import 'offline_tafsir_screen.dart';
 
 /// Screen that displays the tafsir (exegesis / commentary) for a single ayah.
 /// Navigate to this screen by pushing it with the [TafsirScreen.route] method.
@@ -44,6 +45,12 @@ class _TafsirScreenState extends State<TafsirScreen> {
   late final BookmarkService _bookmarkService;
   bool _isBookmarked = false;
   bool _isSharing = false;
+
+  Future<void> _showOfflineTafsirSheet(bool isArabicUi) async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const OfflineTafsirScreen()),
+    );
+  }
 
   String get _bookmarkId =>
       'surah_${widget.surahNumber}_ayah_${widget.ayahNumber}';
@@ -392,6 +399,11 @@ class _TafsirScreenState extends State<TafsirScreen> {
       pinned: true,
       actions: [
         IconButton(
+          icon: const Icon(Icons.download_for_offline_rounded, color: Colors.white),
+          tooltip: isArabicUi ? 'تحميل التفسير أوفلاين' : 'Download tafsir offline',
+          onPressed: () => _showOfflineTafsirSheet(isArabicUi),
+        ),
+        IconButton(
           icon: _isSharing
               ? const SizedBox(
                   width: 20,
@@ -440,11 +452,12 @@ class _TafsirScreenState extends State<TafsirScreen> {
                   ),
                 ),
               ),
-              // Title area — left:48 for back arrow, right:100 for 2 action buttons
+              // Title area — left:48 for back arrow, right:148 for 3 action buttons
               Positioned.fill(
                 child: SafeArea(
                   child: Padding(
-                    padding: const EdgeInsets.only(left: 48, right: 100),
+                    
+                    padding: const EdgeInsets.only(left: 100, right: 0),
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
@@ -604,6 +617,7 @@ class _TafsirScreenState extends State<TafsirScreen> {
             .containsValue('en');
         if (!showTranslation && selectedIsEnglish) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!context.mounted) return;
             final firstArabic = editions.first['id']!;
             context.read<TafsirCubit>().selectEdition(firstArabic);
           });
@@ -638,9 +652,10 @@ class _TafsirScreenState extends State<TafsirScreen> {
                   return GestureDetector(
                     onTap: isLoading
                         ? null
-                        : () => context
-                            .read<TafsirCubit>()
-                            .selectEdition(id),
+                        : () async {
+                            if (!context.mounted) return;
+                            await context.read<TafsirCubit>().selectEdition(id);
+                          },
                     child: AnimatedContainer(
                       duration: const Duration(milliseconds: 200),
                       padding: const EdgeInsets.symmetric(
@@ -700,6 +715,38 @@ class _TafsirScreenState extends State<TafsirScreen> {
       BuildContext context, bool isArabicUi, bool isDark) {
     return BlocBuilder<TafsirCubit, TafsirState>(
       builder: (context, state) {
+        final progress = state.downloadTotal > 0
+            ? (state.downloadDone / state.downloadTotal).clamp(0.0, 1.0)
+            : 0.0;
+
+        if (state.isDownloadingOffline) {
+          return Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            margin: const EdgeInsets.only(bottom: 12),
+            decoration: BoxDecoration(
+              color: AppColors.primary.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: AppColors.primary.withValues(alpha: 0.25)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  state.downloadStatusText.isEmpty
+                      ? (isArabicUi ? 'جاري تحميل التفسير...' : 'Downloading tafsir...')
+                      : state.downloadStatusText,
+                  style: TextStyle(
+                    fontWeight: FontWeight.w600,
+                    color: isDark ? Colors.white : AppColors.textPrimary,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                LinearProgressIndicator(value: progress),
+              ],
+            ),
+          );
+        }
+
         if (state.status == TafsirStatus.loading) {
           return _centeredContainer(
             isDark,
@@ -872,6 +919,26 @@ class _TafsirScreenState extends State<TafsirScreen> {
                         ),
                       ),
                     ),
+                    if (state.isOfflineContent)
+                      Container(
+                        margin: const EdgeInsets.only(right: 8),
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: AppColors.primary.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: AppColors.primary.withValues(alpha: 0.35),
+                          ),
+                        ),
+                        child: Text(
+                          isArabicUi ? 'أوفلاين' : 'Offline',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: AppColors.primary,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
                     // Copy tafsir
                     GestureDetector(
                       onTap: () {

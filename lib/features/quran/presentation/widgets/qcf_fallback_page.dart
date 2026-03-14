@@ -77,7 +77,7 @@ class _Verse {
 
 // ─── Disk cache (shares key-space with MushafPageScreen) ───────────────────
 
-const String _kCachePrefix = 'mushaf_page_v1_';
+const String _kCachePrefix = 'qcf_fallback_page_v2_';
 
 // The Uthmani text in the offline JSON (and quran.com API) prepends the Basmala
 // to verse 1 of every surah except Al-Fatiha (1) and At-Tawbah (9).
@@ -176,8 +176,9 @@ Future<void> _saveToCache(int page, List<_Verse> verses) async {
 }
 
 Future<List<_Verse>> _loadFromBundledAssets(int page) async {
-  final surahNumbers = kMushafPageToSurahs[page];
-  if (surahNumbers == null || surahNumbers.isEmpty) return [];
+  final pageData = getPageData(page);
+  final surahNumbers = pageData.map((e) => (e as Map)['surah'] as int).toSet();
+  if (surahNumbers.isEmpty) return [];
   final results = <_Verse>[];
   for (final surahNum in surahNumbers) {
     try {
@@ -187,7 +188,18 @@ Future<List<_Verse>> _loadFromBundledAssets(int page) async {
       final data = jsonDecode(raw) as Map<String, dynamic>;
       final ayahs = data['ayahs'] as List;
       for (final ayah in ayahs) {
-        if ((ayah['page'] as int?) == page) {
+        final ayahNum = ayah['numberInSurah'] as int;
+        bool inRange = false;
+        for (final r in pageData) {
+          final bounds = r as Map;
+          if (bounds['surah'] == surahNum &&
+              ayahNum >= (bounds['start'] as int) &&
+              ayahNum <= (bounds['end'] as int)) {
+            inRange = true;
+            break;
+          }
+        }
+        if (inRange) {
           results.add(
             _Verse(
               verseKey: '$surahNum:${ayah["numberInSurah"]}',
@@ -200,6 +212,11 @@ Future<List<_Verse>> _loadFromBundledAssets(int page) async {
       }
     } catch (_) {}
   }
+  // Sort the results so they appear in correct Mushaf order (Surah -> Ayah)
+  results.sort((a, b) {
+    if (a.surah != b.surah) return a.surah.compareTo(b.surah);
+    return a.ayah.compareTo(b.ayah);
+  });
   return results;
 }
 
@@ -232,16 +249,40 @@ Future<List<_Verse>> _fetchPage(int page) async {
     final body = await response.transform(const Utf8Decoder()).join();
     final data = jsonDecode(body) as Map<String, dynamic>;
     final vList = data['verses'] as List;
-    final verses = vList.map((v) {
+    final pageData = getPageData(page);
+
+    final verses = <_Verse>[];
+    for (final v in vList) {
       final key = v['verse_key'] as String;
       final sp = key.split(':');
-      return _Verse(
-        verseKey: key,
-        surah: int.parse(sp[0]),
-        ayah: int.parse(sp[1]),
-        text: (v['text_uthmani'] as String?) ?? '',
-      );
-    }).toList();
+      final surahNum = int.parse(sp[0]);
+      final ayahNum = int.parse(sp[1]);
+
+      bool inRange = false;
+      for (final r in pageData) {
+        final bounds = r as Map;
+        if (bounds['surah'] == surahNum &&
+            ayahNum >= (bounds['start'] as int) &&
+            ayahNum <= (bounds['end'] as int)) {
+          inRange = true;
+          break;
+        }
+      }
+
+      if (inRange) {
+        verses.add(
+          _Verse(
+            verseKey: key,
+            surah: surahNum,
+            ayah: ayahNum,
+            text: (v['text_uthmani'] as String?) ?? '',
+          ),
+        );
+      }
+    }
+
+    // In rare cases quran.com might disagree on page bounds such that an ayah is missing.
+    // If it happens, we still save and return what we got.
     _saveToCache(page, verses);
     return verses;
   } catch (e) {

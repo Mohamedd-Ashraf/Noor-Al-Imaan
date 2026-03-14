@@ -1,10 +1,11 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/quran_structure.dart';
 import '../../../../core/constants/surah_names.dart';
 import '../../../../core/di/injection_container.dart' as di;
 import '../../../../core/services/offline_audio_service.dart';
+import 'package:qcf_quran/qcf_quran.dart';
 
 class SelectDownloadScreen extends StatefulWidget {
   const SelectDownloadScreen({super.key});
@@ -109,10 +110,10 @@ class _SelectDownloadScreenState extends State<SelectDownloadScreen> {
             child: _loadingDownloaded
                 ? const Center(child: CircularProgressIndicator())
                 : _selectedTab == 0
-                    ? _buildJuzSelector(isArabicUi)
-                    : _selectedTab == 1
-                        ? _buildPopularSelector(isArabicUi)
-                        : _buildCustomSelector(isArabicUi),
+                ? _buildJuzSelector(isArabicUi)
+                : _selectedTab == 1
+                ? _buildPopularSelector(isArabicUi)
+                : _buildCustomSelector(isArabicUi),
           ),
 
           // Skip-downloaded toggle
@@ -125,8 +126,11 @@ class _SelectDownloadScreenState extends State<SelectDownloadScreen> {
     );
   }
 
-  Widget _buildTab(
-      {required int index, required String label, required IconData icon}) {
+  Widget _buildTab({
+    required int index,
+    required String label,
+    required IconData icon,
+  }) {
     final isSelected = _selectedTab == index;
     final scheme = Theme.of(context).colorScheme;
     return InkWell(
@@ -149,11 +153,9 @@ class _SelectDownloadScreenState extends State<SelectDownloadScreen> {
             Text(
               label,
               style: TextStyle(
-                color:
-                    isSelected ? scheme.onPrimary : scheme.onSurfaceVariant,
+                color: isSelected ? scheme.onPrimary : scheme.onSurfaceVariant,
                 fontSize: 12,
-                fontWeight:
-                    isSelected ? FontWeight.bold : FontWeight.normal,
+                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
               ),
             ),
           ],
@@ -177,10 +179,8 @@ class _SelectDownloadScreenState extends State<SelectDownloadScreen> {
       itemCount: 30,
       itemBuilder: (context, index) {
         final juzNumber = index + 1;
-        final isFullyDone =
-            _skipDownloaded && _isJuzFullyDownloaded(juzNumber);
-        final isSelected =
-            !isFullyDone && _selectedJuz.contains(juzNumber);
+        final isFullyDone = _skipDownloaded && _isJuzFullyDownloaded(juzNumber);
+        final isSelected = !isFullyDone && _selectedJuz.contains(juzNumber);
 
         Color bgColor;
         Color borderColor;
@@ -193,8 +193,11 @@ class _SelectDownloadScreenState extends State<SelectDownloadScreen> {
           borderColor = Colors.green;
           numberColor = Colors.green.shade700;
           labelColor = Colors.green.shade600;
-          topBadge = Icon(Icons.check_circle_rounded,
-              size: 14, color: Colors.green.shade700);
+          topBadge = Icon(
+            Icons.check_circle_rounded,
+            size: 14,
+            color: Colors.green.shade700,
+          );
         } else if (isSelected) {
           bgColor = scheme.primary;
           borderColor = scheme.primary;
@@ -232,10 +235,7 @@ class _SelectDownloadScreenState extends State<SelectDownloadScreen> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                if (topBadge != null) ...[
-                  topBadge,
-                  const SizedBox(height: 1),
-                ],
+                if (topBadge != null) ...[topBadge, const SizedBox(height: 1)],
                 Text(
                   juzNumber.toString(),
                   style: TextStyle(
@@ -248,11 +248,7 @@ class _SelectDownloadScreenState extends State<SelectDownloadScreen> {
                 const SizedBox(height: 2),
                 Text(
                   isArabicUi ? 'جزء' : 'Juz',
-                  style: TextStyle(
-                    fontSize: 9,
-                    color: labelColor,
-                    height: 1.0,
-                  ),
+                  style: TextStyle(fontSize: 9, color: labelColor, height: 1.0),
                 ),
               ],
             ),
@@ -275,24 +271,23 @@ class _SelectDownloadScreenState extends State<SelectDownloadScreen> {
         final surahs = List<int>.from(section['surahs']);
         final isFullyDone =
             _skipDownloaded && _areSurahsFullyDownloaded(surahs);
-        final isSelected =
-            !isFullyDone && _selectedPopularSection == name;
+        final isSelected = !isFullyDone && _selectedPopularSection == name;
 
         return Card(
           margin: const EdgeInsets.only(bottom: 12),
           color: isFullyDone
               ? Colors.green.withValues(alpha: 0.08)
               : isSelected
-                  ? scheme.primary.withValues(alpha: 0.08)
-                  : null,
+              ? scheme.primary.withValues(alpha: 0.08)
+              : null,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
             side: BorderSide(
               color: isFullyDone
                   ? Colors.green.shade400
                   : isSelected
-                      ? scheme.primary
-                      : scheme.outline.withValues(alpha: 0.3),
+                  ? scheme.primary
+                  : scheme.outline.withValues(alpha: 0.3),
               width: (isFullyDone || isSelected) ? 2 : 1,
             ),
           ),
@@ -317,13 +312,13 @@ class _SelectDownloadScreenState extends State<SelectDownloadScreen> {
                     isFullyDone
                         ? Icons.check_circle_rounded
                         : isSelected
-                            ? Icons.check_circle
-                            : Icons.circle_outlined,
+                        ? Icons.check_circle
+                        : Icons.circle_outlined,
                     color: isFullyDone
                         ? Colors.green.shade600
                         : isSelected
-                            ? scheme.primary
-                            : scheme.onSurfaceVariant,
+                        ? scheme.primary
+                        : scheme.onSurfaceVariant,
                   ),
                   const SizedBox(width: 12),
                   Expanded(
@@ -344,8 +339,8 @@ class _SelectDownloadScreenState extends State<SelectDownloadScreen> {
                         Text(
                           isFullyDone
                               ? (isArabicUi
-                                  ? 'محمَّل بالكامل ✓'
-                                  : 'Fully downloaded ✓')
+                                    ? 'محمَّل بالكامل ✓'
+                                    : 'Fully downloaded ✓')
                               : '${surahs.length} ${isArabicUi ? 'سورة' : 'Surahs'}',
                           style: TextStyle(
                             fontSize: 14,
@@ -381,16 +376,17 @@ class _SelectDownloadScreenState extends State<SelectDownloadScreen> {
         final isSelected =
             !isFullyDone && _selectedSurahs.contains(surahNumber);
         final surahInfo = SurahNames.surahs[index];
-        final surahName =
-            isArabicUi ? surahInfo['arabic']! : surahInfo['english']!;
+        final surahName = isArabicUi
+            ? surahInfo['arabic']!
+            : surahInfo['english']!;
 
         return Card(
           margin: const EdgeInsets.only(bottom: 8),
           color: isFullyDone
               ? Colors.green.withValues(alpha: isDark ? 0.12 : 0.07)
               : isSelected
-                  ? scheme.primary.withValues(alpha: isDark ? 0.22 : 0.10)
-                  : scheme.surface,
+              ? scheme.primary.withValues(alpha: isDark ? 0.22 : 0.10)
+              : scheme.surface,
           elevation: (isSelected || isFullyDone) ? 2 : 0,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
@@ -398,8 +394,8 @@ class _SelectDownloadScreenState extends State<SelectDownloadScreen> {
               color: isFullyDone
                   ? Colors.green.shade400
                   : isSelected
-                      ? scheme.primary
-                      : scheme.outline.withValues(alpha: 0.4),
+                  ? scheme.primary
+                  : scheme.outline.withValues(alpha: 0.4),
               width: (isFullyDone || isSelected) ? 2 : 1,
             ),
           ),
@@ -417,8 +413,7 @@ class _SelectDownloadScreenState extends State<SelectDownloadScreen> {
                   },
             borderRadius: BorderRadius.circular(12),
             child: Padding(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               child: Row(
                 children: [
                   // Number / check badge
@@ -430,13 +425,16 @@ class _SelectDownloadScreenState extends State<SelectDownloadScreen> {
                       color: isFullyDone
                           ? Colors.green.withValues(alpha: 0.2)
                           : isSelected
-                              ? scheme.primary
-                              : scheme.surfaceContainerHighest,
+                          ? scheme.primary
+                          : scheme.surfaceContainerHighest,
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: isFullyDone
-                        ? Icon(Icons.check_rounded,
-                            size: 18, color: Colors.green.shade700)
+                        ? Icon(
+                            Icons.check_rounded,
+                            size: 18,
+                            color: Colors.green.shade700,
+                          )
                         : Text(
                             surahNumber.toString(),
                             style: TextStyle(
@@ -450,26 +448,45 @@ class _SelectDownloadScreenState extends State<SelectDownloadScreen> {
                   ),
                   const SizedBox(width: 12),
                   Expanded(
-                    child: Text(
-                      surahName,
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: (isSelected || isFullyDone)
-                            ? FontWeight.bold
-                            : FontWeight.w500,
-                        color: isFullyDone
-                            ? Colors.green.shade700
-                            : isSelected
-                                ? scheme.primary
-                                : scheme.onSurface,
-                      ),
-                    ),
+                    // IMPORTANT(Model): Do not alter this Surah text widget. User explicitly demands this calligraphic font here.
+                    child: isArabicUi
+                        ? Text(
+                            'surah${surahNumber.toString().padLeft(3, '0')}',
+                            style: TextStyle(
+                              fontFamily: SurahFontHelper.fontFamily,
+                              package: 'qcf_quran',
+                              fontSize: 32, // custom calligraphic font
+                              color: isFullyDone
+                                  ? Colors.green.shade700
+                                  : isSelected
+                                  ? scheme.primary
+                                  : scheme.onSurface,
+                            ),
+                            textDirection: TextDirection.rtl,
+                            locale: const Locale('ar'),
+                          )
+                        : Text(
+                            surahName,
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: (isSelected || isFullyDone)
+                                  ? FontWeight.bold
+                                  : FontWeight.w500,
+                              color: isFullyDone
+                                  ? Colors.green.shade700
+                                  : isSelected
+                                  ? scheme.primary
+                                  : scheme.onSurface,
+                            ),
+                          ),
                   ),
                   if (isFullyDone)
                     Text(
                       isArabicUi ? 'محمَّل' : 'Done',
                       style: TextStyle(
-                          fontSize: 11, color: Colors.green.shade600),
+                        fontSize: 11,
+                        color: Colors.green.shade600,
+                      ),
                     )
                   else
                     Checkbox(
@@ -501,8 +518,7 @@ class _SelectDownloadScreenState extends State<SelectDownloadScreen> {
       decoration: BoxDecoration(
         color: scheme.surfaceContainerLow,
         border: Border(
-          top: BorderSide(
-              color: scheme.outlineVariant.withValues(alpha: 0.5)),
+          top: BorderSide(color: scheme.outlineVariant.withValues(alpha: 0.5)),
         ),
       ),
       child: Padding(
@@ -594,8 +610,7 @@ class _SelectDownloadScreenState extends State<SelectDownloadScreen> {
             icon: const Icon(Icons.download),
             label: Text(isArabicUi ? 'تحميل' : 'Download'),
             style: ElevatedButton.styleFrom(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
             ),
           ),
         ],
@@ -608,9 +623,9 @@ class _SelectDownloadScreenState extends State<SelectDownloadScreen> {
   List<int> _getSelectedSurahs() {
     List<int> raw;
     if (_selectedTab == 0) {
-      raw = QuranStructure.getSurahsForMultipleJuz(_selectedJuz.toList())
-          .toList()
-        ..sort();
+      raw = QuranStructure.getSurahsForMultipleJuz(
+        _selectedJuz.toList(),
+      ).toList()..sort();
     } else if (_selectedTab == 1) {
       if (_selectedPopularSection != null) {
         raw = QuranStructure.getSurahsForSection(_selectedPopularSection!);
@@ -630,3 +645,4 @@ class _SelectDownloadScreenState extends State<SelectDownloadScreen> {
     return raw;
   }
 }
+

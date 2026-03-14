@@ -783,6 +783,21 @@ class AdhanNotificationService {
     await _playFullAdhanAudio(prayerArabicName: 'الأذان');
   }
 
+  /// Test adhan for a specific prayer. Uses the exact same function
+  /// as when the real prayer time arrives.
+  /// [prayer] can be: 'fajr', 'dhuhr', 'asr', 'maghrib', 'isha'
+  Future<void> testAdhanForPrayer(String prayer) async {
+    final arabicNames = {
+      'fajr': 'الفجر',
+      'dhuhr': 'الظهر',
+      'asr': 'العصر',
+      'maghrib': 'المغرب',
+      'isha': 'العشاء',
+    };
+    final arabicName = arabicNames[prayer] ?? prayer;
+    await _playFullAdhanAudio(prayerArabicName: arabicName);
+  }
+
   Future<void> scheduleTestIn(Duration delay) async {
     final whenLocal = DateTime.now().add(delay);
 

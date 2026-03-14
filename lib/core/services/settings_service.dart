@@ -47,6 +47,7 @@ class SettingsService {
   static const String _keyAdhanBannerShown        = 'adhan_banner_shown';
   /// One-time migration flag: forces adhan stream to 'alarm' for all existing users.
   static const String _keyAdhanAlarmMigrated      = 'adhan_alarm_stream_migrated_v1';
+  static const String _keyShowAdhanTestButtons    = 'show_adhan_test_buttons';
 
   // ── Salawat sound selection ────────────────────────────────────────────────
   static const String _keySalawatSound        = 'salawat_sound';
@@ -332,6 +333,10 @@ class SettingsService {
   // ── First-launch adhan info banner ──────────────────────────────────────────
   bool hasAdhanBannerShown() => _prefs.getBool(_keyAdhanBannerShown) ?? false;
   Future<bool> setAdhanBannerShown() => _prefs.setBool(_keyAdhanBannerShown, true);
+
+  // ── Show adhan test buttons (for testing individual prayers) ────────────────
+  bool getShowAdhanTestButtons() => _prefs.getBool(_keyShowAdhanTestButtons) ?? false;
+  Future<bool> setShowAdhanTestButtons(bool v) => _prefs.setBool(_keyShowAdhanTestButtons, v);
 
   // ─── Quran Display Edition ────────────────────────────────────────────────
   /// The API edition identifier used when fetching Quran text.

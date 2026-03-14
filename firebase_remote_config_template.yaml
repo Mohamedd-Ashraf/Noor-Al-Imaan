@@ -1,14 +1,14 @@
-# Firebase Remote Config - Default Parameters
+﻿# Firebase Remote Config - Default Parameters
 # Copy these to Firebase Console → Remote Config
 
 latest_version:
   Type: String
-  Value: "1.0.3"
+  Value: "1.0.11"
   Description: "Latest available version of the app"
 
 minimum_version:
   Type: String
-  Value: "1.0.3"
+  Value: "1.0.8"
   Description: "Minimum required version (users below this must update)"
 
 is_mandatory:
@@ -26,94 +26,47 @@ download_url:
       • No ABI-specific URL is set for the device's architecture
     Leave empty if you always use per-ABI URLs below.
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Per-ABI Download URLs (split-per-ABI Android builds)
-# ─────────────────────────────────────────────────────────────────────────────
-#
-# When you build with `flutter build apk --release --split-per-abi` you get
-# three separate APK files.  Set the correct direct-download URL for each one.
-# The app detects the device CPU architecture at runtime and downloads only the
-# matching APK — saving the user 20-40 MB of bandwidth.
-#
-# How the app resolves the URL (priority order):
-#   1. ABI-specific key (e.g. download_url_arm64_v8a) — if non-empty
-#   2. Generic download_url above — universal fallback
-#
-# ABI → Device type mapping:
-#   arm64_v8a   → Most modern Android smartphones (2015+)
-#   armeabi_v7a → Older / low-end devices, older Qualcomm chips
-#   x86_64      → Android emulators, some Chromebooks
-
 download_url_arm64_v8a:
   Type: String
   Value: ""
-  Description: |
-    Direct download URL for the arm64-v8a APK.
-    Example: https://example.com/releases/v1.0.9/app-arm64-v8a-release.apk
+  Description: "Direct download URL for the arm64-v8a APK."
 
 download_url_armeabi_v7a:
   Type: String
   Value: ""
-  Description: |
-    Direct download URL for the armeabi-v7a APK.
-    Example: https://example.com/releases/v1.0.9/app-armeabi-v7a-release.apk
+  Description: "Direct download URL for the armeabi-v7a APK."
 
 download_url_x86_64:
   Type: String
   Value: ""
-  Description: |
-    Direct download URL for the x86_64 APK (emulators / Chromebooks).
-    Example: https://example.com/releases/v1.0.9/app-x86_64-release.apk
+  Description: "Direct download URL for the x86_64 APK (emulators / Chromebooks)."
 
 changelog_ar:
   Type: String
   Value: |
-    التحديثات الجديدة:
-    • تحسينات في الأداء
-    • إصلاح مشاكل الصوت
-    • تحسين واجهة المستخدم
-    • إضافة خاصية العلامات المرجعية المحسنة
+    ✨ الجديد في هذا الإصدار (1.0.11):
+    • عرض دقيق واحتياطي لصفحات المصحف الشريف
+    • تحسين دقة أوقات الأذان وتحديد الموقع تلقائيًا
+    • معالجة محسّنة لصلاحيات التنبيهات لضمان وصولها
+    • تحسينات شاملة في الأداء واستقرار التطبيق
   Description: "Changelog in Arabic"
 
 changelog_en:
   Type: String
   Value: |
-    What's New:
-    • Performance improvements
-    • Audio playback fixes
-    • Enhanced user interface
-    • Improved bookmarks feature
+    ✨ What's New in 1.0.11:
+    • Accurate Mushaf page rendering
+    • Enhanced Adhan scheduling & location accuracy
+    • Better permission handling for continuous alerts
+    • Important performance and stability improvements
   Description: "Changelog in English"
 
 release_date:
   Type: String
-  Value: "2026-02-18T00:00:00.000Z"
+  Value: "2026-03-14T00:00:00.000Z"
   Description: "Release date in ISO 8601 format"
 
 enable_in_app_update:
   Type: Boolean
   Value: true
   Description: "Enable in-app updates for Android (uses Google Play In-App Updates API)"
-
----
-
-# Example Scenarios:
-
-# 1. Optional Update (اختياري)
-latest_version: "1.1.0"
-minimum_version: "1.0.0"
-is_mandatory: false
-# → Users can skip this update
-
-# 2. Mandatory Update (إلزامي)
-latest_version: "2.0.0"
-minimum_version: "2.0.0"
-is_mandatory: true
-# → All users must update
-
-# 3. Force old versions only (إجبار نسخ قديمة فقط)
-latest_version: "2.5.0"
-minimum_version: "2.0.0"
-is_mandatory: false
-# → Users below 2.0.0 must update
-# → Users on 2.0.0+ can skip
