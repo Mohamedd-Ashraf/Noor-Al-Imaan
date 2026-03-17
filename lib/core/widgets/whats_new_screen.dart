@@ -155,12 +155,12 @@ const Map<String, List<_WhatsNewEntry>> _changelog = {
       descEn: 'Long-press any verse to open the full Ibn Kathir tafsir — completely offline.',
       color: const Color(0xFF6A1B9A),
     ),
-    // 3 ── تلاوة الشيخ عبدالله كامل
+    // 3 ── علي عبد الله جابرتلاوة الشيخ كامل
     _WhatsNewEntry(
       icon: Icons.record_voice_over_rounded,
-      titleAr: 'تلاوة الشيخ عبدالله كامل',
+      titleAr: 'تلاوة الشيخ علي عبد الله جابر كامل',
       titleEn: 'Sheikh Abdullah Kamel Recitation',
-      descAr: 'استمع لتلاوة الشيخ عبدالله كامل وحمّل السور للاستماع بدون إنترنت.',
+      descAr: 'استمع لتلاوة الشيخ علي عبد الله جابر كامل وحمّل السور للاستماع بدون إنترنت.',
       descEn: 'Listen to Sheikh Abdullah Kamel and download surahs for offline playback.',
       color: const Color(0xFF0277BD),
     ),

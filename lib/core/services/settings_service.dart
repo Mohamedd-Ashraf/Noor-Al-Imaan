@@ -8,9 +8,9 @@ class SettingsService {
   static const String _keyShowTranslation = 'show_translation';
   static const String _keyAppLanguage = 'app_language';
   static const String _keyUseUthmaniScript = 'use_uthmani_script';
-  static const String _keyUseQcfFont        = 'use_qcf_font';
-  static const String _keyMushafMigratedV1  = 'mushaf_migrated_v1';
-  static const String _keyQcfForcedV2       = 'qcf_forced_v2';
+  static const String _keyUseQcfFont = 'use_qcf_font';
+  static const String _keyMushafMigratedV1 = 'mushaf_migrated_v1';
+  static const String _keyQcfForcedV2 = 'qcf_forced_v2';
   static const String _keyPageFlipRightToLeft = 'page_flip_right_to_left';
   static const String _keyOnboardingComplete = 'onboarding_complete';
   static const String _keyDiacriticsColorMode = 'diacritics_color_mode';
@@ -27,54 +27,58 @@ class SettingsService {
   static const String _keyPrayerCalculationMethod = 'prayer_calculation_method';
   static const String _keyPrayerAsrMethod = 'prayer_asr_method';
   static const String _keySelectedAdhanSound = 'selected_adhan_sound';
-  static const String _keyPrayerMethodAutoDetected = 'prayer_method_auto_detected';
+  static const String _keyPrayerMethodAutoDetected =
+      'prayer_method_auto_detected';
   static const String _keyAdhanVolume = 'adhan_volume';
 
   // ── New notification feature keys ────────────────────────────────────────
-  static const String _keyAdhanShortMode          = 'adhan_short_mode';
-  static const String _keyPrayerReminderEnabled   = 'prayer_reminder_enabled';
-  static const String _keyPrayerReminderMinutes   = 'prayer_reminder_minutes';
-  static const String _keyIqamaEnabled            = 'iqama_enabled';
-  static const String _keyIqamaMinutes            = 'iqama_minutes';
-  static const String _keySalawatEnabled          = 'salawat_enabled';
-  static const String _keySalawatMinutes          = 'salawat_minutes';
-  static const String _keySalawatSleepEnabled     = 'salawat_sleep_enabled';
-  static const String _keySalawatSleepStartH      = 'salawat_sleep_start_h';
-  static const String _keySalawatSleepEndH        = 'salawat_sleep_end_h';
+  static const String _keyAdhanShortMode = 'adhan_short_mode';
+  static const String _keyPrayerReminderEnabled = 'prayer_reminder_enabled';
+  static const String _keyPrayerReminderMinutes = 'prayer_reminder_minutes';
+  static const String _keyIqamaEnabled = 'iqama_enabled';
+  static const String _keyIqamaMinutes = 'iqama_minutes';
+  static const String _keySalawatEnabled = 'salawat_enabled';
+  static const String _keySalawatMinutes = 'salawat_minutes';
+  static const String _keySalawatSleepEnabled = 'salawat_sleep_enabled';
+  static const String _keySalawatSleepStartH = 'salawat_sleep_start_h';
+  static const String _keySalawatSleepEndH = 'salawat_sleep_end_h';
+
   /// 'ringtone' (default) or 'alarm' — controls which Android audio stream
   /// is used for adhan playback and which system volume is displayed.
-  static const String _keyAdhanAudioStream        = 'adhan_audio_stream';
-  static const String _keyAdhanBannerShown        = 'adhan_banner_shown';
+  static const String _keyAdhanAudioStream = 'adhan_audio_stream';
+  static const String _keyAdhanBannerShown = 'adhan_banner_shown';
+
   /// One-time migration flag: forces adhan stream to 'alarm' for all existing users.
-  static const String _keyAdhanAlarmMigrated      = 'adhan_alarm_stream_migrated_v1';
-  static const String _keyShowAdhanTestButtons    = 'show_adhan_test_buttons';
+  static const String _keyAdhanAlarmMigrated = 'adhan_alarm_stream_migrated_v1';
+  static const String _keyShowAdhanTestButtons = 'show_adhan_test_buttons';
 
   // ── Salawat sound selection ────────────────────────────────────────────────
-  static const String _keySalawatSound        = 'salawat_sound';
+  static const String _keySalawatSound = 'salawat_sound';
 
   // ── Reminder / notification volumes (0.0 – 1.0) ──────────────────────────
-  static const String _keySalawatVolume      = 'salawat_volume';
-  static const String _keyIqamaVolume        = 'iqama_volume';
-  static const String _keyApproachingVolume  = 'approaching_volume';
+  static const String _keySalawatVolume = 'salawat_volume';
+  static const String _keyIqamaVolume = 'iqama_volume';
+  static const String _keyApproachingVolume = 'approaching_volume';
 
   // ── Per-prayer adhan enable (dhuhr/asr/maghrib/isha — fajr uses _keyAdhanIncludeFajr) ─
-  static const String _keyAdhanEnableDhuhr    = 'adhan_enable_dhuhr';
-  static const String _keyAdhanEnableAsr      = 'adhan_enable_asr';
-  static const String _keyAdhanEnableMaghrib  = 'adhan_enable_maghrib';
-  static const String _keyAdhanEnableIsha     = 'adhan_enable_isha';
+  static const String _keyAdhanEnableDhuhr = 'adhan_enable_dhuhr';
+  static const String _keyAdhanEnableAsr = 'adhan_enable_asr';
+  static const String _keyAdhanEnableMaghrib = 'adhan_enable_maghrib';
+  static const String _keyAdhanEnableIsha = 'adhan_enable_isha';
 
   // ── Per-prayer iqama minutes ──────────────────────────────────────────────
-  static const String _keyIqamaMinutesFajr    = 'iqama_minutes_fajr';
-  static const String _keyIqamaMinutesDhuhr   = 'iqama_minutes_dhuhr';
-  static const String _keyIqamaMinutesAsr     = 'iqama_minutes_asr';
+  static const String _keyIqamaMinutesFajr = 'iqama_minutes_fajr';
+  static const String _keyIqamaMinutesDhuhr = 'iqama_minutes_dhuhr';
+  static const String _keyIqamaMinutesAsr = 'iqama_minutes_asr';
   static const String _keyIqamaMinutesMaghrib = 'iqama_minutes_maghrib';
-  static const String _keyIqamaMinutesIsha    = 'iqama_minutes_isha';
+  static const String _keyIqamaMinutesIsha = 'iqama_minutes_isha';
 
   static const String _keyQuranEdition = 'quran_edition';
   static const String _keyQuranFont = 'quran_font';
   static const String _keyFontSizeMigratedV18 = 'font_size_migrated_v18';
   static const String _keyScrollMode = 'scroll_mode';
   static const String _keyWordByWordAudio = 'word_by_word_audio';
+  static const String _keyGeminiApiKey = 'gemini_api_key';
 
   final SharedPreferences _prefs;
 
@@ -160,7 +164,8 @@ class SettingsService {
 
   // Mushaf view + QCF migration flag
   bool getMushafMigratedV1() => _prefs.getBool(_keyMushafMigratedV1) ?? false;
-  Future<bool> setMushafMigratedV1() => _prefs.setBool(_keyMushafMigratedV1, true);
+  Future<bool> setMushafMigratedV1() =>
+      _prefs.setBool(_keyMushafMigratedV1, true);
 
   // One-time QCF force-on migration (v2): ensures QCF is enabled for all users
   // after the update that ships the QCF renderer.  Runs once; thereafter the
@@ -332,11 +337,14 @@ class SettingsService {
 
   // ── First-launch adhan info banner ──────────────────────────────────────────
   bool hasAdhanBannerShown() => _prefs.getBool(_keyAdhanBannerShown) ?? false;
-  Future<bool> setAdhanBannerShown() => _prefs.setBool(_keyAdhanBannerShown, true);
+  Future<bool> setAdhanBannerShown() =>
+      _prefs.setBool(_keyAdhanBannerShown, true);
 
   // ── Show adhan test buttons (for testing individual prayers) ────────────────
-  bool getShowAdhanTestButtons() => _prefs.getBool(_keyShowAdhanTestButtons) ?? false;
-  Future<bool> setShowAdhanTestButtons(bool v) => _prefs.setBool(_keyShowAdhanTestButtons, v);
+  bool getShowAdhanTestButtons() =>
+      _prefs.getBool(_keyShowAdhanTestButtons) ?? false;
+  Future<bool> setShowAdhanTestButtons(bool v) =>
+      _prefs.setBool(_keyShowAdhanTestButtons, v);
 
   // ─── Quran Display Edition ────────────────────────────────────────────────
   /// The API edition identifier used when fetching Quran text.
@@ -363,7 +371,8 @@ class SettingsService {
 
   // ── Adhan short mode ───────────────────────────────────────────────────────
   bool getAdhanShortMode() => _prefs.getBool(_keyAdhanShortMode) ?? false;
-  Future<bool> setAdhanShortMode(bool v) => _prefs.setBool(_keyAdhanShortMode, v);
+  Future<bool> setAdhanShortMode(bool v) =>
+      _prefs.setBool(_keyAdhanShortMode, v);
 
   // ── Pre-prayer reminder ────────────────────────────────────────────────────
   bool getPrayerReminderEnabled() =>
@@ -383,17 +392,22 @@ class SettingsService {
 
   // ── Salawat reminder ──────────────────────────────────────────────────────
   bool getSalawatEnabled() => _prefs.getBool(_keySalawatEnabled) ?? false;
-  Future<bool> setSalawatEnabled(bool v) => _prefs.setBool(_keySalawatEnabled, v);
+  Future<bool> setSalawatEnabled(bool v) =>
+      _prefs.setBool(_keySalawatEnabled, v);
   int getSalawatMinutes() => _prefs.getInt(_keySalawatMinutes) ?? 30;
   Future<bool> setSalawatMinutes(int v) => _prefs.setInt(_keySalawatMinutes, v);
 
   // ── Salawat quiet hours (sleep) ───────────────────────────────────────────
-  bool getSalawatSleepEnabled() => _prefs.getBool(_keySalawatSleepEnabled) ?? false;
-  Future<bool> setSalawatSleepEnabled(bool v) => _prefs.setBool(_keySalawatSleepEnabled, v);
+  bool getSalawatSleepEnabled() =>
+      _prefs.getBool(_keySalawatSleepEnabled) ?? false;
+  Future<bool> setSalawatSleepEnabled(bool v) =>
+      _prefs.setBool(_keySalawatSleepEnabled, v);
   int getSalawatSleepStartH() => _prefs.getInt(_keySalawatSleepStartH) ?? 22;
-  Future<bool> setSalawatSleepStartH(int v) => _prefs.setInt(_keySalawatSleepStartH, v);
+  Future<bool> setSalawatSleepStartH(int v) =>
+      _prefs.setInt(_keySalawatSleepStartH, v);
   int getSalawatSleepEndH() => _prefs.getInt(_keySalawatSleepEndH) ?? 6;
-  Future<bool> setSalawatSleepEndH(int v) => _prefs.setInt(_keySalawatSleepEndH, v);
+  Future<bool> setSalawatSleepEndH(int v) =>
+      _prefs.setInt(_keySalawatSleepEndH, v);
 
   // ── Scroll mode (تصفح المصحف بالسحب من أسفل لأعلى) ──────────────────────
   bool getScrollMode() => _prefs.getBool(_keyScrollMode) ?? false;
@@ -401,47 +415,78 @@ class SettingsService {
 
   // ── Word-by-word audio (اضغط كلمة لتسمعها) ─────────────────────────────
   bool getWordByWordAudio() => _prefs.getBool(_keyWordByWordAudio) ?? false;
-  Future<bool> setWordByWordAudio(bool v) => _prefs.setBool(_keyWordByWordAudio, v);
+  Future<bool> setWordByWordAudio(bool v) =>
+      _prefs.setBool(_keyWordByWordAudio, v);
+
+  // ── Gemini API key (for tajweed recitation assistant) ────────────────────
+  Future<bool> setGeminiApiKey(String key) {
+    return _prefs.setString(_keyGeminiApiKey, key.trim());
+  }
+
+  String getGeminiApiKey() {
+    return _prefs.getString(_keyGeminiApiKey) ?? '';
+  }
+
+  Future<bool> clearGeminiApiKey() {
+    return _prefs.remove(_keyGeminiApiKey);
+  }
 
   // ── Salawat sound selection ────────────────────────────────────────────────
   String getSalawatSound() => _prefs.getString(_keySalawatSound) ?? 'salawat_1';
-  Future<bool> setSalawatSound(String v) => _prefs.setString(_keySalawatSound, v);
+  Future<bool> setSalawatSound(String v) =>
+      _prefs.setString(_keySalawatSound, v);
 
   // ── Reminder / notification volumes ──────────────────────────────────────
-  double getSalawatVolume()     => _prefs.getDouble(_keySalawatVolume)     ?? 0.8;
-  double getIqamaVolume()       => _prefs.getDouble(_keyIqamaVolume)       ?? 0.8;
-  double getApproachingVolume() => _prefs.getDouble(_keyApproachingVolume) ?? 0.8;
-  Future<bool> setSalawatVolume(double v)     => _prefs.setDouble(_keySalawatVolume, v);
-  Future<bool> setIqamaVolume(double v)       => _prefs.setDouble(_keyIqamaVolume, v);
-  Future<bool> setApproachingVolume(double v) => _prefs.setDouble(_keyApproachingVolume, v);
+  double getSalawatVolume() => _prefs.getDouble(_keySalawatVolume) ?? 0.8;
+  double getIqamaVolume() => _prefs.getDouble(_keyIqamaVolume) ?? 0.8;
+  double getApproachingVolume() =>
+      _prefs.getDouble(_keyApproachingVolume) ?? 0.8;
+  Future<bool> setSalawatVolume(double v) =>
+      _prefs.setDouble(_keySalawatVolume, v);
+  Future<bool> setIqamaVolume(double v) => _prefs.setDouble(_keyIqamaVolume, v);
+  Future<bool> setApproachingVolume(double v) =>
+      _prefs.setDouble(_keyApproachingVolume, v);
 
   // ── Per-prayer adhan enabled ──────────────────────────────────────────────
-  bool getAdhanEnableDhuhr()   => _prefs.getBool(_keyAdhanEnableDhuhr)   ?? true;
-  bool getAdhanEnableAsr()     => _prefs.getBool(_keyAdhanEnableAsr)     ?? true;
-  bool getAdhanEnableMaghrib() => _prefs.getBool(_keyAdhanEnableMaghrib) ?? true;
-  bool getAdhanEnableIsha()    => _prefs.getBool(_keyAdhanEnableIsha)    ?? true;
-  Future<bool> setAdhanEnableDhuhr(bool v)   => _prefs.setBool(_keyAdhanEnableDhuhr, v);
-  Future<bool> setAdhanEnableAsr(bool v)     => _prefs.setBool(_keyAdhanEnableAsr, v);
-  Future<bool> setAdhanEnableMaghrib(bool v) => _prefs.setBool(_keyAdhanEnableMaghrib, v);
-  Future<bool> setAdhanEnableIsha(bool v)    => _prefs.setBool(_keyAdhanEnableIsha, v);
+  bool getAdhanEnableDhuhr() => _prefs.getBool(_keyAdhanEnableDhuhr) ?? true;
+  bool getAdhanEnableAsr() => _prefs.getBool(_keyAdhanEnableAsr) ?? true;
+  bool getAdhanEnableMaghrib() =>
+      _prefs.getBool(_keyAdhanEnableMaghrib) ?? true;
+  bool getAdhanEnableIsha() => _prefs.getBool(_keyAdhanEnableIsha) ?? true;
+  Future<bool> setAdhanEnableDhuhr(bool v) =>
+      _prefs.setBool(_keyAdhanEnableDhuhr, v);
+  Future<bool> setAdhanEnableAsr(bool v) =>
+      _prefs.setBool(_keyAdhanEnableAsr, v);
+  Future<bool> setAdhanEnableMaghrib(bool v) =>
+      _prefs.setBool(_keyAdhanEnableMaghrib, v);
+  Future<bool> setAdhanEnableIsha(bool v) =>
+      _prefs.setBool(_keyAdhanEnableIsha, v);
 
   // ── Per-prayer iqama minutes (different defaults per prayer) ──────────────
-  int getIqamaMinutesFajr()    => _prefs.getInt(_keyIqamaMinutesFajr)    ?? 20;
-  int getIqamaMinutesDhuhr()   => _prefs.getInt(_keyIqamaMinutesDhuhr)   ?? 15;
-  int getIqamaMinutesAsr()     => _prefs.getInt(_keyIqamaMinutesAsr)     ?? 15;
+  int getIqamaMinutesFajr() => _prefs.getInt(_keyIqamaMinutesFajr) ?? 20;
+  int getIqamaMinutesDhuhr() => _prefs.getInt(_keyIqamaMinutesDhuhr) ?? 15;
+  int getIqamaMinutesAsr() => _prefs.getInt(_keyIqamaMinutesAsr) ?? 15;
   int getIqamaMinutesMaghrib() => _prefs.getInt(_keyIqamaMinutesMaghrib) ?? 10;
-  int getIqamaMinutesIsha()    => _prefs.getInt(_keyIqamaMinutesIsha)    ?? 15;
-  Future<bool> setIqamaMinutesFajr(int v)    => _prefs.setInt(_keyIqamaMinutesFajr, v);
-  Future<bool> setIqamaMinutesDhuhr(int v)   => _prefs.setInt(_keyIqamaMinutesDhuhr, v);
-  Future<bool> setIqamaMinutesAsr(int v)     => _prefs.setInt(_keyIqamaMinutesAsr, v);
-  Future<bool> setIqamaMinutesMaghrib(int v) => _prefs.setInt(_keyIqamaMinutesMaghrib, v);
-  Future<bool> setIqamaMinutesIsha(int v)    => _prefs.setInt(_keyIqamaMinutesIsha, v);
+  int getIqamaMinutesIsha() => _prefs.getInt(_keyIqamaMinutesIsha) ?? 15;
+  Future<bool> setIqamaMinutesFajr(int v) =>
+      _prefs.setInt(_keyIqamaMinutesFajr, v);
+  Future<bool> setIqamaMinutesDhuhr(int v) =>
+      _prefs.setInt(_keyIqamaMinutesDhuhr, v);
+  Future<bool> setIqamaMinutesAsr(int v) =>
+      _prefs.setInt(_keyIqamaMinutesAsr, v);
+  Future<bool> setIqamaMinutesMaghrib(int v) =>
+      _prefs.setInt(_keyIqamaMinutesMaghrib, v);
+  Future<bool> setIqamaMinutesIsha(int v) =>
+      _prefs.setInt(_keyIqamaMinutesIsha, v);
 
   // ── Native alarm ID caches (Android only — for cancellation) ─────────────
   String? getApproachingAlarmIds() => _prefs.getString('approaching_alarm_ids');
-  Future<bool> setApproachingAlarmIds(String json) => _prefs.setString('approaching_alarm_ids', json);
+  Future<bool> setApproachingAlarmIds(String json) =>
+      _prefs.setString('approaching_alarm_ids', json);
   String? getIqamaAlarmIds() => _prefs.getString('iqama_alarm_ids');
-  Future<bool> setIqamaAlarmIds(String json) => _prefs.setString('iqama_alarm_ids', json);
+  Future<bool> setIqamaAlarmIds(String json) =>
+      _prefs.setString('iqama_alarm_ids', json);
   String? getSalawatAlarmIds() => _prefs.getString('salawat_alarm_ids');
-  Future<bool> setSalawatAlarmIds(String json) => _prefs.setString('salawat_alarm_ids', json);
+  Future<bool> setSalawatAlarmIds(String json) =>
+      _prefs.setString('salawat_alarm_ids', json);
 }
