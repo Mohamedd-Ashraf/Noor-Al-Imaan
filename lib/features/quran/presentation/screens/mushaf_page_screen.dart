@@ -13,11 +13,14 @@ import '../../../../core/di/injection_container.dart' as di;
 import '../../../../core/services/audio_edition_service.dart';
 import '../../../../core/services/bookmark_service.dart';
 import '../../../../core/services/offline_audio_service.dart';
+import '../../../../core/services/tutorial_service.dart';
 import '../../../../core/settings/app_settings_cubit.dart';
 import '../../../../core/utils/arabic_text_style_helper.dart';
+import '../../../../core/utils/tajweed_parser.dart';
 import '../bloc/tafsir/tafsir_cubit.dart';
 import 'tafsir_screen.dart';
 import 'package:qcf_quran/qcf_quran.dart';
+import '../tutorials/mushaf_tutorial.dart';
 import '../widgets/ayah_share_card.dart';
 import '../widgets/mushaf_page_view.dart'
     show IslamicPatternPainter, BorderOrnamentPainter;
@@ -292,6 +295,54 @@ Future<List<_Verse>> _fetchPage(int page) async {
   return verses;
 }
 
+// ─── Tajweed page data (fetched on-demand from alquran.cloud) ────────────────
+// Keyed by page number. Each entry maps "surah:ayah" → tajweed-marked text.
+final Map<int, Map<String, String>> _tajweedPageCache = {};
+final Map<int, bool> _tajweedPageLoading = {};
+
+/// Fetches tajweed-annotated text for all ayahs on [page] from alquran.cloud.
+/// Returns a map of "surah:ayah" → tajweed text, or `null` on failure.
+Future<Map<String, String>?> _fetchTajweedPage(int page) async {
+  // Return from cache if available.
+  if (_tajweedPageCache.containsKey(page)) return _tajweedPageCache[page];
+  // Prevent duplicate requests
+  if (_tajweedPageLoading[page] == true) return null;
+  _tajweedPageLoading[page] = true;
+
+  try {
+    final uri = Uri.parse(
+      'https://api.alquran.cloud/v1/page/$page/quran-tajweed',
+    );
+    final res = await http.get(uri, headers: const {'Accept': 'application/json'});
+    if (res.statusCode != 200) return null;
+
+    final json = jsonDecode(res.body) as Map<String, dynamic>;
+    final data = json['data'] as Map<String, dynamic>?;
+    if (data == null) return null;
+
+    final ayahs = data['ayahs'] as List?;
+    if (ayahs == null) return null;
+
+    final result = <String, String>{};
+    for (final a in ayahs) {
+      final surahInfo = a['surah'] as Map<String, dynamic>?;
+      final surahNum = surahInfo?['number'] as int? ?? 0;
+      final ayahNum = a['numberInSurah'] as int? ?? 0;
+      final text = a['text'] as String? ?? '';
+      if (surahNum > 0 && ayahNum > 0 && text.isNotEmpty) {
+        result['$surahNum:$ayahNum'] = text;
+      }
+    }
+
+    _tajweedPageCache[page] = result;
+    return result;
+  } catch (_) {
+    return null;
+  } finally {
+    _tajweedPageLoading.remove(page);
+  }
+}
+
 // ─── Main screen ──────────────────────────────────────────────────────────────
 class MushafPageScreen extends StatefulWidget {
   final int initialPage;
@@ -317,10 +368,16 @@ class MushafPageScreen extends StatefulWidget {
 class _MushafPageScreenState extends State<MushafPageScreen> {
   late final PageController _pageCtrl;
   int _currentPage = 1;
+  bool _tutorialShown = false;
+  bool _tajweedMode = false;
 
   final Map<int, List<_Verse>> _cache = {};
   final Map<int, bool> _loading = {};
   final Map<int, Object?> _errors = {};
+
+  // Tajweed text overlays keyed by page → { "surah:ayah": tajweedText }
+  final Map<int, Map<String, String>> _tajweedCache = {};
+  final Map<int, bool> _tajweedLoading = {};
 
   @override
   void initState() {
@@ -329,12 +386,31 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
     _pageCtrl = PageController(initialPage: widget.initialPage - 1);
     _load(_currentPage);
     if (_currentPage < 604) _load(_currentPage + 1);
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _showTutorialIfNeeded();
+    });
   }
 
   @override
   void dispose() {
     _pageCtrl.dispose();
     super.dispose();
+  }
+
+  void _showTutorialIfNeeded() {
+    if (_tutorialShown || !mounted) return;
+    final svc = di.sl<TutorialService>();
+    if (svc.isTutorialComplete(TutorialService.mushafScreen)) return;
+    _tutorialShown = true;
+    final settings = context.read<AppSettingsCubit>().state;
+    final isArabic = settings.appLanguageCode.toLowerCase().startsWith('ar');
+    MushafTutorial.show(
+      context: context,
+      tutorialService: svc,
+      isArabic: isArabic,
+      isDark: settings.darkMode,
+    );
   }
 
   Future<void> _load(int page) async {
@@ -350,10 +426,39 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
     }
   }
 
+  /// Fetches tajweed overlay for a given page (if not cached yet).
+  Future<void> _loadTajweed(int page) async {
+    if (_tajweedCache.containsKey(page) || _tajweedLoading[page] == true) return;
+    if (mounted) setState(() => _tajweedLoading[page] = true);
+    try {
+      final data = await _fetchTajweedPage(page);
+      if (data != null && mounted) {
+        setState(() => _tajweedCache[page] = data);
+      }
+    } catch (_) {
+      // Silently fail — we'll show plain text as fallback
+    } finally {
+      if (mounted) setState(() => _tajweedLoading.remove(page));
+    }
+  }
+
+  /// Toggles tajweed colouring on/off. Triggers background fetch if needed.
+  void _toggleTajweed() {
+    setState(() => _tajweedMode = !_tajweedMode);
+    if (_tajweedMode) {
+      _loadTajweed(_currentPage);
+      if (_currentPage < 604) _loadTajweed(_currentPage + 1);
+    }
+  }
+
   void _onPageChanged(int idx) {
     setState(() => _currentPage = idx + 1);
     _load(_currentPage);
     if (_currentPage < 604) _load(_currentPage + 1);
+    if (_tajweedMode) {
+      _loadTajweed(_currentPage);
+      if (_currentPage < 604) _loadTajweed(_currentPage + 1);
+    }
   }
 
   @override
@@ -396,6 +501,7 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
                         isLoading: _loading[page] == true,
                         error: _errors[page],
                         onRetry: () => _load(page),
+                        isInitialPage: page == widget.initialPage,
                         focusSurahNumber: page == widget.initialPage
                             ? widget.focusSurahNumber
                             : null,
@@ -403,6 +509,10 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
                             ? widget.focusAyahNumber
                             : null,
                         playerCollapsedNotifier: widget.playerCollapsedNotifier,
+                        tajweedMode: _tajweedMode,
+                        tajweedTexts: _tajweedCache[page],
+                        tajweedLoading: _tajweedLoading[page] == true,
+                        onToggleTajweed: _toggleTajweed,
                       );
                     },
                   ),
@@ -423,9 +533,14 @@ class _MushafPage extends StatelessWidget {
   final bool isLoading;
   final Object? error;
   final VoidCallback onRetry;
+  final bool isInitialPage;
   final int? focusSurahNumber;
   final int? focusAyahNumber;
   final ValueNotifier<bool>? playerCollapsedNotifier;
+  final bool tajweedMode;
+  final Map<String, String>? tajweedTexts;
+  final bool tajweedLoading;
+  final VoidCallback onToggleTajweed;
 
   const _MushafPage({
     required this.page,
@@ -433,9 +548,14 @@ class _MushafPage extends StatelessWidget {
     required this.isLoading,
     required this.error,
     required this.onRetry,
+    this.isInitialPage = false,
     this.focusSurahNumber,
     this.focusAyahNumber,
     this.playerCollapsedNotifier,
+    this.tajweedMode = false,
+    this.tajweedTexts,
+    this.tajweedLoading = false,
+    required this.onToggleTajweed,
   });
 
   @override
@@ -512,8 +632,16 @@ class _MushafPage extends StatelessWidget {
 
     return Column(
       children: [
-        _MushafTopBar(page: page, verses: visibleVerses, isDark: isDark),
+        _MushafTopBar(
+          page: page,
+          verses: visibleVerses,
+          isDark: isDark,
+          attachKeys: isInitialPage,
+          tajweedMode: tajweedMode,
+          onToggleTajweed: onToggleTajweed,
+        ),
         Expanded(
+          key: isInitialPage ? MushafTutorialKeys.quranPage : null,
           child: BlocBuilder<AyahAudioCubit, AyahAudioState>(
             builder: (ctx, audioState) {
               final playerVisible = audioState.status != AyahAudioStatus.idle;
@@ -527,6 +655,9 @@ class _MushafPage extends StatelessWidget {
                   verses: visibleVerses,
                   focusSurahNumber: focusSurahNumber,
                   focusAyahNumber: focusAyahNumber,
+                  tajweedMode: tajweedMode,
+                  tajweedTexts: tajweedTexts,
+                  tajweedLoading: tajweedLoading,
                 ),
               );
               if (notifier != null) {
@@ -541,7 +672,11 @@ class _MushafPage extends StatelessWidget {
             },
           ),
         ),
-        _MushafFooter(page: page, isDark: isDark),
+        _MushafFooter(
+          key: isInitialPage ? MushafTutorialKeys.pageFooter : null,
+          page: page,
+          isDark: isDark,
+        ),
       ],
     );
   }
@@ -553,11 +688,17 @@ class _MushafTopBar extends StatelessWidget {
   final int page;
   final List<_Verse> verses;
   final bool isDark;
+  final bool attachKeys;
+  final bool tajweedMode;
+  final VoidCallback onToggleTajweed;
 
   const _MushafTopBar({
     required this.page,
     required this.verses,
     required this.isDark,
+    this.attachKeys = false,
+    this.tajweedMode = false,
+    required this.onToggleTajweed,
   });
 
   static const _kJuzNames = [
@@ -621,6 +762,7 @@ class _MushafTopBar extends StatelessWidget {
     );
 
     return Container(
+      key: attachKeys ? MushafTutorialKeys.topBar : null,
       height: 36,
       padding: const EdgeInsets.symmetric(horizontal: 4),
       decoration: BoxDecoration(
@@ -629,8 +771,16 @@ class _MushafTopBar extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          _TopBarPlayButton(verses: verses),
+          _TopBarPlayButton(
+            verses: verses,
+            tutorialKey: attachKeys ? MushafTutorialKeys.playButton : null,
+          ),
           _TopBarRecitationSettingsButton(isDark: isDark),
+          _TajweedToggleButton(
+            isActive: tajweedMode,
+            isDark: isDark,
+            onToggle: onToggleTajweed,
+          ),
           Text(
             'الجزء $_juzName',
             style: labelStyle,
@@ -649,7 +799,10 @@ class _MushafTopBar extends StatelessWidget {
             style: labelStyle,
             textDirection: TextDirection.rtl,
           ),
-          _TopBarBookmarkButton(page: page),
+          _TopBarBookmarkButton(
+            page: page,
+            tutorialKey: attachKeys ? MushafTutorialKeys.bookmarkButton : null,
+          ),
         ],
       ),
     );
@@ -660,7 +813,8 @@ class _MushafTopBar extends StatelessWidget {
 
 class _TopBarPlayButton extends StatelessWidget {
   final List<_Verse> verses;
-  const _TopBarPlayButton({required this.verses});
+  final Key? tutorialKey;
+  const _TopBarPlayButton({required this.verses, this.tutorialKey});
 
   @override
   Widget build(BuildContext context) {
@@ -685,6 +839,7 @@ class _TopBarPlayButton extends StatelessWidget {
             isPageActive && audioState.status == AyahAudioStatus.paused;
 
         return IconButton(
+          key: tutorialKey,
           onPressed: () {
             final cubit = context.read<AyahAudioCubit>();
             if (isPagePlaying) {
@@ -717,9 +872,187 @@ class _TopBarPlayButton extends StatelessWidget {
 
 // ─── Bookmark button for the Mushaf top bar ───────────────────────────────────
 
+// ─── Tajweed toggle button ────────────────────────────────────────────────────
+
+class _TajweedToggleButton extends StatelessWidget {
+  final bool isActive;
+  final bool isDark;
+  final VoidCallback onToggle;
+
+  const _TajweedToggleButton({
+    required this.isActive,
+    required this.isDark,
+    required this.onToggle,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final activeColor = isDark
+        ? const Color(0xFF69F0AE)
+        : const Color(0xFF169200);
+    final inactiveColor = isDark
+        ? Colors.white.withValues(alpha: 0.45)
+        : AppColors.primary.withValues(alpha: 0.45);
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        // Toggle button
+        GestureDetector(
+          onTap: () {
+            HapticFeedback.lightImpact();
+            onToggle();
+          },
+          onLongPress: () {
+            HapticFeedback.mediumImpact();
+            _showTajweedLegend(context, isDark);
+          },
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 250),
+            curve: Curves.easeInOut,
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+            decoration: BoxDecoration(
+              color: isActive
+                  ? activeColor.withValues(alpha: 0.15)
+                  : Colors.transparent,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(
+                color: isActive ? activeColor : Colors.transparent,
+                width: 1,
+              ),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.palette_rounded,
+                  size: 15,
+                  color: isActive ? activeColor : inactiveColor,
+                ),
+                const SizedBox(width: 2),
+                Text(
+                  'تجويد',
+                  style: GoogleFonts.amiriQuran(
+                    fontSize: 9,
+                    fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
+                    color: isActive ? activeColor : inactiveColor,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ─── Tajweed legend bottom sheet ──────────────────────────────────────────────
+
+void _showTajweedLegend(BuildContext context, bool isDark) {
+  final colorMap = isDark ? kTajweedColorsDark : kTajweedColorsLight;
+  final bg = isDark ? const Color(0xFF1E1E1E) : Colors.white;
+  final textColor = isDark ? Colors.white : const Color(0xFF1A1A1A);
+  final dividerColor = isDark
+      ? Colors.white.withValues(alpha: 0.12)
+      : Colors.black.withValues(alpha: 0.08);
+
+  showModalBottomSheet<void>(
+    context: context,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+    ),
+    backgroundColor: bg,
+    builder: (ctx) {
+      return SafeArea(
+        child: Directionality(
+          textDirection: TextDirection.rtl,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Drag handle
+                Container(
+                  width: 36,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: 12),
+                  decoration: BoxDecoration(
+                    color: dividerColor,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                // Title
+                Text(
+                  'دليل ألوان التجويد',
+                  style: GoogleFonts.amiriQuran(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    color: textColor,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'اضغط مطولاً على زر التجويد لعرض هذا الدليل',
+                  style: GoogleFonts.amiriQuran(
+                    fontSize: 10,
+                    color: textColor.withValues(alpha: 0.5),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Divider(color: dividerColor, height: 1),
+                const SizedBox(height: 8),
+                Flexible(
+                  child: SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: kLegendRules.map((rule) {
+                        final color = colorMap[rule]!;
+                        final name = kTajweedRuleNamesAr[rule] ?? '';
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 6),
+                          child: Row(
+                            children: [
+                              Container(
+                                width: 20,
+                                height: 20,
+                                decoration: BoxDecoration(
+                                  color: color,
+                                  borderRadius: BorderRadius.circular(5),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Text(
+                                  name,
+                                  style: GoogleFonts.amiriQuran(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w600,
+                                    color: color,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+              ],
+            ),
+          ),
+        ),
+      );
+    },
+  );
+}
+
 class _TopBarBookmarkButton extends StatefulWidget {
   final int page;
-  const _TopBarBookmarkButton({required this.page});
+  final Key? tutorialKey;
+  const _TopBarBookmarkButton({required this.page, this.tutorialKey});
 
   @override
   State<_TopBarBookmarkButton> createState() => _TopBarBookmarkButtonState();
@@ -764,6 +1097,7 @@ class _TopBarBookmarkButtonState extends State<_TopBarBookmarkButton> {
         }
         if (mounted) setState(() {});
       },
+      key: widget.tutorialKey,
       padding: EdgeInsets.zero,
       constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
       iconSize: 20,
@@ -890,14 +1224,14 @@ class _RecitationSettingsSheet extends StatelessWidget {
                             children: [
                               Text('تلاوة كلمة بكلمة', style: labelStyle),
                               Text(
-                                'تتطلب تفعيل رسم المصحف الشريف QCF',
+                                'يتطلب تفعيل عرض المصحف الشريف',
                                 style: noteStyle,
                               ),
                             ],
                           ),
                         ),
                         Switch(
-                          value: settings.wordByWordAudio,
+                          value: false,
                           onChanged: null,
                           activeColor: AppColors.secondary,
                           inactiveThumbColor: isDark
@@ -1208,7 +1542,7 @@ class _MushafReciterPickerSheetState
 class _MushafFooter extends StatelessWidget {
   final int page;
   final bool isDark;
-  const _MushafFooter({required this.page, required this.isDark});
+  const _MushafFooter({super.key, required this.page, required this.isDark});
 
   @override
   Widget build(BuildContext context) {
@@ -1263,11 +1597,17 @@ class _PageText extends StatefulWidget {
   final List<_Verse> verses;
   final int? focusSurahNumber;
   final int? focusAyahNumber;
+  final bool tajweedMode;
+  final Map<String, String>? tajweedTexts;
+  final bool tajweedLoading;
 
   const _PageText({
     required this.verses,
     this.focusSurahNumber,
     this.focusAyahNumber,
+    this.tajweedMode = false,
+    this.tajweedTexts,
+    this.tajweedLoading = false,
   });
 
   @override
@@ -1409,6 +1749,40 @@ class _PageTextState extends State<_PageText> {
             }
 
             final children = <Widget>[];
+
+            // Show a subtle tajweed loading indicator when data is being fetched.
+            if (widget.tajweedMode && widget.tajweedLoading) {
+              children.add(
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 4),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      SizedBox(
+                        width: 12, height: 12,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 1.5,
+                          color: isDark
+                              ? const Color(0xFF69F0AE)
+                              : const Color(0xFF169200),
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        'جارٍ تحميل ألوان التجويد…',
+                        style: GoogleFonts.amiriQuran(
+                          fontSize: 10,
+                          color: isDark
+                              ? const Color(0xFF69F0AE).withValues(alpha: 0.7)
+                              : const Color(0xFF169200).withValues(alpha: 0.7),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }
+
             for (final section in sections) {
               // Show decorative surah header whenever ayah 1 appears.
               if (section.entries.isNotEmpty &&
@@ -1464,19 +1838,48 @@ class _PageTextState extends State<_PageText> {
                     ? _stripBasmalaPrefix(v.text)
                     : v.text;
 
-                spans.add(
-                  TextSpan(
-                    text: '$displayText ',
-                    style: baseStyle.copyWith(
-                      backgroundColor: isActive
-                          ? highlightColor
-                          : isBookmarkFocus
-                          ? const Color(0xFFFFD700).withValues(alpha: 0.30)
-                          : null,
+                // Determine if tajweed coloured rendering applies to this verse.
+                String? tajweedRaw;
+                if (widget.tajweedMode && widget.tajweedTexts != null) {
+                  tajweedRaw = widget.tajweedTexts!['${v.surah}:${v.ayah}'];
+                }
+                final bool useTajweed = tajweedRaw != null &&
+                    tajweedRaw.isNotEmpty &&
+                    hasTajweedMarkers(tajweedRaw);
+
+                final bgColor = isActive
+                    ? highlightColor
+                    : isBookmarkFocus
+                    ? const Color(0xFFFFD700).withValues(alpha: 0.30)
+                    : null;
+
+                if (useTajweed) {
+                  // Tajweed mode: render each segment with its rule colour.
+                  final rawText = tajweedRaw;
+                  final tajweedDisplay = (hasBasmalaHeader && v.ayah == 1)
+                      ? _stripBasmalaPrefix(rawText)
+                      : rawText;
+                  final tajweedSpans = buildTajweedSpans(
+                    text: '$tajweedDisplay ',
+                    baseStyle: baseStyle.copyWith(backgroundColor: bgColor),
+                    isDark: isDark,
+                  );
+                  spans.add(
+                    TextSpan(
+                      children: tajweedSpans,
+                      recognizer: tapRec,
                     ),
-                    recognizer: tapRec,
-                  ),
-                );
+                  );
+                } else {
+                  // Normal rendering (or tajweed data not yet loaded).
+                  spans.add(
+                    TextSpan(
+                      text: '$displayText ',
+                      style: baseStyle.copyWith(backgroundColor: bgColor),
+                      recognizer: tapRec,
+                    ),
+                  );
+                }
 
                 // Inline ayah marker — tap to play, long-press for options.
                 spans.add(

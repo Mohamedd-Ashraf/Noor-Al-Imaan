@@ -6,8 +6,13 @@ import 'package:internet_connection_checker/internet_connection_checker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:firebase_remote_config/firebase_remote_config.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
+
+import '../../features/auth/data/auth_service.dart';
+import '../../features/auth/data/cloud_sync_service.dart';
+import '../../features/auth/presentation/cubit/auth_cubit.dart';
 
 import '../../features/quran/data/datasources/quran_remote_data_source.dart';
 import '../../features/quran/data/datasources/quran_local_data_source.dart';
@@ -42,12 +47,17 @@ import '../services/prayer_times_cache_service.dart';
 import '../services/app_update_service_firebase.dart';
 import '../services/whats_new_service.dart';
 import '../services/feedback_service.dart';
+import '../services/tutorial_service.dart';
 import '../audio/download_manager_cubit.dart';
 import '../../features/wird/data/wird_service.dart';
 import '../../features/wird/services/wird_notification_service.dart';
 import '../../features/wird/presentation/cubit/wird_cubit.dart';
 import '../../features/adhkar/data/adhkar_progress_service.dart';
 import '../../features/adhkar/presentation/cubit/adhkar_progress_cubit.dart';
+import '../../features/hadith/data/datasources/hadith_database.dart';
+import '../../features/hadith/data/datasources/hadith_local_datasource.dart';
+import '../../features/hadith/data/repositories/hadith_repository.dart';
+import '../../features/hadith/presentation/cubit/hadith_cubit.dart';
 
 final sl = GetIt.instance;
 
@@ -93,30 +103,16 @@ Future<void> init() async {
   //! Features - Quran
   // Bloc
   sl.registerFactory(
-    () => SurahBloc(
-      getAllSurahs: sl(),
-      getSurah: sl(),
-      getInstantSurah: sl(),
-    ),
+    () => SurahBloc(getAllSurahs: sl(), getSurah: sl(), getInstantSurah: sl()),
   );
 
-  sl.registerFactory(
-    () => AyahBloc(
-      getAyah: sl(),
-    ),
-  );
+  sl.registerFactory(() => AyahBloc(getAyah: sl()));
 
-  sl.registerFactory(
-    () => AyahAudioCubit(sl(), sl()),
-  );
+  sl.registerFactory(() => AyahAudioCubit(sl(), sl()));
 
-  sl.registerFactory(
-    () => TafsirCubit(sl(), sl(), sl()),
-  );
+  sl.registerFactory(() => TafsirCubit(sl(), sl(), sl()));
 
-  sl.registerFactory(
-    () => TafsirDownloadCubit(sl(), sl(), sl(), sl()),
-  );
+  sl.registerFactory(() => TafsirDownloadCubit(sl(), sl(), sl(), sl()));
 
   // Use cases
   sl.registerLazySingleton(() => GetAllSurahs(sl()));
@@ -148,9 +144,7 @@ Future<void> init() async {
     () => QuranBundledDataSourceImpl(),
   );
 
-  sl.registerLazySingleton(
-    () => IbnKathirRemoteDataSource(client: sl()),
-  );
+  sl.registerLazySingleton(() => IbnKathirRemoteDataSource(client: sl()));
 
   sl.registerLazySingleton<QuranLocalTafsirDataSource>(
     () => QuranLocalTafsirDataSourceImpl(),
@@ -172,7 +166,9 @@ Future<void> init() async {
   sl.registerLazySingleton(() => const LocationService());
   sl.registerLazySingleton(() => FlutterLocalNotificationsPlugin());
   sl.registerLazySingleton(() => PrayerTimesCacheService(sl()));
-  sl.registerLazySingleton(() => AdhanNotificationService(sl(), sl(), sl(), sl()));
+  sl.registerLazySingleton(
+    () => AdhanNotificationService(sl(), sl(), sl(), sl()),
+  );
   sl.registerLazySingleton(() => BookmarkService(sl()));
   sl.registerLazySingleton(() => OfflineAudioService(sl(), sl()));
   sl.registerLazySingleton(() => AyahAudioService(sl(), sl(), sl()));
@@ -185,9 +181,7 @@ Future<void> init() async {
   sl.registerLazySingleton(
     () => TafsirAutoDownloadService(sl(), sl(), sl(), sl(), sl()),
   );
-  sl.registerLazySingleton(
-    () => AudioDownloadNotificationService(sl(), sl()),
-  );
+  sl.registerLazySingleton(() => AudioDownloadNotificationService(sl(), sl()));
   sl.registerFactory(
     () => DownloadManagerCubit(
       audioService: sl(),
@@ -196,14 +190,33 @@ Future<void> init() async {
       editionService: sl(),
     ),
   );
-  
+
   sl.registerLazySingleton(() => WhatsNewService(sl()));
   sl.registerLazySingleton(() => FeedbackService(sl()));
+  sl.registerLazySingleton(() => TutorialService(sl()));
   sl.registerLazySingleton(() => AdhkarProgressService(sl()));
   sl.registerFactory(() => AdhkarProgressCubit(sl()));
 
+  //! Features - Hadith
+  sl.registerLazySingleton(() => HadithDatabase());
+  sl.registerLazySingleton(() => HadithLocalDataSource(sl()));
+  sl.registerLazySingleton(() => HadithRepository(sl()));
+  sl.registerFactory(() => HadithCubit(sl(), sl()));
+
   // Firebase-based update service
   sl.registerLazySingleton(() => AppUpdateServiceFirebase(sl(), sl()));
+
+  //! Auth
+  sl.registerLazySingleton(() => AuthService());
+  sl.registerLazySingleton(
+    () => CloudSyncService(
+      FirebaseFirestore.instance,
+      sl(),
+      sl(),
+      sl(),
+    ),
+  );
+  sl.registerFactory(() => AuthCubit(sl(), sl()));
 
   //! External
   final sharedPreferences = await SharedPreferences.getInstance();

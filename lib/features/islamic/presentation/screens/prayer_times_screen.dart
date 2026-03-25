@@ -12,6 +12,8 @@ import '../../../../core/services/prayer_times_cache_service.dart';
 import '../../../../core/settings/app_settings_cubit.dart';
 import '../../../../core/di/injection_container.dart' as di;
 import '../../../../core/services/reverse_geocoding_service.dart';
+import '../../../../core/services/tutorial_service.dart';
+import '../tutorials/prayer_times_tutorial.dart';
 import 'adhan_settings_screen.dart';
 
 class PrayerTimesScreen extends StatefulWidget {
@@ -324,6 +326,26 @@ class _PrayerTimesBodyState extends State<_PrayerTimesBody> {
     _minuteTimer = Timer.periodic(const Duration(minutes: 1), (_) {
       if (mounted) setState(() {});
     });
+    _showTutorialIfNeeded();
+  }
+
+  bool _tutorialShown = false;
+
+  void _showTutorialIfNeeded() {
+    if (_tutorialShown) return;
+    _tutorialShown = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final svc = di.sl<TutorialService>();
+      if (svc.isTutorialComplete(TutorialService.prayerTimesScreen)) return;
+      final isDark = Theme.of(context).brightness == Brightness.dark;
+      PrayerTimesTutorial.show(
+        context: context,
+        tutorialService: svc,
+        isArabic: widget.isArabicUi,
+        isDark: isDark,
+      );
+    });
   }
 
   @override
@@ -409,6 +431,7 @@ class _PrayerTimesBodyState extends State<_PrayerTimesBody> {
         padding: const EdgeInsets.fromLTRB(16, 14, 16, 36),
         children: [
           _HeaderRow(
+            key: PrayerTimesTutorialKeys.locationInfo,
             dateStr: _formattedDate(),
             isArabicUi: isArabicUi,
             coordinates: widget.coordinates,
@@ -418,6 +441,9 @@ class _PrayerTimesBodyState extends State<_PrayerTimesBody> {
             isDark: isDark,
           ),
           const SizedBox(height: 16),
+          Column(
+            key: PrayerTimesTutorialKeys.prayerList,
+            children: [
           _PrayerTile(
             prayerKey: 'fajr',
             title: isArabicUi ? 'الفجر' : 'Fajr',
@@ -462,6 +488,8 @@ class _PrayerTimesBodyState extends State<_PrayerTimesBody> {
             countdown: countdown(Prayer.isha),
             isArabicUi: isArabicUi,
           ),
+            ],
+          ),
           const SizedBox(height: 20),
           _MethodCard(
             label: isArabicUi ? 'طريقة الحساب' : 'Calculation Method',
@@ -485,6 +513,7 @@ class _HeaderRow extends StatelessWidget {
   final bool isDark;
 
   const _HeaderRow({
+    super.key,
     required this.dateStr,
     required this.isArabicUi,
     required this.coordinates,

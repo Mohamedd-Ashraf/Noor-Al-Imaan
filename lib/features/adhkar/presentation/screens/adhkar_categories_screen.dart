@@ -4,13 +4,51 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/settings/app_settings_cubit.dart';
+import '../../../../core/di/injection_container.dart' as di;
+import '../../../../core/services/tutorial_service.dart';
+import '../tutorials/adhkar_tutorial.dart';
 import '../../data/adhkar_data.dart';
 import '../../data/models/adhkar_category.dart';
 import '../cubit/adhkar_progress_cubit.dart';
 import 'adhkar_list_screen.dart';
 
-class AdhkarCategoriesScreen extends StatelessWidget {
+class AdhkarCategoriesScreen extends StatefulWidget {
   const AdhkarCategoriesScreen({super.key});
+
+  @override
+  State<AdhkarCategoriesScreen> createState() => _AdhkarCategoriesScreenState();
+}
+
+class _AdhkarCategoriesScreenState extends State<AdhkarCategoriesScreen> {
+  bool _tutorialShown = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // Trigger after the first frame so all keys are attached.
+    WidgetsBinding.instance.addPostFrameCallback((_) => _showTutorialIfNeeded());
+  }
+
+  void _showTutorialIfNeeded() {
+    if (_tutorialShown) return;
+    if (!mounted) return;
+    _tutorialShown = true;
+    final svc = di.sl<TutorialService>();
+    if (svc.isTutorialComplete(TutorialService.adhkarScreen)) return;
+    final isAr = context
+        .read<AppSettingsCubit>()
+        .state
+        .appLanguageCode
+        .toLowerCase()
+        .startsWith('ar');
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    AdhkarTutorial.show(
+      context: context,
+      tutorialService: svc,
+      isArabic: isAr,
+      isDark: isDark,
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -34,7 +72,13 @@ class AdhkarCategoriesScreen extends StatelessWidget {
       body: CustomScrollView(
         slivers: [
           SliverToBoxAdapter(
-            child: _HeaderBanner(isArabicUi: isArabicUi),
+            // categoryGrid key is on a SizedBox (RenderBox) wrapping the
+            // header so that tutorial_coach_mark can find the render object.
+            // It must NOT be placed on a Sliver widget (RenderSliver).
+            child: SizedBox(
+              key: AdhkarTutorialKeys.categoryGrid,
+              child: _HeaderBanner(isArabicUi: isArabicUi),
+            ),
           ),
           SliverPadding(
             padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
@@ -47,6 +91,7 @@ class AdhkarCategoriesScreen extends StatelessWidget {
               ),
               delegate: SliverChildBuilderDelegate(
                 (context, index) => _CategoryCard(
+                  key: index == 0 ? AdhkarTutorialKeys.morningCard : null,
                   category: categories[index],
                   isArabicUi: isArabicUi,
                   onTap: () {
@@ -155,6 +200,7 @@ class _CategoryCard extends StatelessWidget {
   final VoidCallback onTap;
 
   const _CategoryCard({
+    super.key,
     required this.category,
     required this.isArabicUi,
     required this.onTap,

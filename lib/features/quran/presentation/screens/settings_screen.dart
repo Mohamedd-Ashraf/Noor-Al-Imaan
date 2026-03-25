@@ -7,6 +7,9 @@ import '../../../../core/utils/arabic_text_style_helper.dart';
 import 'feedback_screen.dart';
 import '../../../../core/settings/app_settings_cubit.dart';
 import '../../../../core/di/injection_container.dart' as di;
+import '../../../auth/presentation/cubit/auth_cubit.dart';
+import '../../../auth/presentation/cubit/auth_state.dart';
+import '../../../auth/data/cloud_sync_service.dart';
 import '../../../../core/services/offline_audio_service.dart';
 import '../../../../core/services/audio_edition_service.dart';
 import '../../../../core/services/app_update_service_firebase.dart';
@@ -16,6 +19,9 @@ import '../../../wird/presentation/cubit/wird_cubit.dart';
 import '../../../wird/presentation/cubit/wird_state.dart';
 import 'mushaf_settings_screen.dart';
 import 'offline_audio_screen.dart';
+import '../../../../core/services/tutorial_service.dart';
+import '../tutorials/settings_tutorial.dart';
+import '../../../../core/utils/hijri_utils.dart' as hijri;
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -67,6 +73,45 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _audioEditionsFuture = _audioEditionService.getVerseByVerseAudioEditions();
     PackageInfo.fromPlatform().then((info) {
       if (mounted) setState(() => _version = info.version);
+    });
+    // Listen for when Settings tab (index 4) becomes active.
+    di.sl<TutorialService>().activeTabIndex.addListener(_onTabActivated);
+  }
+
+  @override
+  void dispose() {
+    di.sl<TutorialService>().activeTabIndex.removeListener(_onTabActivated);
+    super.dispose();
+  }
+
+  void _onTabActivated() {
+    if (di.sl<TutorialService>().activeTabIndex.value != 4) return;
+    _tutorialShown = false;
+    WidgetsBinding.instance.addPostFrameCallback((_) => _showTutorialIfNeeded());
+  }
+
+  bool _tutorialShown = false;
+
+  void _showTutorialIfNeeded() {
+    if (_tutorialShown) return;
+    _tutorialShown = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final svc = di.sl<TutorialService>();
+      if (svc.isTutorialComplete(TutorialService.settingsScreen)) return;
+      final isAr = context
+          .read<AppSettingsCubit>()
+          .state
+          .appLanguageCode
+          .toLowerCase()
+          .startsWith('ar');
+      final isDark = context.read<AppSettingsCubit>().state.darkMode;
+      SettingsTutorial.show(
+        context: context,
+        tutorialService: svc,
+        isArabic: isAr,
+        isDark: isDark,
+      );
     });
   }
 
@@ -133,6 +178,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
           // App Language
           _SettingsCard(
+            key: SettingsTutorialKeys.languageSelector,
             child: Padding(
               padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
               child: Column(
@@ -261,6 +307,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
           // Arabic Font Size
           _SettingsCard(
+            key: SettingsTutorialKeys.fontSizeSlider,
             child: Padding(
               padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
               child: Column(
@@ -313,7 +360,86 @@ class _SettingsScreenState extends State<SettingsScreen> {
           const SizedBox(height: 6),
 
           // ─────────────────────────────────────────────────────
-          // 2. القراءة
+          // 2. التقويم الهجري
+          // ─────────────────────────────────────────────────────
+          _SectionHeader(
+              isAr ? 'التقويم الهجري' : 'Hijri Calendar',
+              Icons.brightness_3_outlined),
+
+          _SettingsCard(
+            child: Builder(builder: (ctx) {
+              final offset =
+                  ctx.watch<AppSettingsCubit>().state.hijriDateOffset;
+              final hDate = hijri.todayHijri(offset);
+              final dateStr = hijri.formatHijriDate(
+                hDate[0], hDate[1], hDate[2],
+                isAr: isAr,
+              );
+              return ListTile(
+                leading: const Icon(Icons.brightness_3_outlined,
+                    color: AppColors.primary),
+                title: _TileTitle(isAr
+                    ? 'تعديل التاريخ الهجري'
+                    : 'Hijri Date Adjustment'),
+                subtitle: Text(
+                  dateStr,
+                  style: const TextStyle(
+                    color: AppColors.primary,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 12,
+                  ),
+                ),
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    IconButton(
+                      constraints: const BoxConstraints(),
+                      padding: const EdgeInsets.all(4),
+                      onPressed: offset > -3
+                          ? () => ctx
+                              .read<AppSettingsCubit>()
+                              .setHijriDateOffset(offset - 1)
+                          : null,
+                      icon: const Icon(Icons.remove_circle_outline, size: 22),
+                      color: AppColors.primary,
+                      disabledColor: AppColors.textHint,
+                    ),
+                    SizedBox(
+                      width: 28,
+                      child: Text(
+                        offset == 0
+                            ? '0'
+                            : (offset > 0 ? '+$offset' : '$offset'),
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          color: AppColors.primary,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      constraints: const BoxConstraints(),
+                      padding: const EdgeInsets.all(4),
+                      onPressed: offset < 3
+                          ? () => ctx
+                              .read<AppSettingsCubit>()
+                              .setHijriDateOffset(offset + 1)
+                          : null,
+                      icon: const Icon(Icons.add_circle_outline, size: 22),
+                      color: AppColors.primary,
+                      disabledColor: AppColors.textHint,
+                    ),
+                  ],
+                ),
+              );
+            }),
+          ),
+
+          const SizedBox(height: 6),
+
+          // ─────────────────────────────────────────────────────
+          // 3. القراءة
           // ─────────────────────────────────────────────────────
           _SectionHeader(
               isAr ? 'إعدادات القراءة' : 'Reading', Icons.menu_book_outlined),
@@ -429,6 +555,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
           // Reciter Selector
           FutureBuilder<List<AudioEdition>>(
+            key: SettingsTutorialKeys.reciterSelector,
             future: _audioEditionsFuture,
             builder: (context, snap) {
               final all = (snap.data ?? const <AudioEdition>[]).toList();
@@ -696,7 +823,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
           const SizedBox(height: 6),
 
           // ─────────────────────────────────────────────────────
-          // 5. حول التطبيق
+          // 5. الحساب
+          // ─────────────────────────────────────────────────────
+          _SectionHeader(
+              isAr ? 'الحساب' : 'Account', Icons.person_outline),
+          _AccountSection(isAr: isAr),
+
+          const SizedBox(height: 6),
+
+          // ─────────────────────────────────────────────────────
+          // 6. حول التطبيق
           // ─────────────────────────────────────────────────────
           _SectionHeader(
               isAr ? 'حول التطبيق' : 'About', Icons.info_outline),
@@ -810,6 +946,40 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 trailing: const Icon(Icons.chevron_right_rounded,
                     color: AppColors.primary),
                 onTap: _showDataSourceDialog,
+              ),
+              const Divider(height: 1, indent: 56),
+              ListTile(
+                key: SettingsTutorialKeys.replayTutorial,
+                leading: Container(
+                  padding: const EdgeInsets.all(7),
+                  decoration: BoxDecoration(
+                    color: AppColors.primary.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(9),
+                  ),
+                  child: const Icon(Icons.school_outlined,
+                      color: AppColors.primary, size: 18),
+                ),
+                title: _TileTitle(
+                    isAr ? 'إعادة الشرح التوضيحي' : 'Replay Tutorial'),
+                subtitle: _TileSubtitle(isAr
+                    ? 'مشاهدة الجولة التعريفية مرة أخرى'
+                    : 'Watch the app walkthrough again'),
+                trailing: const Icon(Icons.replay_rounded,
+                    color: AppColors.primary),
+                onTap: () async {
+                  final tutorialService = di.sl<TutorialService>();
+                  await tutorialService.resetAll();
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(isAr
+                            ? 'تم إعادة تعيين الشرح التوضيحي — ستظهر الجولة عند فتح كل شاشة'
+                            : 'Tutorial reset — walkthrough will appear when you open each screen'),
+                        backgroundColor: AppColors.primary,
+                      ),
+                    );
+                  }
+                },
               ),
               const Divider(height: 1, indent: 56),
               ListTile(
@@ -1012,7 +1182,7 @@ class _SectionHeader extends StatelessWidget {
 class _SettingsCard extends StatelessWidget {
   final Widget child;
 
-  const _SettingsCard({required this.child});
+  const _SettingsCard({super.key, required this.child});
 
   @override
   Widget build(BuildContext context) {
@@ -1726,5 +1896,324 @@ class _LangChip extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Account Section
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _AccountSection extends StatelessWidget {
+  final bool isAr;
+  const _AccountSection({required this.isAr});
+
+  @override
+  Widget build(BuildContext context) {
+    return BlocBuilder<AuthCubit, AuthState>(
+      builder: (context, authState) {
+        final isGuest = authState.status == AuthStatus.guest;
+        final isAuth = authState.status == AuthStatus.authenticated;
+        final syncService = di.sl<CloudSyncService>();
+
+        return Card(
+          margin: const EdgeInsets.only(bottom: 10),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          clipBehavior: Clip.hardEdge,
+          child: Column(
+            children: [
+              // ── Account Info Header ───────────────────────────────
+              Container(
+                width: double.infinity,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                decoration: const BoxDecoration(
+                  gradient: AppColors.primaryGradient,
+                ),
+                child: Row(
+                  children: [
+                    CircleAvatar(
+                      radius: 18,
+                      backgroundColor: Colors.white.withValues(alpha: 0.2),
+                      child: Icon(
+                        isAuth ? Icons.person : Icons.person_outline,
+                        color: Colors.white,
+                        size: 20,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            isAuth
+                                ? authState.displayName
+                                : (isAr ? 'وضع الزائر' : 'Guest Mode'),
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 14,
+                            ),
+                          ),
+                          if (isAuth && authState.email.isNotEmpty)
+                            Text(
+                              authState.email,
+                              style: TextStyle(
+                                color: Colors.white.withValues(alpha: 0.8),
+                                fontSize: 11,
+                              ),
+                            ),
+                          if (isGuest)
+                            Text(
+                              isAr
+                                  ? 'بياناتك غير محفوظة في السحابة'
+                                  : 'Your data is not backed up',
+                              style: TextStyle(
+                                color: Colors.white.withValues(alpha: 0.8),
+                                fontSize: 11,
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                    if (isGuest)
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.22),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          isAr ? 'زائر' : 'Guest',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+
+              // ── Guest: Link Account ──────────────────────────────
+              if (isGuest) ...[
+                ListTile(
+                  leading: Container(
+                    padding: const EdgeInsets.all(7),
+                    decoration: BoxDecoration(
+                      color: AppColors.primary.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(9),
+                    ),
+                    child: const Icon(Icons.link_rounded,
+                        color: AppColors.primary, size: 18),
+                  ),
+                  title: _TileTitle(
+                      isAr ? 'ربط حساب' : 'Link Account'),
+                  subtitle: _TileSubtitle(isAr
+                      ? 'سجّل بجوجل أو بريد إلكتروني لحفظ بياناتك'
+                      : 'Sign in with Google or email to save your data'),
+                  trailing: const Icon(Icons.chevron_right_rounded,
+                      color: AppColors.primary),
+                  onTap: () => _showLinkAccountOptions(context, isAr),
+                ),
+              ],
+
+              // ── Authenticated: Sync & Sign Out ───────────────────
+              if (isAuth) ...[
+                ListTile(
+                  leading: Container(
+                    padding: const EdgeInsets.all(7),
+                    decoration: BoxDecoration(
+                      color: AppColors.primary.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(9),
+                    ),
+                    child: authState.isLoading
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(
+                                strokeWidth: 2, color: AppColors.primary),
+                          )
+                        : const Icon(Icons.cloud_sync_rounded,
+                            color: AppColors.primary, size: 18),
+                  ),
+                  title: _TileTitle(
+                      isAr ? 'مزامنة البيانات' : 'Sync Data'),
+                  subtitle: _TileSubtitle(
+                    syncService.hasSynced
+                        ? (isAr
+                            ? 'آخر مزامنة: ${_formatSyncTime(syncService.lastSyncTime, isAr)}'
+                            : 'Last sync: ${_formatSyncTime(syncService.lastSyncTime, isAr)}')
+                        : (isAr ? 'لم تتم المزامنة بعد' : 'Not synced yet'),
+                  ),
+                  trailing: const Icon(Icons.sync_rounded,
+                      color: AppColors.primary),
+                  onTap: authState.isLoading
+                      ? null
+                      : () {
+                          context.read<AuthCubit>().manualSync();
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                isAr
+                                    ? 'جاري مزامنة البيانات...'
+                                    : 'Syncing data...',
+                                textAlign: TextAlign.center,
+                              ),
+                              backgroundColor: AppColors.primary,
+                              behavior: SnackBarBehavior.floating,
+                              margin: const EdgeInsets.all(16),
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12)),
+                            ),
+                          );
+                        },
+                ),
+                const Divider(height: 1, indent: 56),
+                ListTile(
+                  leading: Container(
+                    padding: const EdgeInsets.all(7),
+                    decoration: BoxDecoration(
+                      color: AppColors.error.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(9),
+                    ),
+                    child: const Icon(Icons.logout_rounded,
+                        color: AppColors.error, size: 18),
+                  ),
+                  title: Text(
+                    isAr ? 'تسجيل الخروج' : 'Sign Out',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 14,
+                      color: AppColors.error,
+                    ),
+                  ),
+                  onTap: () => _confirmSignOut(context, isAr),
+                ),
+              ],
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  void _showLinkAccountOptions(BuildContext context, bool isAr) {
+    final authCubit = context.read<AuthCubit>();
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(24, 24, 24, 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                isAr ? 'ربط حسابك' : 'Link Your Account',
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.primary,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                isAr
+                    ? 'سجّل دخولك لحفظ بياناتك ومزامنتها بين أجهزتك'
+                    : 'Sign in to save and sync your data across devices',
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  fontSize: 13,
+                  color: AppColors.textSecondary,
+                ),
+              ),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                height: 50,
+                child: OutlinedButton.icon(
+                  onPressed: () {
+                    Navigator.pop(ctx);
+                    authCubit.signInWithGoogle();
+                  },
+                  icon: const Icon(Icons.g_mobiledata, size: 24),
+                  label: Text(
+                    isAr ? 'ربط بحساب جوجل' : 'Link with Google',
+                    style: const TextStyle(
+                        fontSize: 15, fontWeight: FontWeight.w600),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _confirmSignOut(BuildContext context, bool isAr) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(
+          isAr ? 'تسجيل الخروج' : 'Sign Out',
+          textAlign: TextAlign.center,
+        ),
+        content: Text(
+          isAr
+              ? 'سيتم مزامنة بياناتك قبل تسجيل الخروج.\nهل تريد المتابعة؟'
+              : 'Your data will be synced before signing out.\nContinue?',
+          textAlign: isAr ? TextAlign.right : TextAlign.left,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text(isAr ? 'إلغاء' : 'Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              context.read<AuthCubit>().signOut();
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.error,
+              foregroundColor: Colors.white,
+            ),
+            child: Text(isAr ? 'تسجيل الخروج' : 'Sign Out'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _formatSyncTime(DateTime? time, bool isAr) {
+    if (time == null) return isAr ? 'غير معروف' : 'Unknown';
+    final now = DateTime.now();
+    final diff = now.difference(time);
+    if (diff.inMinutes < 1) {
+      return isAr ? 'الآن' : 'Just now';
+    } else if (diff.inHours < 1) {
+      final m = diff.inMinutes;
+      return isAr ? 'منذ $m دقيقة' : '$m min ago';
+    } else if (diff.inDays < 1) {
+      final h = diff.inHours;
+      return isAr ? 'منذ $h ساعة' : '$h hours ago';
+    } else {
+      final d = diff.inDays;
+      return isAr ? 'منذ $d يوم' : '$d days ago';
+    }
   }
 }

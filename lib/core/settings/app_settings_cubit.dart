@@ -21,6 +21,7 @@ class AppSettingsState extends Equatable {
   final bool useQcfFont;    // use QCF bitmap font within the Mushaf view
   final bool mushafContinueTilawa; // when tapping an ayah, continue playing to end of page/surah
   final String mushafContinueScope; // 'page' or 'surah'
+  final int hijriDateOffset; // user-defined Hijri date adjustment: -3..+3
 
   const AppSettingsState({
     required this.arabicFontSize,
@@ -38,6 +39,7 @@ class AppSettingsState extends Equatable {
     required this.useQcfFont,
     required this.mushafContinueTilawa,
     required this.mushafContinueScope,
+    required this.hijriDateOffset,
   });
 
   factory AppSettingsState.initial(SettingsService service) {
@@ -57,6 +59,7 @@ class AppSettingsState extends Equatable {
       useQcfFont: service.getUseQcfFont(),
       mushafContinueTilawa: service.getMushafContinueTilawa(),
       mushafContinueScope: service.getMushafContinueScope(),
+      hijriDateOffset: service.getHijriDateOffset(),
     );
   }
 
@@ -76,6 +79,7 @@ class AppSettingsState extends Equatable {
     bool? useQcfFont,
     bool? mushafContinueTilawa,
     String? mushafContinueScope,
+    int? hijriDateOffset,
   }) {
     return AppSettingsState(
       arabicFontSize: arabicFontSize ?? this.arabicFontSize,
@@ -93,6 +97,7 @@ class AppSettingsState extends Equatable {
       useQcfFont: useQcfFont ?? this.useQcfFont,
       mushafContinueTilawa: mushafContinueTilawa ?? this.mushafContinueTilawa,
       mushafContinueScope: mushafContinueScope ?? this.mushafContinueScope,
+      hijriDateOffset: hijriDateOffset ?? this.hijriDateOffset,
     );
   }
 
@@ -113,6 +118,7 @@ class AppSettingsState extends Equatable {
     useQcfFont,
     mushafContinueTilawa,
     mushafContinueScope,
+    hijriDateOffset,
   ];
 }
 
@@ -239,5 +245,11 @@ class AppSettingsCubit extends Cubit<AppSettingsState> {
   Future<void> setMushafContinueScope(String value) async {
     await _service.setMushafContinueScope(value);
     emit(state.copyWith(mushafContinueScope: value));
+  }
+
+  Future<void> setHijriDateOffset(int value) async {
+    final clamped = value.clamp(-3, 3);
+    await _service.setHijriDateOffset(clamped);
+    emit(state.copyWith(hijriDateOffset: clamped));
   }
 }

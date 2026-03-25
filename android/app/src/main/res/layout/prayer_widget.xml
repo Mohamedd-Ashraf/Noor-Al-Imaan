@@ -4,6 +4,7 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@drawable/widget_bg_balanced"
+    android:layoutDirection="ltr"
     android:orientation="vertical"
     android:padding="8dp">
 
@@ -39,19 +40,23 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="—"
-            android:textColor="#CCFFFDF7"
+            android:textColor="#CCE8D79A"
             android:textSize="9sp" />
     </LinearLayout>
 
     <LinearLayout
         android:id="@+id/next_card"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="4dp"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:layout_marginTop="6dp"
         android:background="@drawable/widget_card_next_balanced"
         android:gravity="center_vertical"
         android:orientation="horizontal"
-        android:padding="7dp">
+        android:paddingLeft="10dp"
+        android:paddingRight="10dp"
+        android:paddingTop="8dp"
+        android:paddingBottom="8dp">
 
         <LinearLayout
             android:layout_width="0dp"
@@ -65,7 +70,7 @@
                 android:layout_height="wrap_content"
                 android:text="—"
                 android:textColor="#FFF0C040"
-                android:textSize="15sp"
+                android:textSize="20sp"
                 android:textStyle="bold" />
 
             <TextView
@@ -73,9 +78,9 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="2dp"
-                android:text="القادمة"
-                android:textColor="#CCFFFDF7"
-                android:textSize="7sp" />
+                android:text="الصلاة القادمة"
+                android:textColor="#99E8D79A"
+                android:textSize="8sp" />
         </LinearLayout>
 
         <LinearLayout
@@ -90,25 +95,25 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="—"
-                android:textColor="#FFFDF7"
-                android:textSize="20sp"
+                android:textColor="#FFFFFFFF"
+                android:textSize="26sp"
                 android:textStyle="bold" />
 
             <TextView
                 android:id="@+id/next_prayer_time"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="1dp"
+                android:layout_marginTop="2dp"
                 android:text="—"
-                android:textColor="#B3FFFDF7"
-                android:textSize="9sp" />
+                android:textColor="#CCE8D79A"
+                android:textSize="10sp" />
         </LinearLayout>
     </LinearLayout>
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="4dp"
+        android:layout_marginTop="6dp"
         android:gravity="center"
         android:layoutDirection="rtl"
         android:orientation="horizontal">
@@ -141,7 +146,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="2dp"
                 android:text="الفجر"
-                android:textColor="#B3FFFDF7"
+                android:textColor="#99E8D79A"
                 android:textSize="8sp" />
 
             <TextView
@@ -150,7 +155,7 @@
                 android:layout_height="wrap_content"
                 android:text="—"
                 android:textColor="#FFFDF7"
-                android:textSize="10sp"
+                android:textSize="11sp"
                 android:textStyle="bold" />
         </LinearLayout>
 
@@ -182,7 +187,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="2dp"
                 android:text="الظهر"
-                android:textColor="#B3FFFDF7"
+                android:textColor="#99E8D79A"
                 android:textSize="8sp" />
 
             <TextView
@@ -191,7 +196,7 @@
                 android:layout_height="wrap_content"
                 android:text="—"
                 android:textColor="#FFFDF7"
-                android:textSize="10sp"
+                android:textSize="11sp"
                 android:textStyle="bold" />
         </LinearLayout>
 
@@ -223,7 +228,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="2dp"
                 android:text="العصر"
-                android:textColor="#B3FFFDF7"
+                android:textColor="#99E8D79A"
                 android:textSize="8sp" />
 
             <TextView
@@ -232,7 +237,7 @@
                 android:layout_height="wrap_content"
                 android:text="—"
                 android:textColor="#FFFDF7"
-                android:textSize="10sp"
+                android:textSize="11sp"
                 android:textStyle="bold" />
         </LinearLayout>
 
@@ -264,7 +269,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="2dp"
                 android:text="المغرب"
-                android:textColor="#B3FFFDF7"
+                android:textColor="#99E8D79A"
                 android:textSize="8sp" />
 
             <TextView
@@ -273,7 +278,7 @@
                 android:layout_height="wrap_content"
                 android:text="—"
                 android:textColor="#FFFDF7"
-                android:textSize="10sp"
+                android:textSize="11sp"
                 android:textStyle="bold" />
         </LinearLayout>
 
@@ -305,7 +310,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="2dp"
                 android:text="العشاء"
-                android:textColor="#B3FFFDF7"
+                android:textColor="#99E8D79A"
                 android:textSize="8sp" />
 
             <TextView
@@ -314,7 +319,7 @@
                 android:layout_height="wrap_content"
                 android:text="—"
                 android:textColor="#FFFDF7"
-                android:textSize="10sp"
+                android:textSize="11sp"
                 android:textStyle="bold" />
         </LinearLayout>
     </LinearLayout>
@@ -335,8 +340,8 @@
             android:gravity="left"
             android:maxLines="1"
             android:text="—"
-            android:textColor="#D9FFFDF7"
-            android:textSize="10sp"
+            android:textColor="#CCE8D79A"
+            android:textSize="9sp"
             android:textStyle="bold" />
 
         <TextView
@@ -345,7 +350,7 @@
             android:layout_height="wrap_content"
             android:layout_alignParentRight="true"
             android:text="—"
-            android:textColor="#B3FFFDF7"
+            android:textColor="#CCE8D79A"
             android:textSize="9sp" />
     </RelativeLayout>
 </LinearLayout>

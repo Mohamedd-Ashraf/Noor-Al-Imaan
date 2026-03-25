@@ -4,6 +4,7 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@drawable/widget_bg_dark"
+    android:layoutDirection="ltr"
     android:orientation="vertical"
     android:padding="8dp">
 
@@ -46,12 +47,16 @@
     <LinearLayout
         android:id="@+id/next_card"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="4dp"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:layout_marginTop="6dp"
         android:background="@drawable/widget_card_next_dark"
         android:gravity="center_vertical"
         android:orientation="horizontal"
-        android:padding="7dp">
+        android:paddingLeft="10dp"
+        android:paddingRight="10dp"
+        android:paddingTop="8dp"
+        android:paddingBottom="8dp">
 
         <LinearLayout
             android:layout_width="0dp"
@@ -65,7 +70,7 @@
                 android:layout_height="wrap_content"
                 android:text="—"
                 android:textColor="#FF9FD5C0"
-                android:textSize="15sp"
+                android:textSize="20sp"
                 android:textStyle="bold" />
 
             <TextView
@@ -73,9 +78,9 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="2dp"
-                android:text="القادمة"
-                android:textColor="#CCDEE6EB"
-                android:textSize="7sp" />
+                android:text="الصلاة القادمة"
+                android:textColor="#99DEE6EB"
+                android:textSize="8sp" />
         </LinearLayout>
 
         <LinearLayout
@@ -91,17 +96,17 @@
                 android:layout_height="wrap_content"
                 android:text="—"
                 android:textColor="#FFF1F5F8"
-                android:textSize="20sp"
+                android:textSize="26sp"
                 android:textStyle="bold" />
 
             <TextView
                 android:id="@+id/next_prayer_time"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="1dp"
+                android:layout_marginTop="2dp"
                 android:text="—"
                 android:textColor="#99DEE6EB"
-                android:textSize="9sp" />
+                android:textSize="10sp" />
         </LinearLayout>
     </LinearLayout>
 
@@ -345,7 +350,7 @@
             android:layout_height="wrap_content"
             android:layout_alignParentRight="true"
             android:text="—"
-            android:textColor="#99DEE6EB"
-            android:textSize="9sp" />
+            android:textColor="#DDDEE6EB"
+            android:textSize="10sp" />
     </RelativeLayout>
 </LinearLayout>

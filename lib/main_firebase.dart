@@ -20,10 +20,13 @@ import 'core/settings/app_settings_cubit.dart';
 import 'core/audio/ayah_audio_cubit.dart';
 import 'core/audio/download_manager_cubit.dart';
 import 'core/widgets/onboarding_gate.dart';
+import 'features/auth/presentation/cubit/auth_cubit.dart';
 import 'features/quran/presentation/bloc/surah/surah_bloc.dart';
 import 'features/quran/presentation/bloc/ayah/ayah_bloc.dart';
 import 'features/wird/presentation/cubit/wird_cubit.dart';
 import 'features/adhkar/presentation/cubit/adhkar_progress_cubit.dart';
+import 'features/hadith/presentation/cubit/hadith_cubit.dart';
+import 'features/hadith/data/repositories/hadith_repository.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -60,18 +63,16 @@ void main() async {
     // but in debug we let it pass.
     return true; // Prevent all async crashes offline
   };
-  
+
   // Initialize Firebase
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   // Ensure Firestore is initialized (fixes gray screen in release if tree-shaken)
   try {
     FirebaseFirestore.instance.settings;
   } catch (e) {
     debugPrint('Firestore init error: $e');
   }
-  
+
   // Initialize dependency injection
   await di.init();
 
@@ -135,7 +136,8 @@ class _GlobalWirdLifecycleObserver extends StatefulWidget {
 }
 
 class _GlobalWirdLifecycleObserverState
-    extends State<_GlobalWirdLifecycleObserver> with WidgetsBindingObserver {
+    extends State<_GlobalWirdLifecycleObserver>
+    with WidgetsBindingObserver {
   bool _requestedInitialAdhanSchedule = false;
 
   @override
@@ -178,7 +180,10 @@ class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
   /// Check for app updates in the background
-  Future<void> _checkForUpdates(BuildContext context, String languageCode) async {
+  Future<void> _checkForUpdates(
+    BuildContext context,
+    String languageCode,
+  ) async {
     try {
       final updateService = di.sl<AppUpdateServiceFirebase>();
       final updateInfo = await updateService.checkForUpdate();
@@ -201,58 +206,59 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MultiBlocProvider(
-      providers: [
-        BlocProvider(create: (_) => di.sl<SurahBloc>()),
-        BlocProvider(create: (_) => di.sl<AyahBloc>()),
-        BlocProvider(create: (_) => di.sl<AyahAudioCubit>()),
-        BlocProvider(create: (_) => AppSettingsCubit(di.sl())),
-        BlocProvider(
-          create: (_) {
-            final cubit = di.sl<DownloadManagerCubit>();
-            cubit.checkForResumableSession();
-            return cubit;
+    return RepositoryProvider<HadithRepository>(
+      create: (_) => di.sl<HadithRepository>(),
+      child: MultiBlocProvider(
+        providers: [
+          BlocProvider(create: (_) => di.sl<AuthCubit>()),
+          BlocProvider(create: (_) => di.sl<SurahBloc>()),
+          BlocProvider(create: (_) => di.sl<AyahBloc>()),
+          BlocProvider(create: (_) => di.sl<AyahAudioCubit>()),
+          BlocProvider(create: (_) => AppSettingsCubit(di.sl())),
+          BlocProvider(
+            create: (_) {
+              final cubit = di.sl<DownloadManagerCubit>();
+              cubit.checkForResumableSession();
+              return cubit;
+            },
+          ),
+          BlocProvider(create: (_) => di.sl<WirdCubit>()..load()),
+          BlocProvider(create: (_) => di.sl<AdhkarProgressCubit>()..load()),
+          BlocProvider(create: (_) => di.sl<HadithCubit>()),
+        ],
+        child: BlocBuilder<AppSettingsCubit, AppSettingsState>(
+          builder: (context, settings) {
+            final locale = Locale(settings.appLanguageCode);
+            final isArabicUi = settings.appLanguageCode
+                .toLowerCase()
+                .startsWith('ar');
+            return MaterialApp(
+              title: 'Quran App',
+              debugShowCheckedModeBanner: false,
+              theme: AppTheme.lightTheme(isArabicUi: isArabicUi),
+              darkTheme: AppTheme.darkTheme(isArabicUi: isArabicUi),
+              themeMode: settings.darkMode ? ThemeMode.dark : ThemeMode.light,
+              locale: locale,
+              supportedLocales: const [Locale('en'), Locale('ar')],
+              localizationsDelegates: const [
+                GlobalMaterialLocalizations.delegate,
+                GlobalWidgetsLocalizations.delegate,
+                GlobalCupertinoLocalizations.delegate,
+              ],
+              home: _GlobalWirdLifecycleObserver(
+                child: Builder(
+                  builder: (context) {
+                    // Check for updates after the app loads
+                    WidgetsBinding.instance.addPostFrameCallback((_) async {
+                      _checkForUpdates(context, settings.appLanguageCode);
+                    });
+                    return const OnboardingGate();
+                  },
+                ),
+              ),
+            );
           },
         ),
-        BlocProvider(
-          create: (_) => di.sl<WirdCubit>()..load(),
-        ),
-        BlocProvider(
-          create: (_) => di.sl<AdhkarProgressCubit>()..load(),
-        ),
-      ],
-      child: BlocBuilder<AppSettingsCubit, AppSettingsState>(
-        builder: (context, settings) {
-          final locale = Locale(settings.appLanguageCode);
-          final isArabicUi = settings.appLanguageCode.toLowerCase().startsWith(
-            'ar',
-          );
-          return MaterialApp(
-            title: 'Quran App',
-            debugShowCheckedModeBanner: false,
-            theme: AppTheme.lightTheme(isArabicUi: isArabicUi),
-            darkTheme: AppTheme.darkTheme(isArabicUi: isArabicUi),
-            themeMode: settings.darkMode ? ThemeMode.dark : ThemeMode.light,
-            locale: locale,
-            supportedLocales: const [Locale('en'), Locale('ar')],
-            localizationsDelegates: const [
-              GlobalMaterialLocalizations.delegate,
-              GlobalWidgetsLocalizations.delegate,
-              GlobalCupertinoLocalizations.delegate,
-            ],
-            home: _GlobalWirdLifecycleObserver(
-              child: Builder(
-                builder: (context) {
-                  // Check for updates after the app loads
-                  WidgetsBinding.instance.addPostFrameCallback((_) async {
-                    _checkForUpdates(context, settings.appLanguageCode);
-                  });
-                  return const OnboardingGate();
-                },
-              ),
-            ),
-          );
-        },
       ),
     );
   }

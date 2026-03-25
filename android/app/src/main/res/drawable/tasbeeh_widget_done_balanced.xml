@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Glowing outer ring -->
+    <item>
+        <shape android:shape="oval">
+            <stroke android:width="3dp" android:color="#70F0C040" />
+        </shape>
+    </item>
+    <!-- Full gold bead ring (completion) -->
+    <item android:left="3dp" android:top="3dp" android:right="3dp" android:bottom="3dp">
+        <shape android:shape="oval">
+            <stroke android:width="10dp" android:color="#F0C040"
+                android:dashWidth="7dp" android:dashGap="6dp" />
+        </shape>
+    </item>
+    <!-- Warm golden inner circle -->
+    <item android:left="18dp" android:top="18dp" android:right="18dp" android:bottom="18dp">
+        <shape android:shape="oval">
+            <gradient android:angle="315"
+                android:startColor="#5C4200" android:endColor="#2A1E00" />
+        </shape>
+    </item>
+</layer-list>

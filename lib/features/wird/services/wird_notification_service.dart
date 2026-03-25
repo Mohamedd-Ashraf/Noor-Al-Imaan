@@ -185,6 +185,72 @@ class WirdNotificationService {
 
   // ── Internal scheduling ───────────────────────────────────────────────────
 
+  // Motivational bodies for the main daily reminder — rotated each day.
+  static const _mainReminderBodiesAr = [
+    'لا تنس قراءة وردك اليومي من القرآن الكريم',
+    'اجعل القرآن أنيس يومك ونور دربك 🌟',
+    'وِردك اليوم خطوة نحو ختمة مباركة 📖',
+    'اقرأ وارتقِ.. فإن منزلتك عند آخر آية تقرأها 🌙',
+    'القرآن ربيع القلوب، فلا تحرم قلبك منه 🤲',
+    'من قرأ حرفاً من كتاب الله فله حسنة والحسنة بعشر أمثالها ✨',
+    'خير ما تبدأ به يومك هو كلام الله ☀️',
+    'لا يأتي القرآن شفيعاً لمن هجره — أقبِل عليه اليوم 💚',
+    'خصّص دقائق لوردك وسترى أثرها في يومك كله 🕌',
+    'إن هذا القرآن يهدي للتي هي أقوم 🌿',
+  ];
+
+  static const _mainReminderBodiesEn = [
+    'Don\'t forget to read your daily Quran portion',
+    'Make the Quran the companion of your day 🌟',
+    'Today\'s portion is a step toward a blessed khatmah 📖',
+    'Read and ascend — your rank is at the last verse you read 🌙',
+    'The Quran is the spring of hearts — don\'t deprive yours 🤲',
+    'Every letter of the Quran earns you a good deed multiplied tenfold ✨',
+    'The best way to start your day is with the words of Allah ☀️',
+    'The Quran will not intercede for those who abandoned it — turn to it today 💚',
+    'Dedicate a few minutes to your wird and see its blessing all day 🕌',
+    'Indeed this Quran guides to the straightest path 🌿',
+  ];
+
+  // Follow-up bodies — rotated across IDs.
+  static const _followUpBodiesAr = [
+    'لم تسجّل وردك بعد — لا تؤخر القراءة',
+    'يومك لم يكتمل بدون وردك 📖',
+    'لا تجعل اليوم يمضي بلا قراءة 🌙',
+    'تذكّر: القرآن ينتظرك، رُدّ عليه السلام ☀️',
+    'غداً ستتمنى لو قرأت اليوم — ابدأ الآن 💪',
+  ];
+
+  static const _followUpBodiesEn = [
+    'You haven\'t logged your wird yet — don\'t delay',
+    'Your day isn\'t complete without your recitation 📖',
+    'Don\'t let the day pass without reading 🌙',
+    'Remember: the Quran awaits you ☀️',
+    'Tomorrow you\'ll wish you read today — start now 💪',
+  ];
+
+  static const _followUpUrgentBodiesAr = [
+    'اغتنم ما تبقى من الوقت وأكمل وردك اليومي 🌙',
+    'الوقت يضيق — بادر بقراءة وردك قبل نهاية اليوم ⏰',
+    'لم يتبقَّ سوى القليل، أكمل وردك الآن 🤲',
+  ];
+
+  static const _followUpUrgentBodiesEn = [
+    'Time is running out — finish your daily wird 🌙',
+    'Only a little time left — complete your recitation now ⏰',
+    'Don\'t miss today\'s portion, there\'s still time 🤲',
+  ];
+
+  /// Pick a message from a list using a rotating counter stored in SharedPrefs.
+  String _pickRotating(List<String> arList, List<String> enList, String counterKey) {
+    final isArabic = _wirdService.getAppLanguage() == 'ar';
+    final list = isArabic ? arList : enList;
+    final counter = _wirdService.getCounter(counterKey);
+    final msg = list[counter % list.length];
+    _wirdService.incrementCounter(counterKey);
+    return msg;
+  }
+
   Future<void> _scheduleMainReminder(int hour, int minute) async {
     final now = tz.TZDateTime.now(tz.local);
     var scheduled =
@@ -193,10 +259,13 @@ class WirdNotificationService {
       scheduled = scheduled.add(const Duration(days: 1));
     }
 
+    final body = _pickRotating(
+      _mainReminderBodiesAr, _mainReminderBodiesEn, 'wird_main_msg_counter');
+
     await _plugin.zonedSchedule(
       _idMainReminder,
       '📖 حان وقت الورد اليومي',
-      'لا تنس قراءة وردك اليومي من القرآن الكريم',
+      body,
       scheduled,
       _buildDetails(isFollowUp: false),
       androidScheduleMode: _scheduleMode(),
@@ -242,8 +311,10 @@ class WirdNotificationService {
 
       final hoursToNext = boundaryTime.difference(followUpTime).inHours;
       final body = hoursToNext <= 2
-          ? 'اغتنم ما تبقى من الوقت وأكمل وردك اليومي 🌙'
-          : 'لم تسجّل وردك بعد — لا تؤخر القراءة';
+          ? _pickRotating(_followUpUrgentBodiesAr, _followUpUrgentBodiesEn,
+              'wird_urgent_msg_counter')
+          : _pickRotating(_followUpBodiesAr, _followUpBodiesEn,
+              'wird_followup_msg_counter');
 
       await _plugin.zonedSchedule(
         _followUpIds[i],
@@ -266,10 +337,12 @@ class WirdNotificationService {
   /// Send an immediate test notification so the user can verify sound/appearance.
   Future<void> sendTestNotification() async {
     if (kIsWeb) return;
+    final body = _pickRotating(
+      _mainReminderBodiesAr, _mainReminderBodiesEn, 'wird_test_msg_counter');
     await _plugin.show(
       5999,
       '📖 حان وقت الورد اليومي',
-      'هذا إشعار تجريبي — سيصلك هكذا كل يوم 🌙',
+      body,
       _buildDetails(isFollowUp: false),
     );
     debugPrint('📿 [Wird] Test notification sent');

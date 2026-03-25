@@ -8,4 +8,11 @@
     <string name="prayer_widget_dark_description">Dark style preview of today&#8217;s prayer times with next and current prayer highlights.</string>
     <string name="prayer_widget_light_label">Prayer Times Light</string>
     <string name="prayer_widget_light_description">Light style preview of today&#8217;s prayer times with next and current prayer highlights.</string>
+    <!-- Tasbeeh Widget -->
+    <string name="tasbeeh_widget_label">Tasbeeh Counter</string>
+    <string name="tasbeeh_widget_description">An electronic tasbeeh counter you can use directly from your home screen without opening the app.</string>
+    <string name="tasbeeh_widget_dark_label">Tasbeeh Counter Night</string>
+    <string name="tasbeeh_widget_dark_description">Dark style tasbeeh counter for your home screen.</string>
+    <string name="tasbeeh_widget_light_label">Tasbeeh Counter Light</string>
+    <string name="tasbeeh_widget_light_description">Light style tasbeeh counter for your home screen.</string>
 </resources>

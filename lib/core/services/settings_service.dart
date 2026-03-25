@@ -52,6 +52,9 @@ class SettingsService {
   static const String _keyAdhanAlarmMigrated = 'adhan_alarm_stream_migrated_v1';
   static const String _keyShowAdhanTestButtons = 'show_adhan_test_buttons';
 
+  // ── Hijri date offset (رؤية الهلال) ────────────────────────────────────────
+  static const String _keyHijriDateOffset = 'hijri_date_offset';
+
   // ── Salawat sound selection ────────────────────────────────────────────────
   static const String _keySalawatSound = 'salawat_sound';
 
@@ -512,4 +515,10 @@ class SettingsService {
   String? getSalawatAlarmIds() => _prefs.getString('salawat_alarm_ids');
   Future<bool> setSalawatAlarmIds(String json) =>
       _prefs.setString('salawat_alarm_ids', json);
+
+  // ── Hijri date offset: clamped to [-3, +3] ────────────────────────────────
+  int getHijriDateOffset() =>
+      (_prefs.getInt(_keyHijriDateOffset) ?? 0).clamp(-3, 3);
+  Future<bool> setHijriDateOffset(int v) =>
+      _prefs.setInt(_keyHijriDateOffset, v.clamp(-3, 3));
 }

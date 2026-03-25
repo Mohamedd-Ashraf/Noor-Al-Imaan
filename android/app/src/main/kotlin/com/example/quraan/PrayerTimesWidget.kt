@@ -50,6 +50,7 @@ abstract class BasePrayerTimesWidget : AppWidgetProvider() {
     protected abstract val nextTimeColor: Int
     protected abstract val currentHighlightDrawable: Int
     protected abstract val currentBadgeDrawable: Int
+    protected abstract val nextCircleDrawable: Int
 
     // ─── AppWidgetProvider overrides ─────────────────────────────────────────
 
@@ -189,7 +190,7 @@ abstract class BasePrayerTimesWidget : AppWidgetProvider() {
     private fun bindHeader(context: Context, views: RemoteViews, locationName: String?) {
         val now = Date()
         val arabicFormatter = SimpleDateFormat("EEEE، d MMMM yyyy", Locale("ar"))
-        views.setTextViewText(R.id.widget_date, arabicFormatter.format(now))
+        views.setTextViewText(R.id.widget_date, toArabicNumerals(arabicFormatter.format(now)))
         views.setTextViewText(R.id.widget_hijri_date, formatHijriDate(context, now))
         views.setTextViewText(R.id.widget_location, locationName ?: "الموقع المحفوظ")
     }
@@ -245,7 +246,7 @@ abstract class BasePrayerTimesWidget : AppWidgetProvider() {
 
         clearColumnHighlights(views)
         highlightCurrent(views, currentName)
-        accentNext(views, if (isTomorrow) null else nextName, currentName)
+        accentNext(views, nextName, currentName)
     }
 
     private fun renderNoData(views: RemoteViews) {
@@ -278,25 +279,16 @@ abstract class BasePrayerTimesWidget : AppWidgetProvider() {
     }
 
     private fun highlightCurrent(views: RemoteViews, name: String?) {
-        val col  = colIdFor(name)  ?: return
         val time = timeIdFor(name) ?: return
-        val badge = badgeIdFor(name) ?: return
-        views.setInt(col, "setBackgroundResource", currentHighlightDrawable)
         views.setTextColor(time, currentTimeColor)
-        views.setViewVisibility(badge, android.view.View.VISIBLE)
-        views.setTextViewText(badge, "الآن")
-        views.setInt(badge, "setBackgroundResource", currentBadgeDrawable)
     }
 
     private fun accentNext(views: RemoteViews, next: String?, current: String?) {
         if (next == null || next == current) return
+        val col  = colIdFor(next) ?: return
         val time = timeIdFor(next) ?: return
+        views.setInt(col, "setBackgroundResource", currentHighlightDrawable)
         views.setTextColor(time, nextTimeColor)
-        val badge = badgeIdFor(next) ?: return
-        views.setViewVisibility(badge, android.view.View.VISIBLE)
-        views.setTextViewText(badge, "لاحقا")
-        views.setTextColor(badge, nextTimeColor)
-        views.setInt(badge, "setBackgroundResource", 0)
     }
 
     private fun colIdFor(name: String?): Int? = when (name) {
@@ -573,15 +565,28 @@ abstract class BasePrayerTimesWidget : AppWidgetProvider() {
     }
 
     /**
+     * Convert Western Arabic digits (0-9) to Eastern Arabic digits (٠-٩).
+     */
+    private fun toArabicNumerals(s: String): String {
+        return s.map {
+            when (it) {
+                '0' -> '٠'; '1' -> '١'; '2' -> '٢'; '3' -> '٣'; '4' -> '٤'
+                '5' -> '٥'; '6' -> '٦'; '7' -> '٧'; '8' -> '٨'; '9' -> '٩'
+                else -> it
+            }
+        }.joinToString("")
+    }
+
+    /**
      * Format a Date as "hh:mm ص/م" using a 12-hour Arabic clock.
-     * Example: 04:36 ص  |  05:51 م
+     * Example: ٠٤:٣٦ ص  |  ٠٥:٥١ م
      */
     private fun formatTime(date: Date): String {
         val cal = Calendar.getInstance().apply { time = date }
         val hour = cal.get(Calendar.HOUR).let { if (it == 0) 12 else it }
         val minute = cal.get(Calendar.MINUTE)
         val amPm = if (cal.get(Calendar.AM_PM) == Calendar.AM) "ص" else "م"
-        return String.format(Locale.ENGLISH, "%02d:%02d %s", hour, minute, amPm)
+        return toArabicNumerals(String.format(Locale.ENGLISH, "%02d:%02d %s", hour, minute, amPm))
     }
 
     /**
@@ -593,9 +598,9 @@ abstract class BasePrayerTimesWidget : AppWidgetProvider() {
         val h = totalMin / 60
         val m = totalMin % 60
         return if (h > 0) {
-            String.format(Locale.ENGLISH, "%dس %02dد", h, m)
+            toArabicNumerals(String.format(Locale.ENGLISH, "%dس %02dد", h, m))
         } else {
-            String.format(Locale.ENGLISH, "%dد", m)
+            toArabicNumerals(String.format(Locale.ENGLISH, "%dد", m))
         }
     }
 
@@ -621,7 +626,7 @@ abstract class BasePrayerTimesWidget : AppWidgetProvider() {
             "محرم", "صفر", "ربيع الأول", "ربيع الآخر", "جمادى الأولى", "جمادى الآخرة",
             "رجب", "شعبان", "رمضان", "شوال", "ذو القعدة", "ذو الحجة",
         )
-        return "${hijri.day} ${months[hijri.month - 1]} ${hijri.year} هـ"
+        return "${toArabicNumerals(hijri.day.toString())} ${months[hijri.month - 1]} ${toArabicNumerals(hijri.year.toString())} هـ"
     }
 
     private fun resolveCountryCode(context: Context): String {
@@ -635,9 +640,8 @@ abstract class BasePrayerTimesWidget : AppWidgetProvider() {
     }
 
     private fun tryFormatHijriWithDeviceLocale(countryCode: String, date: Date): String? {
-        // EG uses the algorithmic path so the regional offset (-1) is applied correctly
-        if (countryCode == "EG") return null
         val localeTag = when (countryCode) {
+            "EG" -> "ar-EG-u-ca-islamic"
             "SA", "AE", "QA", "KW", "BH", "OM", "YE" -> "ar-SA-u-ca-islamic-umalqura"
             "MA", "DZ", "TN", "LY" -> "ar-MA-u-ca-islamic-civil"
             "JO", "PS", "SY", "LB", "IQ" -> "ar-EG-u-ca-islamic"
@@ -648,7 +652,7 @@ abstract class BasePrayerTimesWidget : AppWidgetProvider() {
             val locale = Locale.forLanguageTag(localeTag)
             val formatter = SimpleDateFormat("d MMMM yyyy", locale)
             val value = formatter.format(date)
-            if (looksGregorianMonth(value)) null else "$value هـ"
+            if (looksGregorianMonth(value)) null else toArabicNumerals("$value هـ")
         } catch (_: Exception) {
             null
         }
@@ -663,16 +667,12 @@ abstract class BasePrayerTimesWidget : AppWidgetProvider() {
     }
 
     private fun regionalHijriOffsetDays(context: Context, countryCode: String): Int {
-        // Check country, locale, and timezone because some devices expose Arabic locale without country.
-        val isEgypt = countryCode == "EG" || isEgyptLocale(context) || isEgyptTimezone()
-        return when {
-            // Empirically Egypt's official ruya is still one more day behind this tabular conversion.
-            isEgypt -> -1
-        // Gulf countries — Umm al-Qura often runs a day ahead of naked-eye sighting elsewhere.
-            countryCode in listOf("SA", "AE", "QA", "KW", "BH", "OM", "YE") -> 1
-        // Egypt & Maghreb — Dar al-Iftaa / local ruya sighting tends to be a day behind the tabular calculation.
-            countryCode in listOf("MA", "DZ", "TN", "LY") -> -1
-        else -> 0
+        return when (countryCode) {
+            // Gulf countries — Umm al-Qura often runs a day ahead of naked-eye sighting elsewhere.
+            "SA", "AE", "QA", "KW", "BH", "OM", "YE" -> 1
+            // Maghreb — local ruya sighting tends to be a day behind the tabular calculation.
+            "MA", "DZ", "TN", "LY" -> -1
+            else -> 0
         }
     }
 
@@ -733,6 +733,7 @@ class PrayerTimesWidget : BasePrayerTimesWidget() {
     override val nextTimeColor = 0xFFE8D79A.toInt()
     override val currentHighlightDrawable = R.drawable.widget_current_highlight_balanced
     override val currentBadgeDrawable = R.drawable.widget_badge_balanced
+    override val nextCircleDrawable = R.drawable.widget_next_circle_balanced
 }
 
 class PrayerTimesWidgetDark : BasePrayerTimesWidget() {
@@ -744,6 +745,7 @@ class PrayerTimesWidgetDark : BasePrayerTimesWidget() {
     override val nextTimeColor = 0xFF9FD5C0.toInt()
     override val currentHighlightDrawable = R.drawable.widget_current_highlight_dark
     override val currentBadgeDrawable = R.drawable.widget_badge_dark
+    override val nextCircleDrawable = R.drawable.widget_next_circle_dark
 }
 
 class PrayerTimesWidgetLight : BasePrayerTimesWidget() {
@@ -755,4 +757,5 @@ class PrayerTimesWidgetLight : BasePrayerTimesWidget() {
     override val nextTimeColor = 0xFF0D5E3A.toInt()
     override val currentHighlightDrawable = R.drawable.widget_current_highlight_light
     override val currentBadgeDrawable = R.drawable.widget_badge_light
+    override val nextCircleDrawable = R.drawable.widget_next_circle_light
 }

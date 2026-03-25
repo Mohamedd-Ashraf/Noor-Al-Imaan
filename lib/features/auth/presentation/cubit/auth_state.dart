@@ -1,0 +1,62 @@
+import 'package:equatable/equatable.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+
+enum AuthStatus {
+  /// Initial state before the auth check has completed.
+  unknown,
+
+  /// User is authenticated (Google or email/password).
+  authenticated,
+
+  /// User chose guest mode (anonymous auth).
+  guest,
+
+  /// User is not authenticated at all.
+  unauthenticated,
+}
+
+class AuthState extends Equatable {
+  final AuthStatus status;
+  final User? user;
+  final String? errorMessage;
+  final bool isLoading;
+
+  const AuthState({
+    this.status = AuthStatus.unknown,
+    this.user,
+    this.errorMessage,
+    this.isLoading = false,
+  });
+
+  /// Display name: Google/email name, or guest fallback.
+  String get displayName {
+    if (user == null) return '';
+    if (user!.isAnonymous) return 'زائر';
+    return user!.displayName ?? user!.email?.split('@').first ?? '';
+  }
+
+  /// Email address (empty for guests).
+  String get email => user?.email ?? '';
+
+  /// Whether user has a real account (not anonymous).
+  bool get hasAccount => status == AuthStatus.authenticated;
+
+  AuthState copyWith({
+    AuthStatus? status,
+    User? user,
+    String? errorMessage,
+    bool? isLoading,
+    bool clearError = false,
+    bool clearUser = false,
+  }) {
+    return AuthState(
+      status: status ?? this.status,
+      user: clearUser ? null : (user ?? this.user),
+      errorMessage: clearError ? null : (errorMessage ?? this.errorMessage),
+      isLoading: isLoading ?? this.isLoading,
+    );
+  }
+
+  @override
+  List<Object?> get props => [status, user?.uid, errorMessage, isLoading];
+}

@@ -7,6 +7,7 @@ import '../../../../core/theme/app_design_system.dart';
 import '../../../../core/di/injection_container.dart' as di;
 import '../../../../core/services/adhan_notification_service.dart';
 import '../../../../core/services/settings_service.dart';
+import '../../../../core/services/tutorial_service.dart';
 import '../../../../core/settings/app_settings_cubit.dart';
 import '../widgets/islamic_audio_player.dart';
 import 'home_screen.dart';
@@ -58,7 +59,11 @@ class _MainNavigatorState extends State<MainNavigator> {
         await adhan.requestPermissions();
         await di.sl<WirdNotificationService>().requestPermissions();
         if (!mounted) return;
-        unawaited(adhan.requestLocationIfNeeded());
+        await adhan.requestLocationIfNeeded();
+        // All startup dialogs / permission sheets / banners are done.
+        // Give a brief buffer for system dialog dismiss animations.
+        await Future<void>.delayed(const Duration(milliseconds: 800));
+        di.sl<TutorialService>().markAppReady();
       }));
     });
   }
@@ -92,6 +97,9 @@ class _MainNavigatorState extends State<MainNavigator> {
     setState(() => _currentIndex = index);
     if (index == 0) _homeKey.currentState?.reload();
     if (index == 1) _bookmarksKey.currentState?.reload();
+    // Notify all screens which tab is now visible so they can show their
+    // tutorial only when they're actually on screen.
+    di.sl<TutorialService>().activeTabIndex.value = index;
   }
 
   @override

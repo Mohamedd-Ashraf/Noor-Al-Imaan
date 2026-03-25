@@ -5,8 +5,13 @@ import 'package:http/http.dart' as http;
 import 'package:internet_connection_checker/internet_connection_checker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
+
+import '../../features/auth/data/auth_service.dart';
+import '../../features/auth/data/cloud_sync_service.dart';
+import '../../features/auth/presentation/cubit/auth_cubit.dart';
 
 import '../../features/quran/data/datasources/quran_remote_data_source.dart';
 import '../../features/quran/data/datasources/quran_local_data_source.dart';
@@ -196,6 +201,18 @@ Future<void> init() async {
       editionService: sl(),
     ),
   );
+
+  //! Auth
+  sl.registerLazySingleton(() => AuthService());
+  sl.registerLazySingleton(
+    () => CloudSyncService(
+      FirebaseFirestore.instance,
+      sl(),
+      sl(),
+      sl(),
+    ),
+  );
+  sl.registerFactory(() => AuthCubit(sl(), sl()));
 
   //! External
   final sharedPreferences = await SharedPreferences.getInstance();

@@ -398,4 +398,17 @@ class WirdService {
     const digits = ['٠', '١', '٢', '٣', '٤', '٥', '٦', '٧', '٨', '٩'];
     return n.toString().split('').map((c) => digits[int.parse(c)]).join();
   }
+
+  // ── Rotating-message helpers (used by WirdNotificationService) ─────────
+
+  /// Returns the current app language code ('ar' or 'en').
+  String getAppLanguage() => _prefs.getString('app_language') ?? 'ar';
+
+  /// Reads a named counter from SharedPreferences (default 0).
+  int getCounter(String key) => _prefs.getInt(key) ?? 0;
+
+  /// Increments a named counter and persists it.
+  void incrementCounter(String key) {
+    _prefs.setInt(key, getCounter(key) + 1);
+  }
 }

@@ -18,10 +18,64 @@ import '../../../adhkar/presentation/screens/tasbeeh_screen.dart';
 import '../../../quran/presentation/screens/feedback_screen.dart';
 import '../../../quran/presentation/screens/offline_tafsir_screen.dart';
 import '../../../ruqyah/presentation/screens/ruqyah_screen.dart';
+import '../../../hadith/presentation/screens/hadith_categories_screen.dart';
 import 'package:qcf_quran/qcf_quran.dart';
+import '../../../../core/services/tutorial_service.dart';
+import '../../../../core/di/injection_container.dart' as di;
+import '../tutorials/more_tutorial.dart';
 
-class MoreScreen extends StatelessWidget {
+class MoreScreen extends StatefulWidget {
   const MoreScreen({super.key});
+
+  @override
+  State<MoreScreen> createState() => _MoreScreenState();
+}
+
+class _MoreScreenState extends State<MoreScreen> {
+  bool _tutorialShown = false;
+
+  // Tab index for MoreScreen in the MainNavigator IndexedStack (0=Home,
+  // 1=Bookmarks, 2=Wird, 3=More, 4=Settings).
+  static const int _tabIndex = 3;
+
+  @override
+  void initState() {
+    super.initState();
+    // Listen for when this tab becomes active instead of triggering at mount
+    // time, because IndexedStack mounts all tabs at startup.
+    di.sl<TutorialService>().activeTabIndex.addListener(_onTabActivated);
+  }
+
+  @override
+  void dispose() {
+    di.sl<TutorialService>().activeTabIndex.removeListener(_onTabActivated);
+    super.dispose();
+  }
+
+  void _onTabActivated() {
+    if (di.sl<TutorialService>().activeTabIndex.value != _tabIndex) return;
+    _tutorialShown = false; // allow retry when tab is revisited
+    WidgetsBinding.instance.addPostFrameCallback((_) => _showTutorialIfNeeded());
+  }
+
+  void _showTutorialIfNeeded() {
+    if (_tutorialShown) return;
+    _tutorialShown = true;
+    final tutorialService = di.sl<TutorialService>();
+    final isArabic = context
+        .read<AppSettingsCubit>()
+        .state
+        .appLanguageCode
+        .toLowerCase()
+        .startsWith('ar');
+    final isDark = context.read<AppSettingsCubit>().state.darkMode;
+    MoreTutorial.show(
+      context: context,
+      tutorialService: tutorialService,
+      isArabic: isArabic,
+      isDark: isDark,
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -41,7 +95,9 @@ class MoreScreen extends StatelessWidget {
           decoration: BoxDecoration(gradient: AppColors.primaryGradient),
         ),
       ),
-      body: ListView(
+      body: Builder(
+        builder: (context) {
+          return ListView(
         padding: const EdgeInsets.all(16),
         children: [
           // ── App logo card ──────────────────────────────────────────────
@@ -168,6 +224,7 @@ class MoreScreen extends StatelessWidget {
             ),
           ),
           _NavCard(
+            key: MoreTutorialKeys.prayerTimesCard,
             title: isArabicUi ? 'مواقيت الصلاة' : 'Prayer Times',
             subtitle: isArabicUi
                 ? 'حسب موقعك الحالي'
@@ -204,6 +261,7 @@ class MoreScreen extends StatelessWidget {
             },
           ),
           _NavCard(
+            key: MoreTutorialKeys.feedbackCard,
             title: isArabicUi ? 'اقتراحات ومشاركات' : 'Feedback & Suggestions',
             subtitle: isArabicUi
                 ? 'رأيك يُحسِّن التطبيق — نسخة بيتا'
@@ -217,6 +275,7 @@ class MoreScreen extends StatelessWidget {
             },
           ),
           _NavCard(
+            key: MoreTutorialKeys.tasbeehCard,
             title: isArabicUi ? 'السبحة الإلكترونية' : 'Digital Tasbeeh',
             subtitle: isArabicUi
                 ? 'عداد التسبيح مع حفظ العدد وخيارات متعددة'
@@ -243,6 +302,7 @@ class MoreScreen extends StatelessWidget {
             },
           ),
           _NavCard(
+            key: MoreTutorialKeys.ruqyahCard,
             title: isArabicUi ? 'الرقية الشرعية' : 'Ruqyah Shariah',
             subtitle: isArabicUi
                 ? 'آيات الشفاء والحماية من القرآن الكريم'
@@ -254,6 +314,19 @@ class MoreScreen extends StatelessWidget {
               Navigator.of(
                 context,
               ).push(MaterialPageRoute(builder: (_) => const RuqyahScreen()));
+            },
+          ),
+          _NavCard(
+            title: isArabicUi ? 'الأحاديث النبوية' : 'Prophetic Hadiths',
+            subtitle: isArabicUi
+                ? 'أحاديث صحيحة مع السند والتحقيق والمشاركة'
+                : 'Authentic hadiths with chain, verification & sharing',
+            icon: Icons.menu_book_rounded,
+            onTap: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                    builder: (_) => const HadithCategoriesScreen()),
+              );
             },
           ),
           _NavCard(
@@ -270,6 +343,8 @@ class MoreScreen extends StatelessWidget {
             },
           ),
         ],
+      );
+        },
       ),
     );
   }
@@ -323,8 +398,6 @@ class _QuranPlaylistBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
     return Container(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(20),
@@ -1018,6 +1091,7 @@ class _NavCard extends StatelessWidget {
   final String? badge;
 
   const _NavCard({
+    super.key,
     required this.title,
     required this.subtitle,
     required this.icon,

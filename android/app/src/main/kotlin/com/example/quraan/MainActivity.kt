@@ -427,6 +427,18 @@ class MainActivity : AudioServiceFragmentActivity() {
                     else -> result.notImplemented()
                 }
             }
+
+        // ── Tasbeeh widget refresh channel ────────────────────────────────────
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "quraan/tasbeeh_widget")
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "refreshWidget" -> {
+                        TasbeehWidgetUpdateDispatcher.refreshAll(this)
+                        result.success(null)
+                    }
+                    else -> result.notImplemented()
+                }
+            }
     }
 
     // ── OEM-specific battery optimization ──────────────────────────────────

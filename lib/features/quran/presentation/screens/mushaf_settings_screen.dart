@@ -561,7 +561,13 @@ class _DisplayModeCard extends StatelessWidget {
                 context.read<AppSettingsCubit>().setScrollMode(v),
           ),
           const Divider(height: 1, indent: 56, endIndent: 16),
-          SwitchListTile(
+          Builder(builder: (context) {
+            // Enabled only when Mushaf view is ON and QCF font is OFF
+            final wordByWordEnabled =
+                settings.useUthmaniScript && !settings.useQcfFont;
+            return Opacity(
+              opacity: wordByWordEnabled ? 1.0 : 0.4,
+              child: SwitchListTile(
             secondary: Container(
               padding: const EdgeInsets.all(7),
               decoration: BoxDecoration(
@@ -628,13 +634,37 @@ class _DisplayModeCard extends StatelessWidget {
                     ),
                   ],
                 ),
+                if (!wordByWordEnabled) ...[  
+                  const SizedBox(height: 4),
+                  Row(children: [
+                    Icon(Icons.info_outline_rounded,
+                        size: 11, color: AppColors.textSecondary),
+                    const SizedBox(width: 4),
+                    Flexible(
+                      child: Text(
+                        isAr
+                            ? (settings.useQcfFont
+                                ? 'يتطلب إيقاف رسم المصحف QCF'
+                                : 'يتطلب تفعيل عرض المصحف الشريف')
+                            : (settings.useQcfFont
+                                ? 'Requires QCF font to be disabled'
+                                : 'Requires Mushaf View to be enabled'),
+                        style: const TextStyle(
+                            fontSize: 10, color: AppColors.textSecondary),
+                      ),
+                    ),
+                  ]),
+                ],
               ],
             ),
-            value: settings.wordByWordAudio,
+            value: wordByWordEnabled && settings.wordByWordAudio,
             activeColor: AppColors.primary,
-            onChanged: (v) =>
-                context.read<AppSettingsCubit>().setWordByWordAudio(v),
-          ),
+            onChanged: wordByWordEnabled
+                ? (v) => context.read<AppSettingsCubit>().setWordByWordAudio(v)
+                : null,
+              ),
+            );
+          }),
         ],
       ),
     );
@@ -994,31 +1024,36 @@ class _EditionPickerCard extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // Tab bar
+          // Tab bar – gradient header matching app style
           Container(
-            decoration: BoxDecoration(
-              color: AppColors.primary.withValues(alpha: 0.06),
+            decoration: const BoxDecoration(
+              gradient: AppColors.primaryGradient,
               borderRadius:
-                  const BorderRadius.vertical(top: Radius.circular(14)),
+                  BorderRadius.vertical(top: Radius.circular(14)),
             ),
             child: TabBar(
               controller: tabController,
-              labelColor: AppColors.primary,
-              unselectedLabelColor: AppColors.textSecondary,
-              indicatorColor: AppColors.primary,
-              indicatorWeight: 2.5,
+              labelColor: Colors.white,
+              unselectedLabelColor: Colors.white.withValues(alpha: 0.6),
+              indicatorColor: Colors.transparent,
               dividerColor: Colors.transparent,
+              indicator: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.18),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              indicatorSize: TabBarIndicatorSize.tab,
               labelStyle:
                   const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
               unselectedLabelStyle:
-                  const TextStyle(fontWeight: FontWeight.w400, fontSize: 13),
+                  const TextStyle(fontWeight: FontWeight.w500, fontSize: 13),
               tabs: groups
                   .map((g) => Tab(
+                        height: 44,
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             Icon(g.icon, size: 14),
-                            const SizedBox(width: 4),
+                            const SizedBox(width: 5),
                             Text(isAr ? g.labelAr : g.labelEn),
                           ],
                         ),

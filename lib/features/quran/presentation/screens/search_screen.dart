@@ -3,6 +3,9 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/settings/app_settings_cubit.dart';
+import '../../../../core/di/injection_container.dart' as di;
+import '../../../../core/services/tutorial_service.dart';
+import '../tutorials/search_tutorial.dart';
 import '../cubit/search/search_cubit.dart';
 import '../cubit/search/search_state.dart';
 import 'surah_detail_screen.dart';
@@ -30,7 +33,30 @@ class _SearchScreenState extends State<SearchScreen> {
     // Auto-focus the search field when the screen opens.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _focusNode.requestFocus();
+      _showTutorialIfNeeded();
     });
+  }
+
+  bool _tutorialShown = false;
+
+  void _showTutorialIfNeeded() {
+    if (_tutorialShown) return;
+    _tutorialShown = true;
+    final svc = di.sl<TutorialService>();
+    if (svc.isTutorialComplete(TutorialService.searchScreen)) return;
+    final isAr = context
+        .read<AppSettingsCubit>()
+        .state
+        .appLanguageCode
+        .toLowerCase()
+        .startsWith('ar');
+    final isDark = context.read<AppSettingsCubit>().state.darkMode;
+    SearchTutorial.show(
+      context: context,
+      tutorialService: svc,
+      isArabic: isAr,
+      isDark: isDark,
+    );
   }
 
   @override
@@ -82,6 +108,7 @@ class _SearchScreenState extends State<SearchScreen> {
         onPressed: () => Navigator.of(context).pop(),
       ),
       title: _SearchField(
+        key: SearchTutorialKeys.searchField,
         controller: _controller,
         focusNode: _focusNode,
         isAr: isAr,
@@ -117,6 +144,7 @@ class _SearchScreenState extends State<SearchScreen> {
         }
         if (state.isEmpty) return _EmptyView(query: state.query, isAr: isAr);
         return _ResultsList(
+          key: SearchTutorialKeys.resultsList,
           state: state,
           query: state.query,
           isAr: isAr,
@@ -138,6 +166,7 @@ class _SearchField extends StatelessWidget {
   final VoidCallback onClear;
 
   const _SearchField({
+    super.key,
     required this.controller,
     required this.focusNode,
     required this.isAr,
@@ -461,6 +490,7 @@ class _ResultsList extends StatelessWidget {
   final bool isDark;
 
   const _ResultsList({
+    super.key,
     required this.state,
     required this.query,
     required this.isAr,

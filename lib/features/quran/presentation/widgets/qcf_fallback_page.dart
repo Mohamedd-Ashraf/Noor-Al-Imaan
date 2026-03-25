@@ -1265,13 +1265,13 @@ class _FbRecitationSettingsSheetState
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text('تلاوة كلمة بكلمة', style: labelStyle),
-                              Text('تتطلب تفعيل رسم المصحف الشريف QCF',
+                              Text('يتطلب تفعيل عرض المصحف الشريف',
                                   style: noteStyle),
                             ],
                           ),
                         ),
                         Switch(
-                          value: settings.wordByWordAudio,
+                          value: false,
                           onChanged: null,
                           activeColor: AppColors.secondary,
                           inactiveThumbColor: isDark

@@ -153,12 +153,50 @@
         </receiver>
 
         <!-- ═══════════════════════════════════════════════════════════════════
-             Prayer Times Home-Screen Widget
-             ═══════════════════════════════════════════════════════════════════
-             Reads prayer data from Flutter's SharedPreferences (no network
-             call needed) and refreshes itself every 15 minutes via an exact
-             AlarmManager alarm.  Tapping the widget opens the app.
-        -->
+             Prayer Times & Tasbeeh Home-Screen Widgets
+             Order: Dark → Normal → Light  (each pair: Prayer then Tasbeeh)
+             ═══════════════════════════════════════════════════════════════════ -->
+
+        <!-- 1 ── مواقيت الصلاة (داكن) -->
+        <receiver
+            android:name=".PrayerTimesWidgetDark"
+            android:exported="true"
+            android:label="@string/prayer_widget_dark_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+                <action android:name="com.htc.intent.action.QUICKBOOT_POWERON" />
+                <action android:name="android.intent.action.USER_PRESENT" />
+                <action android:name="com.example.quraan.ADHAN_STARTED" />
+                <action android:name="com.example.quraan.PRAYER_WIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/prayer_widget_dark_info" />
+        </receiver>
+
+        <!-- 2 ── السبحة (داكن) -->
+        <receiver
+            android:name=".TasbeehWidgetDark"
+            android:exported="true"
+            android:label="@string/tasbeeh_widget_dark_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+                <action android:name="com.example.quraan.TASBEEH_INCREMENT" />
+                <action android:name="com.example.quraan.TASBEEH_RESET" />
+                <action android:name="com.example.quraan.TASBEEH_NEXT" />
+                <action android:name="com.example.quraan.TASBEEH_WIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/tasbeeh_widget_dark_info" />
+        </receiver>
+
+        <!-- 3 ── مواقيت الصلاة (عادي) -->
         <receiver
             android:name=".PrayerTimesWidget"
             android:exported="true"
@@ -184,25 +222,26 @@
                 android:resource="@xml/prayer_widget_info" />
         </receiver>
 
+        <!-- 4 ── السبحة (عادي) -->
         <receiver
-            android:name=".PrayerTimesWidgetDark"
+            android:name=".TasbeehWidget"
             android:exported="true"
-            android:label="@string/prayer_widget_dark_label">
+            android:label="@string/tasbeeh_widget_label">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
                 <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
-                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
-                <action android:name="com.htc.intent.action.QUICKBOOT_POWERON" />
-                <action android:name="android.intent.action.USER_PRESENT" />
-                <action android:name="com.example.quraan.ADHAN_STARTED" />
-                <action android:name="com.example.quraan.PRAYER_WIDGET_UPDATE" />
+                <action android:name="com.example.quraan.TASBEEH_INCREMENT" />
+                <action android:name="com.example.quraan.TASBEEH_RESET" />
+                <action android:name="com.example.quraan.TASBEEH_NEXT" />
+                <action android:name="com.example.quraan.TASBEEH_WIDGET_UPDATE" />
             </intent-filter>
             <meta-data
                 android:name="android.appwidget.provider"
-                android:resource="@xml/prayer_widget_dark_info" />
+                android:resource="@xml/tasbeeh_widget_info" />
         </receiver>
 
+        <!-- 5 ── مواقيت الصلاة (فاتح) -->
         <receiver
             android:name=".PrayerTimesWidgetLight"
             android:exported="true"
@@ -220,6 +259,25 @@
             <meta-data
                 android:name="android.appwidget.provider"
                 android:resource="@xml/prayer_widget_light_info" />
+        </receiver>
+
+        <!-- 6 ── السبحة (فاتح) -->
+        <receiver
+            android:name=".TasbeehWidgetLight"
+            android:exported="true"
+            android:label="@string/tasbeeh_widget_light_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+                <action android:name="com.example.quraan.TASBEEH_INCREMENT" />
+                <action android:name="com.example.quraan.TASBEEH_RESET" />
+                <action android:name="com.example.quraan.TASBEEH_NEXT" />
+                <action android:name="com.example.quraan.TASBEEH_WIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/tasbeeh_widget_light_info" />
         </receiver>
     </application>
     <!-- Required to query activities that can process text, see:

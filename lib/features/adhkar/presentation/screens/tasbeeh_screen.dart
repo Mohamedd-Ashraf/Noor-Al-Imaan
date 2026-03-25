@@ -7,10 +7,22 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/settings/app_settings_cubit.dart';
+import '../../../../core/di/injection_container.dart' as di;
+import '../../../../core/services/tutorial_service.dart';
+import '../tutorials/tasbeeh_tutorial.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 // ── Direct Vibrator channel (bypasses haptic feedback system settings) ─────────
 const _kVibrateChannel = MethodChannel('quraan/adhan_player');
+
+// ── Tasbeeh widget refresh channel ────────────────────────────────────────────
+const _kTasbeehWidgetChannel = MethodChannel('quraan/tasbeeh_widget');
+
+Future<void> _refreshTasbeehWidget() async {
+  try {
+    await _kTasbeehWidgetChannel.invokeMethod<void>('refreshWidget');
+  } catch (_) {}
+}
 
 Future<void> _vibrateDevice({int duration = 40, int amplitude = 180}) async {
   try {
@@ -148,6 +160,7 @@ class _TasbeehScreenState extends State<TasbeehScreen>
   late final AnimationController _glowCtrl;
   late final Animation<double>   _glowAnim;
   late SharedPreferences         _prefs;
+  bool _tutorialShown = false;
 
   // ── Derived ────────────────────────────────────────────────────────────────
   _DhikrPreset get _preset => _kPresets[_presetIndex];
@@ -188,6 +201,30 @@ class _TasbeehScreenState extends State<TasbeehScreen>
     );
 
     _loadPrefs();
+    _showTutorialIfNeeded();
+  }
+
+  void _showTutorialIfNeeded() {
+    if (_tutorialShown) return;
+    _tutorialShown = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final svc = di.sl<TutorialService>();
+      if (svc.isTutorialComplete(TutorialService.tasbeehScreen)) return;
+      final isAr = context
+          .read<AppSettingsCubit>()
+          .state
+          .appLanguageCode
+          .toLowerCase()
+          .startsWith('ar');
+      final isDark = Theme.of(context).brightness == Brightness.dark;
+      TasbeehTutorial.show(
+        context: context,
+        tutorialService: svc,
+        isArabic: isAr,
+        isDark: isDark,
+      );
+    });
   }
 
   Future<void> _loadPrefs() async {
@@ -209,6 +246,7 @@ class _TasbeehScreenState extends State<TasbeehScreen>
     _prefs.setInt(_kPrefPreset,   _presetIndex);
     _prefs.setInt(_kPrefTarget,   _customTarget);
     _prefs.setBool(_kPrefVibrate, _vibrate);
+    _refreshTasbeehWidget();
   }
 
   @override
@@ -414,12 +452,14 @@ class _TasbeehScreenState extends State<TasbeehScreen>
                 // Main tap area
                 Expanded(
                   child: GestureDetector(
+                    key: TasbeehTutorialKeys.tapArea,
                     onTap: _increment,
                     behavior: HitTestBehavior.translucent,
                     child: Center(
                       child: ScaleTransition(
                         scale: _scaleAnim,
                         child: _TasbeehButton(
+                          key: TasbeehTutorialKeys.counter,
                           count: _count,
                           target: _target,
                           hasTarget: _hasTarget,
@@ -458,6 +498,7 @@ class _TasbeehScreenState extends State<TasbeehScreen>
                 const SizedBox(height: 8),
                 // Bottom actions
                 _BottomActions(
+                  key: TasbeehTutorialKeys.resetButton,
                   isAr: isAr,
                   isDark: isDark,
                   vibrate: _vibrate,
@@ -745,6 +786,7 @@ class _TasbeehButton extends StatelessWidget {
   final Animation<double> glowAnim;
 
   const _TasbeehButton({
+    super.key,
     required this.count,
     required this.target,
     required this.hasTarget,
@@ -1291,6 +1333,7 @@ class _BottomActions extends StatelessWidget {
   final VoidCallback onToggleVibrate;
 
   const _BottomActions({
+    super.key,
     required this.isAr,
     required this.isDark,
     required this.vibrate,

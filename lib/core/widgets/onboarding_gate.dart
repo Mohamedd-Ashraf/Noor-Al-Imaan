@@ -8,6 +8,9 @@ import '../services/feedback_service.dart';
 import '../settings/app_settings_cubit.dart';
 import '../widgets/whats_new_screen.dart';
 import '../widgets/feedback_dialog.dart';
+import '../../features/auth/presentation/cubit/auth_cubit.dart';
+import '../../features/auth/presentation/cubit/auth_state.dart';
+import '../../features/auth/presentation/screens/auth_screen.dart';
 import '../../features/islamic/presentation/screens/onboarding_screen.dart';
 import '../../features/islamic/presentation/screens/splash_page.dart';
 import '../../features/quran/presentation/screens/main_navigator.dart';
@@ -25,6 +28,8 @@ class _OnboardingGateState extends State<OnboardingGate> {
 
   bool _showSplash = true;
   bool? _onboardingComplete;
+  // Whether auth has been completed (or user is already signed in).
+  bool _authComplete = false;
   // null = not yet checked, true = show, false = skip
   bool? _showWhatsNew;
   String _appVersion = '';
@@ -46,9 +51,9 @@ class _OnboardingGateState extends State<OnboardingGate> {
     setState(() {
       _showSplash = false;
     });
-    // If onboarding is already done, start the What's New check right away.
+    // If onboarding is already done, check auth status.
     if (_onboardingComplete == true) {
-      _checkWhatsNew();
+      _checkAuthAndProceed();
     }
   }
 
@@ -58,6 +63,28 @@ class _OnboardingGateState extends State<OnboardingGate> {
     if (!mounted) return;
     setState(() {
       _onboardingComplete = true;
+    });
+    // After onboarding, check if user is already authenticated.
+    _checkAuthAndProceed();
+  }
+
+  // Checks whether the user is already authenticated.
+  // If yes, skip the auth screen. If no, it will be shown in build().
+  void _checkAuthAndProceed() {
+    final authState = context.read<AuthCubit>().state;
+    if (authState.status == AuthStatus.authenticated ||
+        authState.status == AuthStatus.guest) {
+      _authComplete = true;
+      _checkWhatsNew();
+    }
+    // Otherwise, build() will show the AuthScreen.
+  }
+
+  // Called when auth completes (sign-in, sign-up, or guest).
+  void _onAuthComplete() {
+    if (!mounted) return;
+    setState(() {
+      _authComplete = true;
     });
     _checkWhatsNew();
   }
@@ -124,14 +151,19 @@ class _OnboardingGateState extends State<OnboardingGate> {
       return OnboardingScreen(onContinue: _markOnboardingComplete);
     }
 
-    // ── 3. What's New check loading ────────────────────────────────────────
+    // ── 3. Authentication ──────────────────────────────────────────────────
+    if (!_authComplete) {
+      return AuthScreen(onAuthComplete: _onAuthComplete);
+    }
+
+    // ── 4. What's New check loading ────────────────────────────────────────
     if (_showWhatsNew == null) {
       return const Scaffold(
         body: Center(child: CircularProgressIndicator()),
       );
     }
 
-    // ── 4. What's New screen ───────────────────────────────────────────────
+    // ── 5. What's New screen ───────────────────────────────────────────────
     if (_showWhatsNew == true) {
       return WhatsNewScreen(
         whatsNewService: _whatsNewService,
@@ -141,7 +173,7 @@ class _OnboardingGateState extends State<OnboardingGate> {
       );
     }
 
-    // ── 5. Main app ────────────────────────────────────────────────────────
+    // ── 6. Main app ────────────────────────────────────────────────────────
     return const MainNavigator();
   }
 }

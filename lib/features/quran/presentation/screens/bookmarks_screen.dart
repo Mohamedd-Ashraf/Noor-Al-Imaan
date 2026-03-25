@@ -10,6 +10,8 @@ import '../../../../core/settings/app_settings_cubit.dart';
 import '../bloc/surah/surah_bloc.dart';
 import '../bloc/surah/surah_state.dart';
 import 'surah_detail_screen.dart';
+import '../../../../core/services/tutorial_service.dart';
+import '../tutorials/bookmarks_tutorial.dart';
 
 class BookmarksScreen extends StatefulWidget {
   final VoidCallback? onNavigateToHome;
@@ -26,6 +28,9 @@ class BookmarksScreenState extends State<BookmarksScreen> {
   static final RegExp _ayahIdPattern = RegExp(r'^surah_(\d+)_ayah_(\d+)$');
   static final RegExp _ayahRefPattern = RegExp(r'^(\d+):(\d+)$');
   static final RegExp _pagePattern = RegExp(r'^(?:(\d+)|mushaf):page:(\d+)$');
+
+  // Tutorial guard — prevents re-showing after the first attempt this session.
+  bool _tutorialShown = false;
 
   // ── Selection-mode state ──────────────────────────────────────────────────
   bool _isSelectionMode = false;
@@ -68,6 +73,21 @@ class BookmarksScreenState extends State<BookmarksScreen> {
     super.initState();
     _bookmarkService = di.sl<BookmarkService>();
     _loadBookmarks();
+    // Listen for tab-activation (tab index 1 = Bookmarks) instead of
+    // triggering at mount time, which fires for ALL IndexedStack tabs.
+    di.sl<TutorialService>().activeTabIndex.addListener(_onTabActivated);
+  }
+
+  @override
+  void dispose() {
+    di.sl<TutorialService>().activeTabIndex.removeListener(_onTabActivated);
+    super.dispose();
+  }
+
+  void _onTabActivated() {
+    if (di.sl<TutorialService>().activeTabIndex.value != 1) return;
+    _tutorialShown = false;
+    WidgetsBinding.instance.addPostFrameCallback((_) => _showTutorialIfNeeded());
   }
 
   void _loadBookmarks() {
@@ -218,6 +238,7 @@ class BookmarksScreenState extends State<BookmarksScreen> {
             : [
                 if (_bookmarks.isNotEmpty)
                   IconButton(
+                    key: BookmarksTutorialKeys.deleteButton,
                     icon: const Icon(Icons.delete_sweep),
                     tooltip: isArabicUi ? 'حذف إشارات' : 'Delete Bookmarks',
                     onPressed: _enterSelectionMode,
@@ -225,6 +246,25 @@ class BookmarksScreenState extends State<BookmarksScreen> {
               ],
       ),
       body: _bookmarks.isEmpty ? _buildEmptyState() : _buildBookmarksList(),
+    );
+  }
+
+  void _showTutorialIfNeeded() {
+    if (_tutorialShown) return;
+    _tutorialShown = true;
+    final tutorialService = di.sl<TutorialService>();
+    final isArabic = context
+        .read<AppSettingsCubit>()
+        .state
+        .appLanguageCode
+        .toLowerCase()
+        .startsWith('ar');
+    final isDark = context.read<AppSettingsCubit>().state.darkMode;
+    BookmarksTutorial.show(
+      context: context,
+      tutorialService: tutorialService,
+      isArabic: isArabic,
+      isDark: isDark,
     );
   }
 
@@ -349,6 +389,7 @@ class BookmarksScreenState extends State<BookmarksScreen> {
 
   Widget _buildBookmarksList() {
     return ListView.builder(
+      key: BookmarksTutorialKeys.bookmarksList,
       padding: const EdgeInsets.all(16),
       itemCount: _bookmarks.length,
       itemBuilder: (context, index) {

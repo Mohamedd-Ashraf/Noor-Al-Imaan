@@ -8,4 +8,11 @@
     <string name="prayer_widget_dark_description">معاينة للويدجت بالوضع الليلي مع إبراز الصلاة الحالية والقادمة.</string>
     <string name="prayer_widget_light_label">مواقيت الصلاة الفاتح</string>
     <string name="prayer_widget_light_description">معاينة للويدجت بالوضع الفاتح مع إبراز الصلاة الحالية والقادمة.</string>
+    <!-- ويدجت السبحة الإلكترونية -->
+    <string name="tasbeeh_widget_label">السبحة الإلكترونية</string>
+    <string name="tasbeeh_widget_description">سبحة إلكترونية تقدر تستعملها من الشاشة الرئيسية من غير ما تفتح التطبيق.</string>
+    <string name="tasbeeh_widget_dark_label">السبحة الإلكترونية الليلي</string>
+    <string name="tasbeeh_widget_dark_description">سبحة إلكترونية بالوضع الليلي للشاشة الرئيسية.</string>
+    <string name="tasbeeh_widget_light_label">السبحة الإلكترونية الفاتح</string>
+    <string name="tasbeeh_widget_light_description">سبحة إلكترونية بالوضع الفاتح للشاشة الرئيسية.</string>
 </resources>

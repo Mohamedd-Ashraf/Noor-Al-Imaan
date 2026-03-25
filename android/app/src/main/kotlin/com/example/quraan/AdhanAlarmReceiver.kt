@@ -1,12 +1,15 @@
 package com.example.quraan
 
 import android.app.AlarmManager
+import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.os.Build
 import android.util.Log
 import org.json.JSONArray
@@ -40,6 +43,47 @@ class AdhanAlarmReceiver : BroadcastReceiver() {
         private const val KEY_AUDIO_STREAM   = "flutter.adhan_audio_stream"
         private const val KEY_ONLINE_URL     = "flutter.adhan_online_url"
         private const val KEY_ALARM_TIMES    = "flutter.adhan_alarm_times" // JSON map of alarm ID → timeMs
+
+        // ── Prayer-time text notification ────────────────────────────────────
+        private const val PRAYER_NOTIF_CHANNEL_ID = "prayer_time_info_v1"
+        private const val PRAYER_NOTIF_ID = 9_999 // Unique ID — separate from adhan foreground notification (7777) and fallback (8888)
+
+        // English prayer names keyed by Arabic name
+        private val englishPrayerNames = mapOf(
+            "الفجر" to "Fajr",
+            "الظهر" to "Dhuhr",
+            "العصر" to "Asr",
+            "المغرب" to "Maghrib",
+            "العشاء" to "Isha"
+        )
+
+        // Motivational quotes — Arabic
+        private val motivationalAr = listOf(
+            "أقِم صلاتك تجد راحة قلبك 🕌",
+            "الصلاة نور، فلا تُطفئ نورك 🌟",
+            "حيّ على الصلاة.. حيّ على الفلاح 🤲",
+            "إن الصلاة كانت على المؤمنين كتاباً موقوتاً 📖",
+            "الصلاة عماد الدين، فحافظ عليها 💪",
+            "بين العبد والكفر ترك الصلاة، فأقمها 🕋",
+            "أقرب ما يكون العبد من ربه وهو ساجد 🤲",
+            "الصلاة خير موضوع، فأكثر أو أقل 🌙",
+            "من حافظ عليها كانت له نوراً يوم القيامة ✨",
+            "فاستبقوا الخيرات 🏃"
+        )
+
+        // Motivational quotes — English
+        private val motivationalEn = listOf(
+            "Establish your prayer and find peace of heart 🕌",
+            "Prayer is light — don't extinguish yours 🌟",
+            "Come to prayer.. Come to success 🤲",
+            "Indeed, prayer has been decreed upon the believers at fixed times 📖",
+            "Prayer is the pillar of the religion — guard it 💪",
+            "The closest a servant is to his Lord is when prostrating 🤲",
+            "Race to all that is good 🏃",
+            "Prayer is the best deed, so increase in it 🌙",
+            "Whoever guards their prayer, it will be a light for them ✨",
+            "Verily, in the remembrance of Allah do hearts find rest 🕋"
+        )
 
         /**
          * Schedule a list of alarms via AlarmManager.
@@ -224,6 +268,131 @@ class AdhanAlarmReceiver : BroadcastReceiver() {
             }
         } else {
             context.startService(serviceIntent)
+        }
+
+        // Post a separate persistent text notification alongside the adhan audio.
+        // This stays visible after the adhan player stops so the user can confirm
+        // that the adhan fired even if they were asleep or in a noisy place.
+        postPrayerTimeNotification(context, arabicName, timeDisplay)
+    }
+
+    // ── Prayer-time info notification ──────────────────────────────────────
+
+    /**
+     * Posts a separate, auto-dismissable text notification that tells the user
+     * which prayer time has arrived, the clock time, and a motivational quote.
+     *
+     * This notification is independent of the foreground adhan player notification
+     * and remains visible after the adhan audio stops — confirming to the user that
+     * the adhan did fire even if they were asleep or in a noisy environment.
+     *
+     * Supports Arabic and English based on the app language setting.
+     * Uses the app logo (Splash_dark_transparent.png) as the large icon.
+     */
+    private fun postPrayerTimeNotification(context: Context, arabicName: String, timeDisplay: String) {
+        try {
+            val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            val isArabic = prefs.getString("flutter.app_language", "ar") == "ar"
+
+            // ── Create / ensure notification channel (Android 8+) ──
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                val channelName = if (isArabic) "إشعار وقت الصلاة" else "Prayer Time Alert"
+                val channelDesc = if (isArabic) "إشعار نصّي عند حلول وقت كل صلاة" else "Text notification when each prayer time arrives"
+                val ch = NotificationChannel(
+                    PRAYER_NOTIF_CHANNEL_ID, channelName,
+                    NotificationManager.IMPORTANCE_HIGH
+                ).apply {
+                    description = channelDesc
+                    setShowBadge(true)
+                    lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+                    enableVibration(true)
+                }
+                nm.createNotificationChannel(ch)
+            }
+
+            // ── Build title ──
+            val englishName = englishPrayerNames[arabicName] ?: "Prayer"
+            val title = if (isArabic) {
+                "🕌 حان الآن موعد صلاة $arabicName"
+            } else {
+                "🕌 It's time for $englishName prayer"
+            }
+
+            // ── Build body: prayer time + motivational quote ──
+            // Use a persistent counter so the quote genuinely changes every prayer.
+            val quotes = if (isArabic) motivationalAr else motivationalEn
+            val counterKey = "flutter.prayer_notif_quote_counter"
+            val counter = prefs.getInt(counterKey, 0)
+            val quote = quotes[counter % quotes.size]
+            prefs.edit().putInt(counterKey, counter + 1).apply()
+
+            val body = buildString {
+                if (timeDisplay.isNotEmpty()) {
+                    if (isArabic) {
+                        append("⏰ الساعة $timeDisplay")
+                    } else {
+                        // Format time in English locale
+                        val englishTime = try {
+                            // Re-parse from the Arabic time string and format in English
+                            val arFormatter = SimpleDateFormat("h:mm a", Locale("ar"))
+                            val date = arFormatter.parse(timeDisplay)
+                            val enFormatter = SimpleDateFormat("h:mm a", Locale.ENGLISH)
+                            if (date != null) enFormatter.format(date) else timeDisplay
+                        } catch (_: Exception) { timeDisplay }
+                        append("⏰ $englishTime")
+                    }
+                    append("\n")
+                }
+                append(quote)
+            }
+
+            // ── Load app logo as large icon ──
+            val largeIcon: Bitmap? = try {
+                context.assets.open("flutter_assets/assets/logo/files/transparent/Splash_dark_transparent.png").use { input ->
+                    BitmapFactory.decodeStream(input)
+                }
+            } catch (_: Exception) {
+                // Fallback: try mosque.jpg
+                try {
+                    context.assets.open("flutter_assets/assets/logo/files/mosque.jpg").use { input ->
+                        BitmapFactory.decodeStream(input)
+                    }
+                } catch (_: Exception) { null }
+            }
+
+            // ── Small icon — must be a monochrome drawable for Android 15 ──
+            val smallIconRes = context.resources.getIdentifier("ic_notification", "drawable", context.packageName)
+                .takeIf { it != 0 } ?: android.R.drawable.ic_lock_idle_alarm
+
+            // ── Open app on tap ──
+            val openPi = context.packageManager.getLaunchIntentForPackage(context.packageName)?.let {
+                PendingIntent.getActivity(context, 2, it, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+            }
+
+            // ── Build the notification ──
+            val builder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                Notification.Builder(context, PRAYER_NOTIF_CHANNEL_ID)
+            } else {
+                @Suppress("DEPRECATION") Notification.Builder(context)
+            }
+
+            builder
+                .setSmallIcon(smallIconRes)
+                .setContentTitle(title)
+                .setStyle(Notification.BigTextStyle().bigText(body))
+                .setContentText(body.replace('\n', ' '))  // single-line for collapsed view
+                .setAutoCancel(true)
+                .setColor(0xFF1B5E20.toInt()) // Islamic dark green
+                .setVisibility(Notification.VISIBILITY_PUBLIC)
+
+            if (largeIcon != null) builder.setLargeIcon(largeIcon)
+            if (openPi != null) builder.setContentIntent(openPi)
+
+            nm.notify(PRAYER_NOTIF_ID, builder.build())
+            Log.d(TAG, "Posted prayer-time info notification: $title")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to post prayer-time info notification", e)
         }
     }
 

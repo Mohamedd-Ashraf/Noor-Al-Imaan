@@ -26,6 +26,9 @@ import '../../../islamic/presentation/widgets/next_prayer_countdown.dart';
 import 'surah_detail_screen.dart';
 import '../../../islamic/presentation/screens/qiblah_screen.dart';
 import 'search_screen.dart';
+import '../../../../core/services/tutorial_service.dart';
+import '../tutorials/home_tutorial.dart';
+import '../../../../core/utils/hijri_utils.dart' as hijri;
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -43,6 +46,7 @@ class HomeScreenState extends State<HomeScreen>
   final Map<int, String> _juzLabelBySurahNumber = {};
   final Set<int> _loadingJuzForSurah = {};
   bool _batteryUnrestricted = true; // default true = no warning until checked
+  bool _tutorialShown = false;
 
   @override
   bool get wantKeepAlive => true;
@@ -92,6 +96,31 @@ class HomeScreenState extends State<HomeScreen>
 
   void reload() {
     context.read<SurahBloc>().add(GetAllSurahsEvent());
+  }
+
+  void showTutorial() {
+    _tutorialShown = false;
+    _tryShowTutorial();
+  }
+
+  void _tryShowTutorial() {
+    if (_tutorialShown) return;
+    final tutorialService = di.sl<TutorialService>();
+    if (tutorialService.isTutorialComplete(TutorialService.homeScreen)) return;
+    _tutorialShown = true;
+    final isArabic = context
+        .read<AppSettingsCubit>()
+        .state
+        .appLanguageCode
+        .toLowerCase()
+        .startsWith('ar');
+    final isDark = context.read<AppSettingsCubit>().state.darkMode;
+    HomeTutorial.show(
+      context: context,
+      tutorialService: tutorialService,
+      isArabic: isArabic,
+      isDark: isDark,
+    );
   }
 
   String _revelationLabel(String revelationType, {required bool isArabicUi}) {
@@ -169,7 +198,37 @@ class HomeScreenState extends State<HomeScreen>
             darkTheme: context.watch<AppSettingsCubit>().state.darkMode,
           ),
         ),
-        title: Text(isArabicUi ? 'القرآن الكريم' : 'Quran'),
+        title: Builder(builder: (ctx) {
+          final offset = ctx
+              .watch<AppSettingsCubit>()
+              .state
+              .hijriDateOffset;
+          final hDate = hijri.todayHijri(offset);
+          final dateStr = hijri.formatHijriDate(
+            hDate[0], hDate[1], hDate[2],
+            isAr: isArabicUi,
+          );
+          return Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                isArabicUi ? 'القرآن الكريم' : 'Quran',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 18,
+                ),
+              ),
+              Text(
+                dateStr,
+                style: const TextStyle(
+                  color: Colors.white70,
+                  fontSize: 11,
+                ),
+              ),
+            ],
+          );
+        }),
         centerTitle: true,
         flexibleSpace: Container(
           decoration: const BoxDecoration(gradient: AppColors.primaryGradient),
@@ -177,6 +236,7 @@ class HomeScreenState extends State<HomeScreen>
         actions: [
           // Search button
           _AppBarActionButton(
+            key: HomeTutorialKeys.searchButton,
             icon: Icons.search_rounded,
             tooltip: isArabicUi ? 'بحث' : 'Search',
             onPressed: () => Navigator.push(
@@ -186,6 +246,7 @@ class HomeScreenState extends State<HomeScreen>
           ),
           // Dark mode toggle
           _AppBarActionButton(
+            key: HomeTutorialKeys.darkModeButton,
             icon: context.watch<AppSettingsCubit>().state.darkMode
                 ? Icons.light_mode_rounded
                 : Icons.dark_mode_rounded,
@@ -204,16 +265,23 @@ class HomeScreenState extends State<HomeScreen>
           const SizedBox(width: 4),
         ],
       ),
-      body: BlocBuilder<SurahBloc, SurahState>(
+      body: BlocConsumer<SurahBloc, SurahState>(
+        // listener fires once per state transition — safe place for side effects.
+        listener: (context, state) {
+          if (state is SurahListLoaded) {
+            WidgetsBinding.instance.addPostFrameCallback((_) => _tryShowTutorial());
+          }
+        },
         builder: (context, state) {
           if (state is SurahLoading) {
             return const Center(child: CircularProgressIndicator());
           } else if (state is SurahListLoaded) {
             return CustomScrollView(
               slivers: [
-                const SliverToBoxAdapter(child: NextPrayerCountdown()),
+                SliverToBoxAdapter(child: NextPrayerCountdown(key: HomeTutorialKeys.prayerCountdown)),
                 SliverToBoxAdapter(
                   child: Padding(
+                    key: HomeTutorialKeys.categoriesSection,
                     padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
                     child: _CategoriesSection(
                       isArabicUi: isArabicUi,
@@ -251,6 +319,7 @@ class HomeScreenState extends State<HomeScreen>
                       final detailsLine = detailsParts.join(' • ');
 
                       return Card(
+                        key: index == 0 ? HomeTutorialKeys.firstSurahCard : null,
                         margin: const EdgeInsets.only(bottom: 10),
                         child: InkWell(
                             onTap: () {
@@ -371,6 +440,7 @@ class HomeScreenState extends State<HomeScreen>
                                   const SizedBox(width: 8),
                                   // Play button
                                   Material(
+                                    key: index == 0 ? HomeTutorialKeys.firstPlayButton : null,
                                     color: Colors.transparent,
                                     child: InkWell(
                                       borderRadius: AppDesignSystem.borderRadiusMd,
@@ -977,6 +1047,7 @@ class _AppBarActionButton extends StatelessWidget {
   final VoidCallback onPressed;
 
   const _AppBarActionButton({
+    super.key,
     required this.icon,
     required this.tooltip,
     required this.onPressed,
