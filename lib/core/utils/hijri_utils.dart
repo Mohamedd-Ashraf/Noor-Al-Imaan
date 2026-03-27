@@ -41,7 +41,7 @@ List<int> jdnToHijri(int jdn) {
 
 /// Hijri date → Julian Day Number.
 int hijriToJdn(int hy, int hm, int hd) {
-  return 1948440 +
+  return 1948439 +
       (hy - 1) * 354 +
       (11 * hy + 3) ~/ 30 +
       (59 * hm - 58) ~/ 2 +
@@ -87,6 +87,40 @@ const List<String> _enMonths = [
   "Dhul-Qi'dah",
   'Dhul-Hijjah',
 ];
+
+/// Returns the month name for [hMonth] (1–12) in Arabic or English.
+String hijriMonthName(int hMonth, {required bool isAr}) {
+  return isAr
+      ? _arMonths[(hMonth - 1).clamp(0, 11)]
+      : _enMonths[(hMonth - 1).clamp(0, 11)];
+}
+
+/// Converts a Julian Day Number to a [DateTime].
+DateTime jdnToDateTime(int jdn) {
+  final l = jdn + 68569;
+  final n = (4 * l) ~/ 146097;
+  final ll = l - (146097 * n + 3) ~/ 4;
+  final i = (4000 * (ll + 1)) ~/ 1461001;
+  final lll = ll - (1461 * i) ~/ 4 + 31;
+  final j = (80 * lll) ~/ 2447;
+  final day = lll - (2447 * j) ~/ 80;
+  final lv = j ~/ 11;
+  final month = j + 2 - 12 * lv;
+  final year = 100 * (n - 49) + i + lv;
+  return DateTime(year, month, day);
+}
+
+/// Number of days in a Hijri month (29 or 30).
+int hijriDaysInMonth(int hYear, int hMonth) {
+  if (hMonth % 2 == 1) return 30;
+  if (hMonth == 12) {
+    return ((11 * hYear + 14) % 30 < 11) ? 30 : 29;
+  }
+  return 29;
+}
+
+/// Converts Arabic numeral string (for use in exports).
+String toArabicNumerals(int n) => _toArabicNumerals(n);
 
 /// Formats a Hijri [hYear]/[hMonth]/[hDay] as a localised string.
 ///

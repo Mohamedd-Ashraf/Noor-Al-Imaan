@@ -12,7 +12,20 @@
           "package_name": "com.example.quraan"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "1039427063284-eejagcv1hsnco8k56qb711g7q2juvl0v.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.quraan",
+            "certificate_hash": "68b42abbc8cceaae2baab694c8a1e41ba0fa87d6"
+          }
+        },
+        {
+          "client_id": "1039427063284-md9k0adeefljpu1rr0vg8sksboq7el7u.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyAchR3hvc6n3y3d6LT4Y3QopHLCCHNNwvI"
@@ -20,7 +33,19 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "1039427063284-md9k0adeefljpu1rr0vg8sksboq7el7u.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "1039427063284-918ajsigfcimpbrpbmktuhb193t7jhcj.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.quraan"
+              }
+            }
+          ]
         }
       }
     }

@@ -223,6 +223,8 @@ class _SearchField extends StatelessWidget {
           ),
           border: InputBorder.none,
           isDense: true,
+          filled: true,
+          fillColor: Colors.transparent,
           contentPadding:
               const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
         ),

@@ -160,6 +160,8 @@ class _HadithSearchScreenState extends State<HadithSearchScreen> {
                 ),
                 border: InputBorder.none,
                 isDense: true,
+                filled: true,
+                fillColor: Colors.transparent,
                 contentPadding: const EdgeInsets.symmetric(vertical: 8),
               ),
               onChanged: _search,

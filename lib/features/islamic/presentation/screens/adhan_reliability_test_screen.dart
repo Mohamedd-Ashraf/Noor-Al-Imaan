@@ -4,7 +4,6 @@ import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../../core/di/injection_container.dart' as di;
-import '../../../../core/services/adhan_notification_service.dart';
 import '../../../../core/services/settings_service.dart';
 
 /// Comprehensive real-world Adhan testing screen.
@@ -25,7 +24,6 @@ class _AdhanReliabilityTestScreenState
     extends State<AdhanReliabilityTestScreen> with WidgetsBindingObserver {
   static const _channel = MethodChannel('quraan/adhan_player');
 
-  final _adhanService = di.sl<AdhanNotificationService>();
   final _settings = di.sl<SettingsService>();
 
   // Test state
@@ -564,7 +562,5 @@ class _TestItem {
     required this.label,
     required this.scheduledAt,
     required this.alarmId,
-    this.status = _TestStatus.pending,
-    this.firedAt,
-  });
+  }) : status = _TestStatus.pending, firedAt = null;
 }

@@ -121,8 +121,8 @@ class HadithFirestoreDataSource {
 
       if (!metaSnap.exists && !detailsSnap.exists) return null;
 
-      final m = metaSnap.data()    as Map<String, dynamic>? ?? {};
-      final d = detailsSnap.data() as Map<String, dynamic>? ?? {};
+      final m = metaSnap.data() ?? {};
+      final d = detailsSnap.data() ?? {};
 
       return FirestoreHadith(
         number:      (m['number']      as int?)    ?? hadithNumber,
@@ -243,7 +243,7 @@ class FirestoreHadith {
     // Truncate title to 60 chars — some Firestore titles are the hadith text itself
     final rawTitle = title.isNotEmpty ? title : bookNameAr;
     final shortTitle =
-        rawTitle.length > 60 ? '${rawTitle.substring(0, 60)}...' : rawTitle;
+        rawTitle.length > 30 ? '${rawTitle.substring(0, 30)}...' : rawTitle;
     return HadithListItem(
       id: 'bukhari_${bookNumber}_$number',
       categoryId: 'bukhari',

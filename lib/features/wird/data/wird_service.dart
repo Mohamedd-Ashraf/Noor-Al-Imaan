@@ -43,6 +43,39 @@ class WirdPlan {
   bool get isPagesBased =>
       planMode == WirdPlanMode.pages && pagesPerDay != null;
 
+  /// Consecutive completed days ending at (or just before) today.
+  int get currentStreak {
+    final today = currentDay;
+    int streak = 0;
+    for (int d = today; d >= 1; d--) {
+      if (completedDays.contains(d)) {
+        streak++;
+      } else {
+        break;
+      }
+    }
+    return streak;
+  }
+
+  /// Best (longest) consecutive streak ever in this plan.
+  int get bestStreak {
+    if (completedDays.isEmpty) return 0;
+    final sorted = [...completedDays]..sort();
+    int best = 0;
+    int run = 0;
+    int? prev;
+    for (final d in sorted) {
+      if (prev == null || d == prev + 1) {
+        run++;
+      } else {
+        run = 1;
+      }
+      if (run > best) best = run;
+      prev = d;
+    }
+    return best;
+  }
+
   WirdPlan copyWith({List<int>? completedDays}) => WirdPlan(
     type: type,
     startDate: startDate,
@@ -68,12 +101,16 @@ class WirdService {
       'wird_followup_interval_hours';
   static const String _keyLastReadSurah = 'wird_last_read_surah';
   static const String _keyLastReadAyah = 'wird_last_read_ayah';
+  static const String _keyLastReadPage = 'wird_last_read_page';
   // Makeup wird bookmark
   static const String _keyMakeupDay = 'wird_makeup_day';
   static const String _keyMakeupSurah = 'wird_makeup_surah';
   static const String _keyMakeupAyah = 'wird_makeup_ayah';
 
   final SharedPreferences _prefs;
+
+  /// Called whenever the wird plan or progress is mutated so cloud sync can trigger.
+  void Function()? onDataChanged;
 
   WirdService(this._prefs);
 
@@ -161,6 +198,7 @@ class WirdService {
     if (reminderMinute != null) {
       await _prefs.setInt(_keyReminderMinute, reminderMinute);
     }
+    onDataChanged?.call();
   }
 
   /// Marks a day as complete.
@@ -171,6 +209,7 @@ class WirdService {
     if (!completed.contains(day)) {
       completed.add(day);
       await _prefs.setString(_keyCompletedDays, jsonEncode(completed));
+      onDataChanged?.call();
     }
   }
 
@@ -180,6 +219,7 @@ class WirdService {
     if (plan == null) return;
     final completed = List<int>.from(plan.completedDays)..remove(day);
     await _prefs.setString(_keyCompletedDays, jsonEncode(completed));
+    onDataChanged?.call();
   }
 
   /// Deletes the current plan entirely.
@@ -192,9 +232,11 @@ class WirdService {
     await _prefs.remove(_keyCompletedDays);
     await _prefs.remove(_keyLastReadSurah);
     await _prefs.remove(_keyLastReadAyah);
+    await _prefs.remove(_keyLastReadPage);
     await _prefs.remove(_keyMakeupDay);
     await _prefs.remove(_keyMakeupSurah);
     await _prefs.remove(_keyMakeupAyah);
+    onDataChanged?.call();
     // Intentionally keep reminder time — user may want to re-use it.
   }
 
@@ -211,6 +253,7 @@ class WirdService {
   Future<void> setReminderTime(int hour, int minute) async {
     await _prefs.setInt(_keyReminderHour, hour);
     await _prefs.setInt(_keyReminderMinute, minute);
+    onDataChanged?.call();
   }
 
   Future<void> clearReminderTime() async {
@@ -229,17 +272,19 @@ class WirdService {
 
   Future<void> setNotificationsEnabled(bool enabled) async {
     await _prefs.setBool(_keyNotificationsEnabled, enabled);
+    onDataChanged?.call();
   }
 
   // ── Follow-up interval ────────────────────────────────────────────────────
 
   /// Hours between follow-up reminders (when wird not yet marked complete).
-  /// Default: 4 hours. Allowed values: 1, 2, 3, 4, 6, 8.
+  /// Default: 2 hours. Allowed values: 1, 2, 3, 4, 6, 8.
   int get followUpIntervalHours =>
-      _prefs.getInt(_keyFollowUpIntervalHours) ?? 4;
+      _prefs.getInt(_keyFollowUpIntervalHours) ?? 2;
 
   Future<void> setFollowUpIntervalHours(int hours) async {
     await _prefs.setInt(_keyFollowUpIntervalHours, hours);
+    onDataChanged?.call();
   }
 
   // ── Last-read position (daily progress bookmark) ───────────────────────────
@@ -251,16 +296,28 @@ class WirdService {
   /// Ayah number where the user last stopped reading today.
   int? get lastReadAyah => _prefs.getInt(_keyLastReadAyah);
 
-  /// Saves a reading bookmark.
+  /// Mushaf page number (1–604) where the user last stopped reading.
+  /// This is the primary resume point in QCF mushaf mode.
+  int? get lastReadPage => _prefs.getInt(_keyLastReadPage);
+
+  /// Saves a reading bookmark (surah + ayah, typically on surah navigation).
   Future<void> saveLastRead(int surah, int ayah) async {
     await _prefs.setInt(_keyLastReadSurah, surah);
     await _prefs.setInt(_keyLastReadAyah, ayah);
+    onDataChanged?.call();
+  }
+
+  /// Saves the current mushaf page number wherever the user is reading.
+  Future<void> saveLastReadPage(int page) async {
+    await _prefs.setInt(_keyLastReadPage, page);
+    onDataChanged?.call();
   }
 
   /// Clears the current reading bookmark (call when day is marked complete).
   Future<void> clearLastRead() async {
     await _prefs.remove(_keyLastReadSurah);
     await _prefs.remove(_keyLastReadAyah);
+    await _prefs.remove(_keyLastReadPage);
   }
 
   // ── Makeup wird bookmark ──────────────────────────────────────────────────
@@ -280,6 +337,7 @@ class WirdService {
     await _prefs.setInt(_keyMakeupDay, day);
     await _prefs.setInt(_keyMakeupSurah, surah);
     await _prefs.setInt(_keyMakeupAyah, ayah);
+    onDataChanged?.call();
   }
 
   /// Clears the makeup bookmark (call when the makeup day is marked complete).

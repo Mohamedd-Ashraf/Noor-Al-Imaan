@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
@@ -22,7 +24,37 @@ class CloudSyncService {
   final BookmarkService _bookmarkService;
   final WirdService _wirdService;
 
+  /// Legacy shared sync-time key (kept for migration reads only).
   static const String _keyLastSyncTime = 'cloud_last_sync_time';
+
+  /// Per-user sync-time key so multiple accounts on one device are isolated.
+  static String _syncTimeKey(String uid) => 'cloud_last_sync_time_$uid';
+
+  /// Stores the UID of the last user whose data was synced on this device.
+  /// Used to detect account switches and as a migration fallback.
+  static const String _keyLastSyncedUid = 'cloud_last_synced_uid';
+
+  // ── Auto-sync (debounced) ────────────────────────────────────────────────
+  /// Provides the currently signed-in user. Set via [setUserProvider].
+  User? Function()? _userProvider;
+  Timer? _uploadDebounce;
+  static const Duration _uploadDebounceDelay = Duration(seconds: 5);
+
+  /// Register a provider so `scheduleUpload` can retrieve the active user
+  /// without creating a circular dependency.
+  void setUserProvider(User? Function() provider) {
+    _userProvider = provider;
+  }
+
+  /// Schedules a debounced upload of all local data to Firestore.
+  /// Multiple calls within [_uploadDebounceDelay] are collapsed into one.
+  /// Safe to call from any service whenever local data changes.
+  void scheduleUpload() {
+    final user = _userProvider?.call();
+    if (user == null || user.isAnonymous) return;
+    _uploadDebounce?.cancel();
+    _uploadDebounce = Timer(_uploadDebounceDelay, () => uploadAll(user));
+  }
 
   CloudSyncService(
     this._firestore,
@@ -50,9 +82,10 @@ class CloudSyncService {
         _uploadSettings(doc),
       ]);
       await _prefs.setString(
-        _keyLastSyncTime,
+        _syncTimeKey(user.uid),
         DateTime.now().toIso8601String(),
       );
+      await _prefs.setString(_keyLastSyncedUid, user.uid);
       debugPrint('CloudSync: uploaded all data for ${user.uid}');
     } catch (e, st) {
       debugPrint('CloudSync: upload failed: $e\n$st');
@@ -71,35 +104,61 @@ class CloudSyncService {
         _downloadSettings(doc),
       ]);
       await _prefs.setString(
-        _keyLastSyncTime,
+        _syncTimeKey(user.uid),
         DateTime.now().toIso8601String(),
       );
+      await _prefs.setString(_keyLastSyncedUid, user.uid);
       debugPrint('CloudSync: downloaded all data for ${user.uid}');
     } catch (e, st) {
       debugPrint('CloudSync: download failed: $e\n$st');
     }
   }
 
-  /// Smart sync: uploads local data if it's newer, downloads if cloud is newer.
-  /// On first sign-in, uploads local data.
+  /// Smart sync on sign-in:
+  /// - New user (no Firestore profile) → upload local data.
+  /// - Existing user, first sign-in on this device (or account switch) → download
+  ///   cloud data so the user's personal data is restored immediately.
+  /// - Same user, previously synced on this device → compare timestamps and
+  ///   upload or download whichever side is newer.
   Future<void> syncAll(User user) async {
     final doc = _userDoc(user);
     if (doc == null) return;
 
     try {
       final profileSnap = await doc.get();
+
       if (!profileSnap.exists) {
-        // First time: upload everything
+        // Brand-new user: no cloud data yet → upload whatever is local.
         await uploadAll(user);
         return;
       }
 
+      // Cloud has a profile for this user.
       final cloudData = profileSnap.data() as Map<String, dynamic>?;
       final cloudSyncTime = cloudData?['lastSyncedAt'] as Timestamp?;
-      final localSyncStr = _prefs.getString(_keyLastSyncTime);
+
+      // Determine whether this device has already synced for THIS specific user.
+      // Migration-aware: the legacy shared key counts only when the stored UID
+      // matches (same user, upgraded app), preventing bleed-over from a
+      // previously signed-in different account.
+      final lastSyncedUid = _prefs.getString(_keyLastSyncedUid);
+      final hasLocalForThisUser =
+          _prefs.containsKey(_syncTimeKey(user.uid)) ||
+          (lastSyncedUid == user.uid &&
+              _prefs.containsKey(_keyLastSyncTime));
+
+      if (!hasLocalForThisUser) {
+        // First time on this device for this user (or account switch):
+        // always restore the user's own cloud data.
+        await downloadAll(user);
+        return;
+      }
+
+      // Previously synced — compare timestamps to decide direction.
+      final localSyncStr = _prefs.getString(_syncTimeKey(user.uid)) ??
+          _prefs.getString(_keyLastSyncTime);
 
       if (cloudSyncTime == null || localSyncStr == null) {
-        // No previous sync reference, upload local
         await uploadAll(user);
         return;
       }
@@ -118,8 +177,8 @@ class CloudSyncService {
       }
     } catch (e, st) {
       debugPrint('CloudSync: syncAll failed: $e\n$st');
-      // Fallback: upload local data
-      await uploadAll(user);
+      // Do NOT fall back to uploadAll on error — uploading empty/stale local
+      // data could silently destroy the user's cloud data.
     }
   }
 

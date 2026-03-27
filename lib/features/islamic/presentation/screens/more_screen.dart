@@ -10,23 +10,18 @@ import '../../../../core/widgets/islamic_logo.dart';
 import '../../../quran/domain/entities/surah.dart';
 import '../../../quran/presentation/bloc/surah/surah_bloc.dart';
 import '../../../quran/presentation/bloc/surah/surah_state.dart';
-import 'adhan_settings_screen.dart';
-import 'duaa_screen.dart';
-import 'prayer_times_screen.dart';
-import 'qiblah_screen.dart';
-import '../../../adhkar/presentation/screens/tasbeeh_screen.dart';
 import '../../../quran/presentation/screens/feedback_screen.dart';
 import '../../../quran/presentation/screens/offline_tafsir_screen.dart';
 import '../../../ruqyah/presentation/screens/ruqyah_screen.dart';
-import '../../../hadith/presentation/screens/hadith_categories_screen.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:qcf_quran/qcf_quran.dart';
 import '../../../quiz/presentation/screens/quiz_screen.dart';
 import '../../../quiz/presentation/widgets/quiz_sign_in_sheet.dart';
-import 'package:qcf_quran/qcf_quran.dart';
 import '../../../../core/services/tutorial_service.dart';
 import '../../../../core/services/settings_service.dart';
 import '../../../../core/di/injection_container.dart' as di;
 import '../tutorials/more_tutorial.dart';
+import 'hijri_calendar_screen.dart';
 
 class MoreScreen extends StatefulWidget {
   const MoreScreen({super.key});
@@ -294,6 +289,23 @@ class _MoreScreenState extends State<MoreScreen> {
               Navigator.of(
                 context,
               ).push(MaterialPageRoute(builder: (_) => const RuqyahScreen()));
+            },
+          ),
+
+          _NavCard(
+            title: isArabicUi ? 'التقويم الهجري' : 'Hijri Calendar',
+            subtitle: isArabicUi
+                ? 'التواريخ الإسلامية والمناسبات الدينية'
+                : 'Islamic dates & religious occasions',
+            icon: Icons.calendar_month_rounded,
+            imagePath: 'assetslogo/button icons/calendar.png',
+
+            monochromeImage: false,
+            onTap: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                    builder: (_) => const HijriCalendarScreen()),
+              );
             },
           ),
         ],
@@ -1057,7 +1069,6 @@ class _NavCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       child: InkWell(
@@ -1084,15 +1095,18 @@ class _NavCard extends StatelessWidget {
                 child: imagePath != null
                     ? ClipRRect(
                         borderRadius: BorderRadius.circular(13),
-                        child: Image.asset(
-                          imagePath!,
-                          width: 48,
-                          height: 48,
-                          fit: BoxFit.contain,
-                          color: monochromeImage ? Colors.white : null,
-                          colorBlendMode: monochromeImage ? BlendMode.srcATop : null,
-                          errorBuilder: (context, error, stackTrace) =>
-                              Icon(icon, color: Colors.white, size: 22),
+                        child: Transform.scale(
+                          scale: 1.35,
+                          child: Image.asset(
+                            imagePath!,
+                            width: 48,
+                            height: 48,
+                            fit: BoxFit.contain,
+                            color: monochromeImage ? Colors.white : null,
+                            colorBlendMode: monochromeImage ? BlendMode.srcATop : null,
+                            errorBuilder: (context, error, stackTrace) =>
+                                Icon(icon, color: Colors.white, size: 22),
+                          ),
                         ),
                       )
                     : Icon(icon, color: Colors.white, size: 22),

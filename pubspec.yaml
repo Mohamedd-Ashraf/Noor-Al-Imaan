@@ -92,6 +92,7 @@ dependencies:
   cloud_firestore: ^5.6.0
   firebase_auth: ^5.3.4
   google_sign_in: ^6.2.2
+  google_sign_in_platform_interface: ^2.5.0
 
   # Background downloads
   flutter_downloader: ^1.11.10
@@ -115,6 +116,11 @@ dependencies:
 
 dependency_overrides:
   intl: 0.20.2
+  # Pin to 6.2.1 — uses Credential Manager on Android 14+ (required for
+  # getIdToken without falling back to deprecated GoogleAuthUtil.getToken()).
+  # ProGuard rules keep the CredentialProvider ServiceLoader impl from being
+  # stripped by R8 full mode. See proguard-rules.pro.
+  google_sign_in_android: 6.2.1
 
 dev_dependencies:
   flutter_test:
@@ -169,6 +175,7 @@ flutter:
     - assets/fonts/
     - assets/hadith/
     - assets/logo/button icons/hadith.png
+    - assets/logo/button icons/calendar.png
     # - assets/sound/ # Commented out to reduce size as it seems unused and contains images?
 
   # An image asset can refer to one or more resolution-specific "variants", see

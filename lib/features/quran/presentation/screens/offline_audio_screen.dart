@@ -10,7 +10,6 @@ import '../../../../core/services/audio_edition_service.dart';
 import '../../../../core/services/offline_audio_service.dart';
 import '../../../../core/settings/app_settings_cubit.dart';
 import '../../../../core/audio/ayah_audio_cubit.dart';
-import 'package:qcf_quran/qcf_quran.dart';
 import 'select_download_screen.dart';
 
 class OfflineAudioScreen extends StatefulWidget {

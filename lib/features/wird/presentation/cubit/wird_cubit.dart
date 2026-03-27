@@ -38,6 +38,7 @@ class WirdCubit extends Cubit<WirdState> {
           followUpIntervalHours: followUpInterval,
           lastReadSurah: _wirdService.lastReadSurah,
           lastReadAyah: _wirdService.lastReadAyah,
+          lastReadPage: _wirdService.lastReadPage,
           makeupBookmarkDay: _wirdService.makeupBookmarkDay,
           makeupBookmarkSurah: _wirdService.makeupBookmarkSurah,
           makeupBookmarkAyah: _wirdService.makeupBookmarkAyah,
@@ -160,9 +161,15 @@ class WirdCubit extends Cubit<WirdState> {
   }
   // ── Reading bookmark (last-read position) ─────────────────────────────────
 
-  /// Saves the user’s current reading position (called when they tap “حدّث موضعي”).
+  /// Saves the user's current reading position (surah+ayah, on surah navigation).
   Future<void> saveLastRead(int surah, int ayah) async {
     await _wirdService.saveLastRead(surah, ayah);
+    load();
+  }
+
+  /// Saves the current mushaf page number (fires on every page swipe).
+  Future<void> saveLastReadPage(int page) async {
+    await _wirdService.saveLastReadPage(page);
     load();
   }
 

@@ -247,4 +247,15 @@ Future<void> init() async {
   sl.registerLazySingleton(() => http.Client());
   sl.registerLazySingleton(() => InternetConnectionChecker());
   sl.registerLazySingleton(() => FirebaseRemoteConfig.instance);
+
+  // ── Auto-sync wiring ──────────────────────────────────────────────────────
+  // Tell CloudSyncService how to get the active user (avoids circular deps).
+  sl<CloudSyncService>().setUserProvider(() => sl<AuthService>().currentUser);
+  // Whenever local data changes, schedule a debounced upload to Firestore.
+  sl<BookmarkService>().onDataChanged =
+      () => sl<CloudSyncService>().scheduleUpload();
+  sl<WirdService>().onDataChanged =
+      () => sl<CloudSyncService>().scheduleUpload();
+  sl<SettingsService>().onDataChanged =
+      () => sl<CloudSyncService>().scheduleUpload();
 }

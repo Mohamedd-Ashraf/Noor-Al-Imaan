@@ -20,12 +20,22 @@ class SurahDetailScreen extends StatefulWidget {
   final int? initialAyahNumber;
   final int? initialPageNumber;
 
+  /// Called whenever the visible surah changes (on entry or via next/prev
+  /// surah navigation).  Used by the Wird screen to auto-save reading position.
+  final void Function(int surah, int ayah)? onPositionChanged;
+
+  /// Called whenever the mushaf page number changes (QCF mode only).
+  /// Fires with the 1-based page number each time the user swipes to a new page.
+  final void Function(int page)? onPageChanged;
+
   const SurahDetailScreen({
     super.key,
     required this.surahNumber,
     this.surahName = '',
     this.initialAyahNumber,
     this.initialPageNumber,
+    this.onPositionChanged,
+    this.onPageChanged,
   });
 
   @override
@@ -51,6 +61,9 @@ class _SurahDetailScreenState extends State<SurahDetailScreen> {
   bool? _previousUthmaniSetting;
   String? _previousEditionSetting;
 
+  AnimationStatusListener? _routeAnimationListener;
+  Animation<double>? _routeAnimation;
+
   @override
   void initState() {
     super.initState();
@@ -58,6 +71,14 @@ class _SurahDetailScreenState extends State<SurahDetailScreen> {
     // Use the user-selected edition from settings instead of a binary toggle.
     final settings = context.read<AppSettingsCubit>().state;
     final edition = settings.quranEdition;
+
+    // Notify the caller (e.g. Wird screen) of the surah being entered.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      widget.onPositionChanged?.call(
+        widget.surahNumber,
+        widget.initialAyahNumber ?? 1,
+      );
+    });
 
     context.read<SurahBloc>().add(
       GetSurahDetailEvent(widget.surahNumber, edition: edition),
@@ -75,6 +96,32 @@ class _SurahDetailScreenState extends State<SurahDetailScreen> {
       }
     });
     // Note: scroll will be triggered in build when SurahDetailLoaded state is ready
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Remove previous listener before re-registering (called multiple times).
+    if (_routeAnimationListener != null && _routeAnimation != null) {
+      _routeAnimation!.removeStatusListener(_routeAnimationListener!);
+    }
+    // Save the animation reference so we can remove the listener in dispose()
+    // without calling ModalRoute.of(context) (which is forbidden in dispose).
+    _routeAnimation = ModalRoute.of(context)?.animation;
+    // Re-apply the correct status bar style once the push animation finishes.
+    // During the animation the previous screen's green AppBar keeps calling
+    // SystemChrome.setSystemUIOverlayStyle(light), overriding any earlier fix.
+    _routeAnimationListener = (AnimationStatus status) {
+      if (status == AnimationStatus.completed && mounted) {
+        final isDark = context.read<AppSettingsCubit>().state.darkMode;
+        SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle(
+          statusBarColor: Colors.transparent,
+          statusBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
+          statusBarBrightness: isDark ? Brightness.dark : Brightness.light,
+        ));
+      }
+    };
+    _routeAnimation?.addStatusListener(_routeAnimationListener!);
   }
 
   @override
@@ -96,6 +143,9 @@ class _SurahDetailScreenState extends State<SurahDetailScreen> {
 
   @override
   void dispose() {
+    if (_routeAnimationListener != null) {
+      _routeAnimation?.removeStatusListener(_routeAnimationListener!);
+    }
     // Stop ayah playback when leaving this screen.
     // If you later want background playback, remove this.
     try {
@@ -103,6 +153,8 @@ class _SurahDetailScreenState extends State<SurahDetailScreen> {
     } catch (_) {}
     _playerCollapsed.dispose();
     _scrollController.dispose();
+    // Restore white icons for screens with a green AppBar.
+    SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle.light);
     super.dispose();
   }
 
@@ -210,6 +262,8 @@ class _SurahDetailScreenState extends State<SurahDetailScreen> {
                                 MaterialPageRoute(
                                   builder: (_) => SurahDetailScreen(
                                     surahNumber: nextNumber,
+                                    onPositionChanged: widget.onPositionChanged,
+                                    onPageChanged: widget.onPageChanged,
                                   ),
                                 ),
                               );
@@ -223,11 +277,14 @@ class _SurahDetailScreenState extends State<SurahDetailScreen> {
                                 MaterialPageRoute(
                                   builder: (_) => SurahDetailScreen(
                                     surahNumber: prevNumber,
+                                    onPositionChanged: widget.onPositionChanged,
+                                    onPageChanged: widget.onPageChanged,
                                   ),
                                 ),
                               );
                             }
                           : null,
+                      onPageChanged: widget.onPageChanged,
                     );
                 }
 

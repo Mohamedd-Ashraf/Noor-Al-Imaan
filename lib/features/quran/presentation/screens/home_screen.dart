@@ -402,7 +402,7 @@ class HomeScreenState extends State<HomeScreen>
                                                 )
                                               : null,
                                           style: isArabicUi
-                                              ? GoogleFonts.cairo (
+                                              ? GoogleFonts.amiriQuran (
                                                   fontSize: 20,
                                                   fontWeight: FontWeight.w700,
                                                   height: 1.6050,
@@ -787,7 +787,7 @@ class _CategoriesSection extends StatelessWidget {
                         ),
                         wrap(
                           _CategoryTile(
-                            label: isArabicUi ? 'الأحاديث' : 'Hadiths',
+                            label: isArabicUi ? 'الأحاديث النبوية' : 'Hadiths',
                             imagePath: 'assets/logo/button icons/hadith.png',
                             imagePadding: 3,
                             onTap: () => Navigator.of(context).push(

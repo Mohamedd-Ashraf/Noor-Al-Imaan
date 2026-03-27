@@ -11,7 +11,7 @@ import '../services/hadith_bookmark_sync_service.dart';
 
 /// Unified repository for offline + online (Firestore) hadiths.
 ///
-/// Offline (117 curated hadiths):
+/// Offline (120 curated hadiths):
 ///   Served from the embedded SQLite database, fast and always available.
 ///
 /// Online (Sahih al-Bukhari – 7592 hadiths via Firestore):

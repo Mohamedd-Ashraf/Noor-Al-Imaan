@@ -79,8 +79,6 @@ class _Verse {
 
 // ─── Disk cache (shares key-space with MushafPageScreen) ───────────────────
 
-const String _kCachePrefix = 'qcf_fallback_page_v2_';
-
 // The Uthmani text in the offline JSON (and quran.com API) prepends the Basmala
 // to verse 1 of every surah except Al-Fatiha (1) and At-Tawbah (9).
 // Strip it to avoid showing it twice alongside the QCF decorative header.
@@ -1374,35 +1372,64 @@ class _FbReciterPickerSheet extends StatefulWidget {
 
 class _FbReciterPickerSheetState extends State<_FbReciterPickerSheet> {
   late String _selected;
+  final TextEditingController _searchController = TextEditingController();
+  String _query = '';
 
   @override
   void initState() {
     super.initState();
     _selected = widget.currentEdition;
+    _searchController.addListener(() {
+      setState(() => _query = _searchController.text.trim().toLowerCase());
+    });
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final bg = isDark ? const Color(0xFF1E1E1E) : Colors.white;
+    final bg = isDark ? const Color(0xFF1C1C1E) : Colors.white;
+    final surfaceColor =
+        isDark ? const Color(0xFF2C2C2E) : const Color(0xFFF5F5F5);
     final textColor = isDark ? Colors.white : const Color(0xFF1A1A1A);
+    final subtleColor = isDark
+        ? Colors.white.withValues(alpha: 0.40)
+        : Colors.black.withValues(alpha: 0.35);
+    const accent = AppColors.secondary;
+
     final all = [...widget.all.where((e) => e.language == 'ar'),
                  ...widget.all.where((e) => e.language != 'ar')];
+
+    final filtered = _query.isEmpty
+        ? all
+        : all.where((e) {
+            final name = e
+                .displayNameForAppLanguage(widget.isAr ? 'ar' : 'en')
+                .toLowerCase();
+            return name.contains(_query);
+          }).toList();
 
     return SafeArea(
       child: Directionality(
         textDirection: TextDirection.rtl,
         child: Container(
           decoration: BoxDecoration(
-              color: bg,
-              borderRadius:
-                  const BorderRadius.vertical(top: Radius.circular(20))),
+            color: bg,
+            borderRadius:
+                const BorderRadius.vertical(top: Radius.circular(24)),
+          ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               Container(
-                margin: const EdgeInsets.symmetric(vertical: 10),
-                width: 36, height: 4,
+                margin: const EdgeInsets.only(top: 10, bottom: 6),
+                width: 36,
+                height: 4,
                 decoration: BoxDecoration(
                   color: isDark
                       ? Colors.white.withValues(alpha: 0.18)
@@ -1411,49 +1438,154 @@ class _FbReciterPickerSheetState extends State<_FbReciterPickerSheet> {
                 ),
               ),
               Padding(
-                padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
-                child: Text('اختر القارئ',
-                    style: GoogleFonts.amiriQuran(
-                        fontSize: 15,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 36,
+                      height: 36,
+                      decoration: BoxDecoration(
+                        color: accent.withValues(alpha: 0.12),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.record_voice_over_rounded,
+                          color: accent, size: 18),
+                    ),
+                    const SizedBox(width: 10),
+                    Text(
+                      'اختر القارئ',
+                      style: GoogleFonts.cairo(
+                        fontSize: 16,
                         fontWeight: FontWeight.w700,
-                        color: textColor)),
-              ),
-              const Divider(height: 1),
-              ConstrainedBox(
-                constraints: BoxConstraints(
-                    maxHeight: MediaQuery.of(context).size.height * 0.55),
-                child: ListView.builder(
-                  shrinkWrap: true,
-                  itemCount: all.length,
-                  itemBuilder: (ctx, i) {
-                    final e = all[i];
-                    final name = e.displayNameForAppLanguage(
-                        widget.isAr ? 'ar' : 'en');
-                    final isSelected = e.identifier == _selected;
-                    return ListTile(
-                      title: Text(name,
-                          style: GoogleFonts.amiriQuran(
-                            fontSize: 13,
-                            color: isSelected
-                                ? AppColors.secondary
-                                : textColor,
-                            fontWeight: isSelected
-                                ? FontWeight.w700
-                                : FontWeight.normal,
-                          )),
-                      trailing: isSelected
-                          ? const Icon(Icons.check_rounded,
-                              color: AppColors.secondary, size: 18)
-                          : null,
-                      onTap: () async {
-                        setState(() => _selected = e.identifier);
-                        await widget.onSelected(e.identifier);
-                        if (context.mounted) Navigator.of(context).pop();
-                      },
-                    );
-                  },
+                        color: textColor,
+                      ),
+                    ),
+                    const Spacer(),
+                    Text(
+                      '${all.length} قارئ',
+                      style: GoogleFonts.cairo(
+                          fontSize: 12, color: subtleColor),
+                    ),
+                  ],
                 ),
               ),
+              Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                child: TextField(
+                  controller: _searchController,
+                  textDirection: TextDirection.rtl,
+                  style: GoogleFonts.cairo(fontSize: 13, color: textColor),
+                  decoration: InputDecoration(
+                    hintText: 'ابحث عن قارئ…',
+                    hintStyle:
+                        GoogleFonts.cairo(fontSize: 13, color: subtleColor),
+                    prefixIcon: Icon(Icons.search_rounded,
+                        color: subtleColor, size: 20),
+                    suffixIcon: _query.isNotEmpty
+                        ? IconButton(
+                            icon: Icon(Icons.close_rounded,
+                                size: 18, color: subtleColor),
+                            onPressed: () => _searchController.clear(),
+                          )
+                        : null,
+                    filled: true,
+                    fillColor: surfaceColor,
+                    contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 14, vertical: 10),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none,
+                    ),
+                  ),
+                ),
+              ),
+              Divider(
+                  height: 1,
+                  color: isDark
+                      ? Colors.white.withValues(alpha: 0.08)
+                      : Colors.black.withValues(alpha: 0.06)),
+              ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxHeight: MediaQuery.of(context).size.height * 0.50,
+                ),
+                child: filtered.isEmpty
+                    ? Padding(
+                        padding: const EdgeInsets.all(32),
+                        child: Text(
+                          'لا توجد نتائج',
+                          style: GoogleFonts.cairo(
+                              fontSize: 13, color: subtleColor),
+                          textAlign: TextAlign.center,
+                        ),
+                      )
+                    : ListView.separated(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 8),
+                        itemCount: filtered.length,
+                        separatorBuilder: (_, __) =>
+                            const SizedBox(height: 4),
+                        itemBuilder: (ctx, i) {
+                          final e = filtered[i];
+                          final name = e.displayNameForAppLanguage(
+                              widget.isAr ? 'ar' : 'en');
+                          final isSelected = e.identifier == _selected;
+                          return Material(
+                            color: isSelected
+                                ? accent.withValues(alpha: 0.10)
+                                : surfaceColor,
+                            borderRadius: BorderRadius.circular(12),
+                            child: InkWell(
+                              borderRadius: BorderRadius.circular(12),
+                              onTap: () async {
+                                setState(() => _selected = e.identifier);
+                                await widget.onSelected(e.identifier);
+                                if (context.mounted) {
+                                  Navigator.of(context).pop();
+                                }
+                              },
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 14, vertical: 11),
+                                child: Row(
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        name,
+                                        style: GoogleFonts.cairo(
+                                          fontSize: 13.5,
+                                          color: isSelected
+                                              ? accent
+                                              : textColor,
+                                          fontWeight: isSelected
+                                              ? FontWeight.w700
+                                              : FontWeight.w500,
+                                        ),
+                                      ),
+                                    ),
+                                    if (isSelected)
+                                      Container(
+                                        width: 22,
+                                        height: 22,
+                                        decoration: const BoxDecoration(
+                                          color: accent,
+                                          shape: BoxShape.circle,
+                                        ),
+                                        child: const Icon(
+                                            Icons.check_rounded,
+                                            color: Colors.white,
+                                            size: 14),
+                                      ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+              ),
+              const SizedBox(height: 8),
             ],
           ),
         ),

@@ -166,7 +166,6 @@ class _Verse {
 }
 
 // ─── Persistent page cache ────────────────────────────────────────────────────
-const String _mushafCachePrefix = 'mushaf_page_v2_';
 
 Future<List<_Verse>?> _loadPageFromDiskCache(int page) async {
   final cached = _mushafPageSessionCache[page];
@@ -390,12 +389,24 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _showTutorialIfNeeded();
+      if (!mounted) return;
+      final isDark = context.read<AppSettingsCubit>().state.darkMode;
+      final bgColor =
+          isDark ? const Color(0xFF0E1A12) : const Color(0xFFFFF9ED);
+      SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle(
+        statusBarColor: bgColor,
+        statusBarIconBrightness:
+            isDark ? Brightness.light : Brightness.dark,
+        statusBarBrightness: isDark ? Brightness.dark : Brightness.light,
+      ));
     });
   }
 
   @override
   void dispose() {
     _pageCtrl.dispose();
+    // Restore status bar style for screens that have an AppBar with green bg
+    SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle.light);
     super.dispose();
   }
 
@@ -1449,23 +1460,49 @@ class _MushafReciterPickerSheet extends StatefulWidget {
 class _MushafReciterPickerSheetState
     extends State<_MushafReciterPickerSheet> {
   late String _selected;
+  final TextEditingController _searchController = TextEditingController();
+  String _query = '';
 
   @override
   void initState() {
     super.initState();
     _selected = widget.currentEdition;
+    _searchController.addListener(() {
+      setState(() => _query = _searchController.text.trim().toLowerCase());
+    });
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final bg = isDark ? const Color(0xFF1E1E1E) : Colors.white;
+    final bg = isDark ? const Color(0xFF1C1C1E) : Colors.white;
+    final surfaceColor =
+        isDark ? const Color(0xFF2C2C2E) : const Color(0xFFF5F5F5);
     final textColor = isDark ? Colors.white : const Color(0xFF1A1A1A);
+    final subtleColor = isDark
+        ? Colors.white.withValues(alpha: 0.40)
+        : Colors.black.withValues(alpha: 0.35);
+    const accent = AppColors.secondary;
 
     // Arabic reciters first, others after.
     final arReciters = widget.all.where((e) => e.language == 'ar').toList();
     final others = widget.all.where((e) => e.language != 'ar').toList();
-    final ordered = [...arReciters, ...others];
+    final all = [...arReciters, ...others];
+
+    final filtered = _query.isEmpty
+        ? all
+        : all.where((e) {
+            final name = e
+                .displayNameForAppLanguage(widget.isAr ? 'ar' : 'en')
+                .toLowerCase();
+            return name.contains(_query);
+          }).toList();
 
     return SafeArea(
       child: Directionality(
@@ -1474,14 +1511,14 @@ class _MushafReciterPickerSheetState
           decoration: BoxDecoration(
             color: bg,
             borderRadius:
-                const BorderRadius.vertical(top: Radius.circular(20)),
+                const BorderRadius.vertical(top: Radius.circular(24)),
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // Drag handle
+              // ── Drag handle ──────────────────────────────────────────
               Container(
-                margin: const EdgeInsets.symmetric(vertical: 10),
+                margin: const EdgeInsets.only(top: 10, bottom: 6),
                 width: 36,
                 height: 4,
                 decoration: BoxDecoration(
@@ -1491,56 +1528,165 @@ class _MushafReciterPickerSheetState
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
+
+              // ── Header ───────────────────────────────────────────────
               Padding(
-                padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
-                child: Text(
-                  'اختر القارئ',
-                  style: GoogleFonts.cairo(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w700,
-                    color: textColor,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 36,
+                      height: 36,
+                      decoration: BoxDecoration(
+                        color: accent.withValues(alpha: 0.12),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.record_voice_over_rounded,
+                          color: accent, size: 18),
+                    ),
+                    const SizedBox(width: 10),
+                    Text(
+                      'اختر القارئ',
+                      style: GoogleFonts.cairo(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                        color: textColor,
+                      ),
+                    ),
+                    const Spacer(),
+                    Text(
+                      '${all.length} قارئ',
+                      style: GoogleFonts.cairo(
+                          fontSize: 12, color: subtleColor),
+                    ),
+                  ],
+                ),
+              ),
+
+              // ── Search bar ───────────────────────────────────────────
+              Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                child: TextField(
+                  controller: _searchController,
+                  textDirection: TextDirection.rtl,
+                  style:
+                      GoogleFonts.cairo(fontSize: 13, color: textColor),
+                  decoration: InputDecoration(
+                    hintText: 'ابحث عن قارئ…',
+                    hintStyle: GoogleFonts.cairo(
+                        fontSize: 13, color: subtleColor),
+                    prefixIcon: Icon(Icons.search_rounded,
+                        color: subtleColor, size: 20),
+                    suffixIcon: _query.isNotEmpty
+                        ? IconButton(
+                            icon: Icon(Icons.close_rounded,
+                                size: 18, color: subtleColor),
+                            onPressed: () => _searchController.clear(),
+                          )
+                        : null,
+                    filled: true,
+                    fillColor: surfaceColor,
+                    contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 14, vertical: 10),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none,
+                    ),
                   ),
                 ),
               ),
-              const Divider(height: 1),
+
+              // ── Divider ──────────────────────────────────────────────
+              Divider(
+                  height: 1,
+                  color: isDark
+                      ? Colors.white.withValues(alpha: 0.08)
+                      : Colors.black.withValues(alpha: 0.06)),
+
+              // ── List ─────────────────────────────────────────────────
               ConstrainedBox(
                 constraints: BoxConstraints(
-                  maxHeight: MediaQuery.of(context).size.height * 0.55,
+                  maxHeight: MediaQuery.of(context).size.height * 0.50,
                 ),
-                child: ListView.builder(
-                  shrinkWrap: true,
-                  itemCount: ordered.length,
-                  itemBuilder: (ctx, i) {
-                    final e = ordered[i];
-                    final name = e.displayNameForAppLanguage(
-                        widget.isAr ? 'ar' : 'en');
-                    final isSelected = e.identifier == _selected;
-                    return ListTile(
-                      title: Text(
-                        name,
-                        style: GoogleFonts.cairo(
-                          fontSize: 13,
-                          color: isSelected
-                              ? AppColors.secondary
-                              : textColor,
-                          fontWeight: isSelected
-                              ? FontWeight.w700
-                              : FontWeight.normal,
+                child: filtered.isEmpty
+                    ? Padding(
+                        padding: const EdgeInsets.all(32),
+                        child: Text(
+                          'لا توجد نتائج',
+                          style: GoogleFonts.cairo(
+                              fontSize: 13, color: subtleColor),
+                          textAlign: TextAlign.center,
                         ),
+                      )
+                    : ListView.separated(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 8),
+                        itemCount: filtered.length,
+                        separatorBuilder: (_, __) =>
+                            const SizedBox(height: 4),
+                        itemBuilder: (ctx, i) {
+                          final e = filtered[i];
+                          final name = e.displayNameForAppLanguage(
+                              widget.isAr ? 'ar' : 'en');
+                          final isSelected = e.identifier == _selected;
+                          return Material(
+                            color: isSelected
+                                ? accent.withValues(alpha: 0.10)
+                                : surfaceColor,
+                            borderRadius: BorderRadius.circular(12),
+                            child: InkWell(
+                              borderRadius: BorderRadius.circular(12),
+                              onTap: () async {
+                                setState(
+                                    () => _selected = e.identifier);
+                                await widget.onSelected(e.identifier);
+                                if (context.mounted) {
+                                  Navigator.of(context).pop();
+                                }
+                              },
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 14, vertical: 11),
+                                child: Row(
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        name,
+                                        style: GoogleFonts.cairo(
+                                          fontSize: 13.5,
+                                          color: isSelected
+                                              ? accent
+                                              : textColor,
+                                          fontWeight: isSelected
+                                              ? FontWeight.w700
+                                              : FontWeight.w500,
+                                        ),
+                                      ),
+                                    ),
+                                    if (isSelected)
+                                      Container(
+                                        width: 22,
+                                        height: 22,
+                                        decoration: const BoxDecoration(
+                                          color: accent,
+                                          shape: BoxShape.circle,
+                                        ),
+                                        child: const Icon(
+                                            Icons.check_rounded,
+                                            color: Colors.white,
+                                            size: 14),
+                                      ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          );
+                        },
                       ),
-                      trailing: isSelected
-                          ? const Icon(Icons.check_rounded,
-                              color: AppColors.secondary, size: 18)
-                          : null,
-                      onTap: () async {
-                        setState(() => _selected = e.identifier);
-                        await widget.onSelected(e.identifier);
-                        if (context.mounted) Navigator.of(context).pop();
-                      },
-                    );
-                  },
-                ),
               ),
+              const SizedBox(height: 8),
             ],
           ),
         ),

@@ -70,7 +70,7 @@ void _showVerseOptionsSheet(
                 padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
                 child: Text(
                   '$surahName — آية $verse',
-                  style: GoogleFonts.amiriQuran(
+                  style: GoogleFonts.arefRuqaa(
                     fontSize: 16,
                     fontWeight: FontWeight.bold,
                     color: AppColors.primary,
@@ -172,6 +172,10 @@ class MushafPageView extends StatefulWidget {
   /// Called when the user taps the previous-surah transition button.
   final VoidCallback? onPreviousSurah;
 
+  /// Called whenever the visible mushaf page number changes (1-based, 1-604).
+  /// Used by the Wird screen to auto-save the reading page position.
+  final void Function(int page)? onPageChanged;
+
   const MushafPageView({
     super.key,
     required this.surah,
@@ -181,6 +185,7 @@ class MushafPageView extends StatefulWidget {
     this.initialAyahNumber,
     this.onNextSurah,
     this.onPreviousSurah,
+    this.onPageChanged,
   });
 
   @override
@@ -605,6 +610,9 @@ class _MushafPageViewState extends State<MushafPageView>
                       child: PageView.builder(
                         controller: _pageController,
                         itemCount: 604,
+                        onPageChanged: (index) {
+                          widget.onPageChanged?.call(index + 1);
+                        },
                         itemBuilder: (ctx, index) {
                           final pageNum = index + 1;
                           // Ensure tajweed data is ready for this page.
@@ -1087,7 +1095,7 @@ class _MushafPageViewState extends State<MushafPageView>
     final dividerColor = isDark
         ? Colors.white.withValues(alpha: 0.18)
         : const Color(0xFFC8A84B).withValues(alpha: 0.55);
-    final labelStyle = GoogleFonts.amiriQuran(
+    final labelStyle = GoogleFonts.arefRuqaa(
       fontSize: 12,
       fontWeight: FontWeight.w700,
       color: textColor,
@@ -1166,7 +1174,7 @@ class _MushafPageViewState extends State<MushafPageView>
             const SizedBox(width: 2),
             Text(
               'تجويد',
-              style: GoogleFonts.amiriQuran(
+              style: GoogleFonts.arefRuqaa(
                 fontSize: 9,
                 fontWeight:
                     _tajweedMode ? FontWeight.w700 : FontWeight.w500,
@@ -1213,7 +1221,7 @@ class _MushafPageViewState extends State<MushafPageView>
                   ),
                   Text(
                     'دليل ألوان التجويد',
-                    style: GoogleFonts.amiriQuran(
+                    style: GoogleFonts.arefRuqaa(
                       fontSize: 16,
                       fontWeight: FontWeight.w700,
                       color: textColor,
@@ -1222,7 +1230,7 @@ class _MushafPageViewState extends State<MushafPageView>
                   const SizedBox(height: 4),
                   Text(
                     'اضغط مطولاً على زر التجويد لعرض هذا الدليل',
-                    style: GoogleFonts.amiriQuran(
+                    style: GoogleFonts.arefRuqaa(
                       fontSize: 10,
                       color: textColor.withValues(alpha: 0.5),
                     ),
@@ -1252,7 +1260,7 @@ class _MushafPageViewState extends State<MushafPageView>
                                 const SizedBox(width: 12),
                                 Text(
                                   name,
-                                  style: GoogleFonts.amiriQuran(
+                                  style: GoogleFonts.arefRuqaa(
                                     fontSize: 13,
                                     color: textColor,
                                   ),
@@ -1302,7 +1310,7 @@ class _MushafPageViewState extends State<MushafPageView>
                 child: Text(
                   _toArabicNumerals(pageNumber),
                   textAlign: TextAlign.center,
-                  style: GoogleFonts.amiriQuran(
+                  style: GoogleFonts.arefRuqaa(
                     fontSize: 14,
                     fontWeight: FontWeight.w700,
                     color: isDarkMode ? Colors.white : const Color(0xFF3D1C00),
@@ -1552,15 +1560,15 @@ class _MushafQcfRecitationSheetState
         final dividerColor = isDark
             ? Colors.white.withValues(alpha: 0.12)
             : Colors.black.withValues(alpha: 0.08);
-        final titleStyle = GoogleFonts.amiriQuran(
+        final titleStyle = GoogleFonts.arefRuqaa(
           fontSize: 15,
           fontWeight: FontWeight.w700,
           color: textColor,
         );
         final labelStyle =
-            GoogleFonts.amiriQuran(fontSize: 14, color: textColor);
+            GoogleFonts.arefRuqaa(fontSize: 14, color: textColor);
         final noteStyle =
-            GoogleFonts.amiriQuran(fontSize: 11, color: subTextColor);
+            GoogleFonts.arefRuqaa(fontSize: 11, color: subTextColor);
 
         return SafeArea(
           child: Directionality(
@@ -1629,7 +1637,7 @@ class _MushafQcfRecitationSheetState
                                 : null,
                             child: Text(
                               'تغيير',
-                              style: GoogleFonts.amiriQuran(
+                              style: GoogleFonts.arefRuqaa(
                                 color: AppColors.secondary,
                                 fontSize: 13,
                                 fontWeight: FontWeight.w700,
@@ -1720,12 +1728,12 @@ class _MushafQcfRecitationSheetState
                         ButtonSegment(
                           value: 'page',
                           label: Text('إلى نهاية الصفحة',
-                              style: GoogleFonts.amiriQuran(fontSize: 12)),
+                              style: GoogleFonts.arefRuqaa(fontSize: 12)),
                         ),
                         ButtonSegment(
                           value: 'surah',
                           label: Text('إلى نهاية السورة',
-                              style: GoogleFonts.amiriQuran(fontSize: 12)),
+                              style: GoogleFonts.arefRuqaa(fontSize: 12)),
                         ),
                       ],
                       selected: {settings.mushafContinueScope},
@@ -1780,22 +1788,48 @@ class _QcfReciterPickerSheet extends StatefulWidget {
 
 class _QcfReciterPickerSheetState extends State<_QcfReciterPickerSheet> {
   late String _selected;
+  final TextEditingController _searchController = TextEditingController();
+  String _query = '';
 
   @override
   void initState() {
     super.initState();
     _selected = widget.currentEdition;
+    _searchController.addListener(() {
+      setState(() => _query = _searchController.text.trim().toLowerCase());
+    });
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final bg = isDark ? const Color(0xFF1E1E1E) : Colors.white;
+    final bg = isDark ? const Color(0xFF1C1C1E) : Colors.white;
+    final surfaceColor =
+        isDark ? const Color(0xFF2C2C2E) : const Color(0xFFF5F5F5);
     final textColor = isDark ? Colors.white : const Color(0xFF1A1A1A);
+    final subtleColor = isDark
+        ? Colors.white.withValues(alpha: 0.40)
+        : Colors.black.withValues(alpha: 0.35);
+    const accent = AppColors.secondary;
 
     final arReciters = widget.all.where((e) => e.language == 'ar').toList();
     final others = widget.all.where((e) => e.language != 'ar').toList();
-    final ordered = [...arReciters, ...others];
+    final all = [...arReciters, ...others];
+
+    final filtered = _query.isEmpty
+        ? all
+        : all.where((e) {
+            final name = e
+                .displayNameForAppLanguage(widget.isAr ? 'ar' : 'en')
+                .toLowerCase();
+            return name.contains(_query);
+          }).toList();
 
     return SafeArea(
       child: Directionality(
@@ -1804,13 +1838,13 @@ class _QcfReciterPickerSheetState extends State<_QcfReciterPickerSheet> {
           decoration: BoxDecoration(
             color: bg,
             borderRadius:
-                const BorderRadius.vertical(top: Radius.circular(20)),
+                const BorderRadius.vertical(top: Radius.circular(24)),
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               Container(
-                margin: const EdgeInsets.symmetric(vertical: 10),
+                margin: const EdgeInsets.only(top: 10, bottom: 6),
                 width: 36,
                 height: 4,
                 decoration: BoxDecoration(
@@ -1821,55 +1855,154 @@ class _QcfReciterPickerSheetState extends State<_QcfReciterPickerSheet> {
                 ),
               ),
               Padding(
-                padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
-                child: Text(
-                  'اختر القارئ',
-                  style: GoogleFonts.amiriQuran(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w700,
-                    color: textColor,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 36,
+                      height: 36,
+                      decoration: BoxDecoration(
+                        color: accent.withValues(alpha: 0.12),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.record_voice_over_rounded,
+                          color: accent, size: 18),
+                    ),
+                    const SizedBox(width: 10),
+                    Text(
+                      'اختر القارئ',
+                      style: GoogleFonts.cairo(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                        color: textColor,
+                      ),
+                    ),
+                    const Spacer(),
+                    Text(
+                      '${all.length} قارئ',
+                      style: GoogleFonts.cairo(
+                          fontSize: 12, color: subtleColor),
+                    ),
+                  ],
+                ),
+              ),
+              Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                child: TextField(
+                  controller: _searchController,
+                  textDirection: TextDirection.rtl,
+                  style: GoogleFonts.cairo(fontSize: 13, color: textColor),
+                  decoration: InputDecoration(
+                    hintText: 'ابحث عن قارئ…',
+                    hintStyle:
+                        GoogleFonts.cairo(fontSize: 13, color: subtleColor),
+                    prefixIcon: Icon(Icons.search_rounded,
+                        color: subtleColor, size: 20),
+                    suffixIcon: _query.isNotEmpty
+                        ? IconButton(
+                            icon: Icon(Icons.close_rounded,
+                                size: 18, color: subtleColor),
+                            onPressed: () => _searchController.clear(),
+                          )
+                        : null,
+                    filled: true,
+                    fillColor: surfaceColor,
+                    contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 14, vertical: 10),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none,
+                    ),
                   ),
                 ),
               ),
-              const Divider(height: 1),
+              Divider(
+                  height: 1,
+                  color: isDark
+                      ? Colors.white.withValues(alpha: 0.08)
+                      : Colors.black.withValues(alpha: 0.06)),
               ConstrainedBox(
                 constraints: BoxConstraints(
-                  maxHeight: MediaQuery.of(context).size.height * 0.55,
+                  maxHeight: MediaQuery.of(context).size.height * 0.50,
                 ),
-                child: ListView.builder(
-                  shrinkWrap: true,
-                  itemCount: ordered.length,
-                  itemBuilder: (ctx, i) {
-                    final e = ordered[i];
-                    final name = e.displayNameForAppLanguage(
-                        widget.isAr ? 'ar' : 'en');
-                    final isSelected = e.identifier == _selected;
-                    return ListTile(
-                      title: Text(
-                        name,
-                        style: GoogleFonts.amiriQuran(
-                          fontSize: 13,
-                          color: isSelected
-                              ? AppColors.secondary
-                              : textColor,
-                          fontWeight: isSelected
-                              ? FontWeight.w700
-                              : FontWeight.normal,
+                child: filtered.isEmpty
+                    ? Padding(
+                        padding: const EdgeInsets.all(32),
+                        child: Text(
+                          'لا توجد نتائج',
+                          style: GoogleFonts.cairo(
+                              fontSize: 13, color: subtleColor),
+                          textAlign: TextAlign.center,
                         ),
+                      )
+                    : ListView.separated(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 8),
+                        itemCount: filtered.length,
+                        separatorBuilder: (_, __) =>
+                            const SizedBox(height: 4),
+                        itemBuilder: (ctx, i) {
+                          final e = filtered[i];
+                          final name = e.displayNameForAppLanguage(
+                              widget.isAr ? 'ar' : 'en');
+                          final isSelected = e.identifier == _selected;
+                          return Material(
+                            color: isSelected
+                                ? accent.withValues(alpha: 0.10)
+                                : surfaceColor,
+                            borderRadius: BorderRadius.circular(12),
+                            child: InkWell(
+                              borderRadius: BorderRadius.circular(12),
+                              onTap: () async {
+                                setState(() => _selected = e.identifier);
+                                await widget.onSelected(e.identifier);
+                                if (context.mounted) {
+                                  Navigator.of(context).pop();
+                                }
+                              },
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 14, vertical: 11),
+                                child: Row(
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        name,
+                                        style: GoogleFonts.cairo(
+                                          fontSize: 13.5,
+                                          color: isSelected
+                                              ? accent
+                                              : textColor,
+                                          fontWeight: isSelected
+                                              ? FontWeight.w700
+                                              : FontWeight.w500,
+                                        ),
+                                      ),
+                                    ),
+                                    if (isSelected)
+                                      Container(
+                                        width: 22,
+                                        height: 22,
+                                        decoration: const BoxDecoration(
+                                          color: accent,
+                                          shape: BoxShape.circle,
+                                        ),
+                                        child: const Icon(
+                                            Icons.check_rounded,
+                                            color: Colors.white,
+                                            size: 14),
+                                      ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          );
+                        },
                       ),
-                      trailing: isSelected
-                          ? const Icon(Icons.check_rounded,
-                              color: AppColors.secondary, size: 18)
-                          : null,
-                      onTap: () async {
-                        setState(() => _selected = e.identifier);
-                        await widget.onSelected(e.identifier);
-                        if (context.mounted) Navigator.of(context).pop();
-                      },
-                    );
-                  },
-                ),
               ),
+              const SizedBox(height: 8),
             ],
           ),
         ),

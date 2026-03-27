@@ -46,6 +46,10 @@ class WirdPlanLoaded extends WirdState {
   /// Last reading bookmark: ayah number. Null if not set.
   final int? lastReadAyah;
 
+  /// Last mushaf page (1–604) where the user stopped reading.
+  /// Takes priority over lastReadSurah/lastReadAyah when navigating in QCF mode.
+  final int? lastReadPage;
+
   /// Makeup bookmark: which missed plan-day the user was last working on.
   final int? makeupBookmarkDay;
 
@@ -63,6 +67,7 @@ class WirdPlanLoaded extends WirdState {
     this.followUpIntervalHours = 4,
     this.lastReadSurah,
     this.lastReadAyah,
+    this.lastReadPage,
     this.makeupBookmarkDay,
     this.makeupBookmarkSurah,
     this.makeupBookmarkAyah,
@@ -70,8 +75,10 @@ class WirdPlanLoaded extends WirdState {
 
   bool get hasReminder => reminderHour != null && reminderMinute != null;
 
-  /// True when the user has a saved reading bookmark.
-  bool get hasLastRead => lastReadSurah != null && lastReadAyah != null;
+  /// True when the user has a saved reading bookmark (page or surah+ayah).
+  bool get hasLastRead =>
+      lastReadPage != null ||
+      (lastReadSurah != null && lastReadAyah != null);
 
   /// True when the user has a saved makeup reading bookmark.
   bool get hasMakeupBookmark =>
@@ -91,6 +98,7 @@ class WirdPlanLoaded extends WirdState {
         followUpIntervalHours,
         lastReadSurah,
         lastReadAyah,
+        lastReadPage,
         makeupBookmarkDay,
         makeupBookmarkSurah,
         makeupBookmarkAyah,

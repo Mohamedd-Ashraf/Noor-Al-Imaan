@@ -116,6 +116,8 @@ class _HadithCategoriesScreenState extends State<HadithCategoriesScreen>
                         isArabic: isArabic,
                         totalHadiths: totalHadiths,
                         totalCategories: categories.length,
+                        onlineCount: HadithCategoryInfo.allOnline
+                            .fold(0, (sum, c) => sum + c.count),
                       ),
                     ),
                   ),
@@ -304,11 +306,13 @@ class _HeaderBackground extends StatelessWidget {
   final bool isArabic;
   final int totalHadiths;
   final int totalCategories;
+  final int onlineCount;
 
   const _HeaderBackground({
     required this.isArabic,
     required this.totalHadiths,
     required this.totalCategories,
+    required this.onlineCount,
   });
 
   @override
@@ -397,9 +401,9 @@ class _HeaderBackground extends StatelessWidget {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       _StatChip(
-                        icon: Icons.library_books_rounded,
+                        icon: Icons.wifi_off_rounded,
                         label: '$totalHadiths',
-                        sub: isArabic ? 'حديث' : 'hadiths',
+                        sub: isArabic ? 'أوفلاين' : 'offline',
                       ),
                       Container(
                         width: 1,
@@ -408,9 +412,11 @@ class _HeaderBackground extends StatelessWidget {
                         color: Colors.white.withValues(alpha: 0.2),
                       ),
                       _StatChip(
-                        icon: Icons.category_rounded,
-                        label: '$totalCategories',
-                        sub: isArabic ? 'أبواب' : 'categories',
+                        icon: Icons.wifi_rounded,
+                        label: onlineCount > 0
+                            ? '${(onlineCount ~/ 100) * 100}+'
+                            : '7500+',
+                        sub: isArabic ? 'أونلاين' : 'online',
                       ),
                     ],
                   ),

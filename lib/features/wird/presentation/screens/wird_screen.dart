@@ -299,6 +299,7 @@ class _WirdScreenState extends State<WirdScreen> with WidgetsBindingObserver {
                 reminderMinute: state.reminderMinute,
                 lastReadSurah: state.lastReadSurah,
                 lastReadAyah: state.lastReadAyah,
+                lastReadPage: state.lastReadPage,
                 makeupBookmarkDay: state.makeupBookmarkDay,
                 makeupBookmarkSurah: state.makeupBookmarkSurah,
                 makeupBookmarkAyah: state.makeupBookmarkAyah,
@@ -434,10 +435,12 @@ class _NoPlanView extends StatelessWidget {
           Text(
             isAr ? 'ابدأ رحلتك مع القرآن' : 'Begin Your Quran Journey',
             textAlign: TextAlign.center,
-            style: GoogleFonts.notoSerif(
+            style: GoogleFonts.arefRuqaa(
               fontSize: 28,
               fontWeight: FontWeight.w900,
-              color: const Color(0xFF003527),
+              color: isDark
+                  ? AppColors.primaryLight
+                  : const Color.fromARGB(193, 0, 53, 39),
             ),
           ),
           const SizedBox(height: 8),
@@ -447,7 +450,7 @@ class _NoPlanView extends StatelessWidget {
                 : 'Make a daily portion of Allah\'s book for yourself',
             textAlign: TextAlign.center,
             style: TextStyle(
-              color: AppColors.textSecondary.withValues(alpha: 0.7),
+              color: (isDark ? AppColors.darkTextSecondary : AppColors.textSecondary).withValues(alpha: 0.7),
               fontSize: 14,
               fontWeight: FontWeight.w500,
             ),
@@ -458,14 +461,18 @@ class _NoPlanView extends StatelessWidget {
           Container(
             padding: const EdgeInsets.symmetric(vertical: 44, horizontal: 24),
             decoration: BoxDecoration(
-              gradient: const RadialGradient(
+              gradient: RadialGradient(
                 center: Alignment.center,
                 radius: 1.2,
-                colors: [Color(0xFFF0FDF4), Color(0xFFF8FAFC)],
+                colors: isDark
+                    ? [AppColors.darkCard, AppColors.darkSurface]
+                    : [const Color(0xFFF0FDF4), const Color(0xFFF8FAFC)],
               ),
               borderRadius: BorderRadius.circular(32),
               border: Border.all(
-                color: const Color(0xFFDCFCE7).withValues(alpha: 0.5),
+                color: isDark
+                    ? AppColors.darkBorder
+                    : const Color(0xFFDCFCE7).withValues(alpha: 0.5),
               ),
               boxShadow: [
                 BoxShadow(
@@ -490,10 +497,10 @@ class _NoPlanView extends StatelessWidget {
                   '"وَرَتِّلِ الْقُرْآنَ تَرْتِيلًا"',
                   textAlign: TextAlign.center,
                   textDirection: TextDirection.rtl,
-                  style: GoogleFonts.amiriQuran(
+                  style: GoogleFonts.notoNaskhArabic(
                     fontSize: 30,
                     fontWeight: FontWeight.bold,
-                    color: const Color(0xFF065F46).withValues(alpha: 0.9),
+                    // color: const Color(0xFF065F46).withValues(alpha: 0.9),
                     height: 1.8,
                   ),
                 ),
@@ -512,7 +519,9 @@ class _NoPlanView extends StatelessWidget {
                       style: TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.w600,
-                        color: const Color(0xFF047857).withValues(alpha: 0.6),
+                        color: isDark
+                            ? AppColors.primaryLight.withValues(alpha: 0.7)
+                            : const Color(0xFF047857).withValues(alpha: 0.6),
                         letterSpacing: 1.5,
                       ),
                     ),
@@ -585,8 +594,8 @@ class _NoPlanView extends StatelessWidget {
             onPressed: () => _navigateToSetup(context),
             child: Text(
               isAr ? 'تصفح الخطط المقترحة' : 'Browse Suggested Plans',
-              style: const TextStyle(
-                color: Color(0xFF065F46),
+              style: TextStyle(
+                color: isDark ? AppColors.primaryLight : const Color(0xFF065F46),
                 fontWeight: FontWeight.bold,
                 fontSize: 15,
               ),
@@ -1119,10 +1128,10 @@ class _SetupSheetState extends State<_SetupSheet> {
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
           decoration: BoxDecoration(
-            color: const Color(0xFFFFF3E0),
+            color: isDark ? const Color(0xFF2A1F00) : const Color(0xFFFFF3E0),
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
-              color: const Color(0xFFFF8F00).withValues(alpha: 0.5),
+              color: const Color(0xFFFF8F00).withValues(alpha: isDark ? 0.3 : 0.5),
             ),
           ),
           child: Row(
@@ -1753,6 +1762,7 @@ class _ActivePlanView extends StatefulWidget {
   final int? reminderMinute;
   final int? lastReadSurah;
   final int? lastReadAyah;
+  final int? lastReadPage;
   final int? makeupBookmarkDay;
   final int? makeupBookmarkSurah;
   final int? makeupBookmarkAyah;
@@ -1764,6 +1774,7 @@ class _ActivePlanView extends StatefulWidget {
     this.reminderMinute,
     this.lastReadSurah,
     this.lastReadAyah,
+    this.lastReadPage,
     this.makeupBookmarkDay,
     this.makeupBookmarkSurah,
     this.makeupBookmarkAyah,
@@ -1816,25 +1827,7 @@ class _ActivePlanViewState extends State<_ActivePlanView> {
       if (!plan.isDayComplete(d)) daysBehind++;
     }
 
-    final pct = (plan.progressPercent * 100).round();
     final completedCount = plan.completedDays.length;
-    final currentDesc = WirdService.getDayDescription(
-      today,
-      plan.targetDays,
-      isArabic: isAr,
-    );
-
-    // Get current surah name from today's reading range
-    final surahState = context.read<SurahBloc>().state;
-    String currentSurahName;
-    if (surahState is SurahListLoaded) {
-      final match = surahState.surahs.where((s) => s.number == range.start.surah).toList();
-      currentSurahName = match.isNotEmpty
-          ? (isAr ? match.first.name : match.first.englishName)
-          : (_surahArabicNames[range.start.surah] ?? 'سورة ${range.start.surah}');
-    } else {
-      currentSurahName = _surahArabicNames[range.start.surah] ?? 'سورة ${range.start.surah}';
-    }
 
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
@@ -1872,16 +1865,6 @@ class _ActivePlanViewState extends State<_ActivePlanView> {
                       isAr ? CrossAxisAlignment.end : CrossAxisAlignment.start,
                   children: [
                     Text(
-                      isAr ? 'الورد اليومي' : 'Daily Wird',
-                      style: const TextStyle(
-                        color: Color(0xFFE9C349),
-                        fontWeight: FontWeight.bold,
-                        fontSize: 11,
-                        letterSpacing: 2,
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    Text(
                       'وَرَتِّلِ الْقُرْآنَ تَرْتِيلاً',
                       textDirection: TextDirection.rtl,
                       style: GoogleFonts.notoSerif(
@@ -1908,260 +1891,22 @@ class _ActivePlanViewState extends State<_ActivePlanView> {
               ],
             ),
           ),
-          const SizedBox(height: 14),
-
-          // ── Progress card ─────────────────────────────────────────────
-          Container(
-            decoration: BoxDecoration(
-              color: isDark ? AppColors.darkCard : Colors.white,
-              borderRadius: BorderRadius.circular(16),
-              border: const BorderDirectional(
-                start: BorderSide(color: AppColors.secondary, width: 4),
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.04),
-                  blurRadius: 16,
-                  offset: const Offset(0, 4),
-                ),
-              ],
-            ),
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      isAr ? 'الختمة الحالية' : 'Current Khatm',
-                      style: const TextStyle(
-                        color: AppColors.primary,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 17,
-                      ),
-                    ),
-                    Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: AppColors.secondary.withValues(alpha: 0.15),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: const Icon(
-                        Icons.menu_book_rounded,
-                        color: AppColors.secondary,
-                        size: 20,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 6),
-                Align(
-                  alignment:
-                      isAr ? Alignment.centerRight : Alignment.centerLeft,
-                  child: Text(
-                    isAr
-                        ? 'أنت الآن في $currentDesc'
-                        : 'You are now at $currentDesc',
-                    style: const TextStyle(
-                      color: AppColors.textSecondary,
-                      fontSize: 13,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      currentSurahName,
-                      style: const TextStyle(
-                        color: AppColors.primary,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    Text(
-                      isAr
-                          ? '${_arabicNumerals(pct)}٪ مكتمل'
-                          : '$pct% completed',
-                      style: const TextStyle(
-                        color: AppColors.secondary,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                // Progress bar
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(6),
-                  child: Container(
-                    height: 10,
-                    decoration: BoxDecoration(
-                      color: AppColors.divider.withValues(alpha: 0.5),
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: Align(
-                      alignment: isAr
-                          ? Alignment.centerRight
-                          : Alignment.centerLeft,
-                      child: FractionallySizedBox(
-                        widthFactor: plan.progressPercent,
-                        child: Container(
-                          decoration: const BoxDecoration(
-                            gradient: LinearGradient(
-                              colors: [Color(0xFF0D5E3A), Color(0xFFD4AF37)],
-                            ),
-                            borderRadius:
-                                BorderRadius.all(Radius.circular(6)),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 10,
-                            vertical: 4,
-                          ),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFF0FDF4),
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(
-                              color: const Color(0xFF059669)
-                                  .withValues(alpha: 0.3),
-                            ),
-                          ),
-                          child: Text(
-                            isAr
-                                ? _arabicNumerals(completedCount)
-                                : '$completedCount',
-                            style: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                              color: AppColors.primary,
-                              fontSize: 13,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 6),
-                        Text(
-                          isAr ? 'أيام' : 'days',
-                          style: const TextStyle(
-                            color: AppColors.textSecondary,
-                            fontSize: 12,
-                          ),
-                        ),
-                      ],
-                    ),
-                    ElevatedButton.icon(
-                      key: WirdTutorialKeys.continueButton,
-                      onPressed: todayComplete
-                          ? null
-                          : () => _navigateToReadFromHero(
-                                context,
-                                range,
-                                isAr,
-                              ),
-                      icon: Icon(
-                        isAr
-                            ? Icons.arrow_back_rounded
-                            : Icons.arrow_forward_rounded,
-                        size: 16,
-                      ),
-                      label: Text(
-                        todayComplete
-                            ? (isAr ? 'مكتمل ✓' : 'Done ✓')
-                            : (isAr ? 'متابعة القراءة' : 'Continue Reading'),
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 13,
-                        ),
-                      ),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor:
-                            todayComplete ? AppColors.success : AppColors.primary,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 14,
-                          vertical: 8,
-                        ),
-                        shape: const StadiumBorder(),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
           const SizedBox(height: 12),
 
-          // ── Quick access: Reminder card ────────────────────────────────
-          _QuickReminderCard(
-            isAr: isAr,
-            isDark: isDark,
-            reminderHour: widget.reminderHour,
-            reminderMinute: widget.reminderMinute,
-            notificationsEnabled:
-                context.watch<WirdCubit>().state is WirdPlanLoaded
-                    ? (context.watch<WirdCubit>().state as WirdPlanLoaded)
-                        .notificationsEnabled
-                    : true,
-          ),
-          const SizedBox(height: 10),
-
-          // ── Mini bento grid ────────────────────────────────────────────
-          Row(
-            children: [
-              Expanded(
-                child: _MiniInfoCard(
-                  icon: Icons.insights_rounded,
-                  iconColor: AppColors.secondary,
-                  title: isAr ? 'تتبع التقدم' : 'Track Progress',
-                  subtitle: isAr
-                      ? 'إحصائيات مفصلة عن قراءتك الأسبوعية.'
-                      : 'Detailed weekly reading stats.',
-                  isDark: isDark,
-                  onTap: () =>
-                      setState(() => _daysExpanded = !_daysExpanded),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: _MiniInfoCard(
-                  icon: Icons.tune_rounded,
-                  iconColor: AppColors.primary,
-                  title: isAr ? 'مرونة كاملة' : 'Full Flexibility',
-                  subtitle: isAr
-                      ? 'تعديل الورد اليومي حسب ظروفك.'
-                      : 'Adjust your daily wird anytime.',
-                  isDark: isDark,
-                  onTap: () => _confirmReset(context),
-                ),
-              ),
-            ],
-          ),
-
-          // ── Missed days mode toggle ────────────────────────────────────
+          // ── Missed days banner + mode toggle ──────────────────────────
           if (hasMissedDays) ...[
-            const SizedBox(height: 14),
-            _WirdModeToggle(
+            _MissedDaysBanner(
               isAr: isAr,
               isDark: isDark,
-              isMakeupMode: _showMakeupMode,
               missedCount: missed.length,
-              onToggle: (v) => setState(() => _showMakeupMode = v),
+              isMakeupMode: _showMakeupMode,
+              onSwitchToMakeup: () => setState(() => _showMakeupMode = true),
+              onSwitchToToday: () => setState(() => _showMakeupMode = false),
             ),
+            const SizedBox(height: 12),
           ],
 
-          const SizedBox(height: 14),
-
-          // ── Today card ─────────────────────────────────────────────────
+          // ── Today / Makeup card ────────────────────────────────────────
           if (!_showMakeupMode)
             _TodayCard(
               key: WirdTutorialKeys.todayPlan,
@@ -2174,10 +1919,14 @@ class _ActivePlanViewState extends State<_ActivePlanView> {
               isDark: isDark,
               lastReadSurah: widget.lastReadSurah,
               lastReadAyah: widget.lastReadAyah,
+              lastReadPage: widget.lastReadPage,
               daysBehind: daysBehind,
+              onShowBookmarkDialog: _showBookmarkDialog,
+              onSwitchToMakeup: hasMissedDays
+                  ? () => setState(() => _showMakeupMode = true)
+                  : null,
             ),
 
-          // ── Makeup card ────────────────────────────────────────────────
           if (_showMakeupMode && hasMissedDays)
             _MakeupCard(
               plan: plan,
@@ -2187,6 +1936,30 @@ class _ActivePlanViewState extends State<_ActivePlanView> {
               makeupBookmarkSurah: widget.makeupBookmarkSurah,
               makeupBookmarkAyah: widget.makeupBookmarkAyah,
             ),
+
+          const SizedBox(height: 14),
+
+          // ── Smart tracking stats ────────────────────────────────────────
+          _SmartStatsCard(plan: plan, isAr: isAr, isDark: isDark),
+          const SizedBox(height: 10),
+
+          // ── Quick access: Reminder card ────────────────────────────────
+          _QuickReminderCard(
+            isAr: isAr,
+            isDark: isDark,
+            reminderHour: widget.reminderHour,
+            reminderMinute: widget.reminderMinute,
+            notificationsEnabled:
+                context.watch<WirdCubit>().state is WirdPlanLoaded
+                    ? (context.watch<WirdCubit>().state as WirdPlanLoaded)
+                        .notificationsEnabled
+                    : true,
+            followUpIntervalHours:
+                context.watch<WirdCubit>().state is WirdPlanLoaded
+                    ? (context.watch<WirdCubit>().state as WirdPlanLoaded)
+                        .followUpIntervalHours
+                    : 2,
+          ),
 
           const SizedBox(height: 18),
 
@@ -2264,14 +2037,6 @@ class _ActivePlanViewState extends State<_ActivePlanView> {
           ),
           const SizedBox(height: 18),
 
-          _ReminderCard(
-            isAr: isAr,
-            isDark: isDark,
-            reminderHour: widget.reminderHour,
-            reminderMinute: widget.reminderMinute,
-          ),
-          const SizedBox(height: 12),
-
           Center(
             child: TextButton.icon(
               onPressed: () => _confirmReset(context),
@@ -2291,14 +2056,51 @@ class _ActivePlanViewState extends State<_ActivePlanView> {
   void _navigateToReadFromHero(
     BuildContext context,
     ReadingRange range,
-    bool isAr,
-  ) {
-    final lastReadSurah = widget.lastReadSurah;
-    final lastReadAyah = widget.lastReadAyah;
-    final targetSurah =
-        (lastReadSurah != null) ? lastReadSurah : range.start.surah;
-    final targetAyah =
-        (lastReadAyah != null) ? lastReadAyah : range.start.ayah;
+    bool isAr, {
+    int? forDay,
+  }) {
+    final cubit = context.read<WirdCubit>();
+    final cubitState = cubit.state;
+    final savedPage = (cubitState is WirdPlanLoaded) ? cubitState.lastReadPage : null;
+    final savedSurah = (cubitState is WirdPlanLoaded) ? cubitState.lastReadSurah : null;
+    final savedAyah = (cubitState is WirdPlanLoaded) ? cubitState.lastReadAyah : null;
+
+    final day = forDay ?? widget.plan.currentDay;
+    final dayPageRange = widget.plan.isPagesBased
+        ? getPageRangeForDay(day, widget.plan.pagesPerDay!)
+        : null;
+
+    final pageInRange = savedPage != null &&
+        dayPageRange != null &&
+        savedPage >= dayPageRange.startPage &&
+        savedPage <= dayPageRange.endPage;
+    final surahInRange = !pageInRange &&
+        savedSurah != null &&
+        savedSurah >= range.start.surah &&
+        savedSurah <= range.end.surah;
+
+    int? targetPage;
+    int targetSurah;
+    int targetAyah;
+
+    if (pageInRange) {
+      targetPage = savedPage!;
+      final pos = pageStartPosition(targetPage);
+      targetSurah = pos.surah;
+      targetAyah = pos.ayah;
+    } else if (surahInRange) {
+      targetSurah = savedSurah!;
+      targetAyah = savedAyah ?? range.start.ayah;
+    } else {
+      targetSurah = range.start.surah;
+      targetAyah = range.start.ayah;
+      if (dayPageRange != null) {
+        targetPage = dayPageRange.startPage;
+        final pos = pageStartPosition(targetPage);
+        targetSurah = pos.surah;
+        targetAyah = pos.ayah;
+      }
+    }
 
     final surahState = context.read<SurahBloc>().state;
     String surahName;
@@ -2312,16 +2114,29 @@ class _ActivePlanViewState extends State<_ActivePlanView> {
       surahName = _surahArabicNames[targetSurah] ?? 'سورة $targetSurah';
     }
 
+    // Save immediately in case the app is closed.
+    if (targetPage != null) {
+      cubit.saveLastReadPage(targetPage!);
+    } else {
+      cubit.saveLastRead(targetSurah, targetAyah);
+    }
+
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (_) => SurahDetailScreen(
           surahNumber: targetSurah,
           surahName: surahName,
-          initialAyahNumber: targetAyah,
+          initialPageNumber: targetPage,
+          initialAyahNumber: targetPage == null ? targetAyah : null,
+          onPositionChanged: (s, a) => cubit.saveLastRead(s, a),
+          onPageChanged: (p) => cubit.saveLastReadPage(p),
         ),
       ),
-    );
+    ).then((_) {
+      if (!context.mounted) return;
+      _showRangeBookmarkDialog(context, range, day, pageRange: dayPageRange);
+    });
   }
 
   void _confirmReset(BuildContext context) {
@@ -2354,9 +2169,753 @@ class _ActivePlanViewState extends State<_ActivePlanView> {
       ),
     );
   }
+
+  // ── Bookmark / progress dialog ──────────────────────────────────────────
+
+  void _showBookmarkDialog(
+    BuildContext context,
+    ReadingRange range,
+    int today,
+    PageReadingRange? pageRange,
+  ) {
+    _showRangeBookmarkDialog(context, range, today, pageRange: pageRange);
+  }
+
+  /// Generic bookmark dialog for any day's range.
+  /// If [pageRange] is provided the dialog asks for page number (mushaf mode).
+  /// Always reads the latest saved position from cubit state.
+  void _showRangeBookmarkDialog(
+    BuildContext context,
+    ReadingRange targetRange,
+    int targetDay, {
+    PageReadingRange? pageRange,
+  }) {
+    final cubitState = context.read<WirdCubit>().state;
+    final savedPage = (cubitState is WirdPlanLoaded) ? cubitState.lastReadPage : null;
+    final savedSurah = (cubitState is WirdPlanLoaded) ? cubitState.lastReadSurah : null;
+    final savedAyah = (cubitState is WirdPlanLoaded) ? cubitState.lastReadAyah : null;
+    final cubit = context.read<WirdCubit>();
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final isAr = widget.isAr;
+
+    // ── Page mode (mushaf view) ──────────────────────────────────────────
+    if (pageRange != null) {
+      final startP = pageRange.startPage;
+      final endP = pageRange.endPage;
+      final pageInRange = savedPage != null && savedPage >= startP && savedPage <= endP;
+      int enteredPage = pageInRange ? savedPage! : startP;
+
+      showModalBottomSheet(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        builder: (ctx) => StatefulBuilder(
+          builder: (ctx, setSheetState) {
+            final pageCtrl = TextEditingController(text: enteredPage.toString());
+            return Padding(
+              padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
+              child: Container(
+                decoration: BoxDecoration(
+                  color: isDark ? AppColors.darkSurface : Colors.white,
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+                ),
+                padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: isAr ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+                  children: [
+                    Center(
+                      child: Container(
+                        width: 36, height: 4,
+                        decoration: BoxDecoration(
+                          color: AppColors.divider,
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        const Icon(Icons.bookmark_add_rounded,
+                            color: AppColors.primary, size: 20),
+                        const SizedBox(width: 8),
+                        Text(
+                          isAr ? 'حتى أين وصلت؟' : 'Where did you stop?',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold, fontSize: 16,
+                            color: isDark ? AppColors.darkTextPrimary : AppColors.primary,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      isAr
+                          ? 'سيُحفظ رقم الصفحة لتتابع القراءة منه'
+                          : 'Page number will be saved to resume next time',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: isDark ? AppColors.darkTextSecondary : AppColors.textSecondary,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    TextFormField(
+                      controller: pageCtrl,
+                      keyboardType: TextInputType.number,
+                      textAlign: TextAlign.center,
+                      decoration: InputDecoration(
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        labelText: isAr
+                            ? 'رقم الصفحة (${_arabicNumerals(startP)} – ${_arabicNumerals(endP)})'
+                            : 'Page number ($startP–$endP)',
+                      ),
+                      onChanged: (v) {
+                        final n = int.tryParse(v);
+                        if (n != null && n >= startP && n <= endP) enteredPage = n;
+                      },
+                    ),
+                    const SizedBox(height: 20),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton(
+                            onPressed: () => Navigator.pop(ctx),
+                            style: OutlinedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            ),
+                            child: Text(isAr ? 'تخطي' : 'Skip'),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          flex: 2,
+                          child: ElevatedButton.icon(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppColors.primary,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            ),
+                            icon: const Icon(Icons.save_rounded, size: 18),
+                            onPressed: () {
+                              final n = int.tryParse(pageCtrl.text);
+                              final pg = (n != null && n >= startP && n <= endP)
+                                  ? n : enteredPage;
+                              cubit.saveLastReadPage(pg);
+                              Navigator.pop(ctx);
+                            },
+                            label: Text(
+                              isAr ? 'حفظ الصفحة' : 'Save Page',
+                              style: const TextStyle(fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        ),
+      );
+      return;
+    }
+
+    // ── Surah+ayah mode (classic ayah view) ─────────────────────────────
+    final startS = targetRange.start.surah;
+    final endS = targetRange.end.surah;
+    final surahInRange = savedSurah != null &&
+        savedSurah >= startS && savedSurah <= endS;
+    int selectedSurah = surahInRange ? savedSurah! : startS;
+    int enteredAyah = (surahInRange && savedSurah == selectedSurah && savedAyah != null)
+        ? savedAyah
+        : targetRange.start.ayah;
+    // Rename local var for UI code below
+    final range = targetRange;
+
+    int minAyahFor(int s) => s == startS ? range.start.ayah : 1;
+    int maxAyahFor(int s) => s == endS ? range.end.ayah : kSurahAyahCounts[s - 1];
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSheetState) {
+          final minAyah = minAyahFor(selectedSurah);
+          final maxAyah = maxAyahFor(selectedSurah);
+          if (enteredAyah < minAyah) enteredAyah = minAyah;
+          if (enteredAyah > maxAyah) enteredAyah = maxAyah;
+          final ayahCtrl = TextEditingController(text: enteredAyah.toString());
+
+          return Padding(
+            padding: EdgeInsets.only(
+              bottom: MediaQuery.of(ctx).viewInsets.bottom,
+            ),
+            child: Container(
+              decoration: BoxDecoration(
+                color: isDark ? AppColors.darkSurface : Colors.white,
+                borderRadius:
+                    const BorderRadius.vertical(top: Radius.circular(24)),
+              ),
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: isAr
+                    ? CrossAxisAlignment.end
+                    : CrossAxisAlignment.start,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 36,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: AppColors.divider,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      const Icon(Icons.bookmark_add_rounded,
+                          color: AppColors.primary, size: 20),
+                      const SizedBox(width: 8),
+                      Text(
+                        isAr ? 'حتى أين وصلت؟' : 'Where did you stop?',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                          color: isDark
+                              ? AppColors.darkTextPrimary
+                              : AppColors.primary,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    isAr
+                        ? 'سيُحفظ موضعك لتتابع القراءة منه في المرة القادمة'
+                        : 'Your position will be saved to resume next time',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: isDark
+                          ? AppColors.darkTextSecondary
+                          : AppColors.textSecondary,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    isAr ? 'السورة:' : 'Surah:',
+                    style: const TextStyle(
+                        fontWeight: FontWeight.bold, fontSize: 13),
+                  ),
+                  const SizedBox(height: 6),
+                  DropdownButtonFormField<int>(
+                    value: selectedSurah,
+                    isExpanded: true,
+                    decoration: InputDecoration(
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 8),
+                    ),
+                    items: List.generate(endS - startS + 1, (i) {
+                      final n = startS + i;
+                      return DropdownMenuItem(
+                        value: n,
+                        child: Text(
+                          isAr
+                              ? '${_arabicNumerals(n)}. ${_surahArabicNames[n] ?? n.toString()}'
+                              : '$n. Surah $n',
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      );
+                    }),
+                    onChanged: (v) {
+                      if (v != null) {
+                        setSheetState(() {
+                          selectedSurah = v;
+                          enteredAyah = minAyahFor(v);
+                        });
+                      }
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    isAr
+                        ? 'رقم الآية ($minAyah – $maxAyah):'
+                        : 'Ayah number ($minAyah–$maxAyah):',
+                    style: const TextStyle(
+                        fontWeight: FontWeight.bold, fontSize: 13),
+                  ),
+                  const SizedBox(height: 6),
+                  TextFormField(
+                    controller: ayahCtrl,
+                    keyboardType: TextInputType.number,
+                    textAlign: TextAlign.center,
+                    decoration: InputDecoration(
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 8),
+                      hintText: '$minAyah – $maxAyah',
+                    ),
+                    onChanged: (v) {
+                      final n = int.tryParse(v);
+                      if (n != null && n >= minAyah && n <= maxAyah) {
+                        enteredAyah = n;
+                      }
+                    },
+                  ),
+                  const SizedBox(height: 20),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () => Navigator.pop(ctx),
+                          style: OutlinedButton.styleFrom(
+                            padding:
+                                const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          child: Text(isAr ? 'تخطي' : 'Skip'),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        flex: 2,
+                        child: ElevatedButton.icon(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.primary,
+                            foregroundColor: Colors.white,
+                            padding:
+                                const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          icon: const Icon(Icons.save_rounded, size: 18),
+                          onPressed: () {
+                            final n = int.tryParse(ayahCtrl.text);
+                            final ayah =
+                                (n != null && n >= minAyah && n <= maxAyah)
+                                    ? n
+                                    : enteredAyah;
+                            cubit.saveLastRead(selectedSurah, ayah);
+                            Navigator.pop(ctx);
+                          },
+                          label: Text(
+                            isAr ? 'حفظ الموضع' : 'Save Position',
+                            style: const TextStyle(
+                                fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
 }
 
 // ── Wird Mode Toggle ──────────────────────────────────────────────────────────
+
+// ── Missed days banner + mode toggle (combined) ─────────────────────────────
+
+class _MissedDaysBanner extends StatelessWidget {
+  final bool isAr;
+  final bool isDark;
+  final int missedCount;
+  final bool isMakeupMode;
+  final VoidCallback onSwitchToMakeup;
+  final VoidCallback onSwitchToToday;
+
+  const _MissedDaysBanner({
+    required this.isAr,
+    required this.isDark,
+    required this.missedCount,
+    required this.isMakeupMode,
+    required this.onSwitchToMakeup,
+    required this.onSwitchToToday,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final count = isAr ? _arabicNumerals(missedCount) : '$missedCount';
+    final dayWord = missedCount == 1
+        ? (isAr ? 'يوم فائت' : 'missed day')
+        : (isAr ? 'أيام فائتة' : 'missed days');
+
+    return Column(
+      children: [
+        // ── Amber/green notice strip ──────────────────────────────────
+        AnimatedContainer(
+          duration: const Duration(milliseconds: 300),
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+          decoration: BoxDecoration(
+            color: isMakeupMode
+                ? (isDark
+                    ? const Color(0xFF0F2416)
+                    : const Color(0xFFECFDF5))
+                : (isDark
+                    ? const Color(0xFF2A1F00)
+                    : const Color(0xFFFFFBEB)),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: isMakeupMode
+                  ? AppColors.success.withValues(alpha: 0.4)
+                  : Colors.amber.shade700.withValues(alpha: 0.5),
+            ),
+          ),
+          child: Row(
+            children: [
+              Icon(
+                isMakeupMode
+                    ? Icons.history_edu_rounded
+                    : Icons.access_time_rounded,
+                color: isMakeupMode
+                    ? AppColors.success
+                    : Colors.amber.shade700,
+                size: 17,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  isMakeupMode
+                      ? (isAr
+                          ? 'وضع القضاء نشط — $count $dayWord للتعويض'
+                          : 'Makeup mode — $count $dayWord to catch up')
+                      : (isAr
+                          ? 'متأخر $count $dayWord — لا تُفوِّت الفرصة'
+                          : '$count $dayWord behind — don\'t miss your chance'),
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: isMakeupMode
+                        ? (isDark ? AppColors.primaryLight : AppColors.primary)
+                        : (isDark
+                            ? Colors.amber.shade300
+                            : Colors.amber.shade800),
+                  ),
+                ),
+              ),
+              // Quick-action chip
+              if (!isMakeupMode) ...[
+                const SizedBox(width: 8),
+                GestureDetector(
+                  onTap: onSwitchToMakeup,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 11,
+                      vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.amber.shade700,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      isAr ? 'ابدأ القضاء' : 'Start Makeup',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+        const SizedBox(height: 8),
+        // ── Mode toggle tabs ──────────────────────────────────────────
+        _WirdModeToggle(
+          isAr: isAr,
+          isDark: isDark,
+          isMakeupMode: isMakeupMode,
+          missedCount: missedCount,
+          onToggle: (v) => v ? onSwitchToMakeup() : onSwitchToToday(),
+        ),
+      ],
+    );
+  }
+}
+
+// ── Completion widget: today done + missed days exist ───────────────────────
+
+class _CompletedWithMissedWidget extends StatelessWidget {
+  final bool isAr;
+  final bool isDark;
+  final int daysBehind;
+  final bool hasTomorrow;
+  final VoidCallback? onMakeup;
+  final VoidCallback? onTomorrow;
+
+  const _CompletedWithMissedWidget({
+    required this.isAr,
+    required this.isDark,
+    required this.daysBehind,
+    required this.hasTomorrow,
+    this.onMakeup,
+    this.onTomorrow,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final count = isAr ? _arabicNumerals(daysBehind) : '$daysBehind';
+    final dayWord = daysBehind == 1
+        ? (isAr ? 'يوم فائت' : 'missed day')
+        : (isAr ? 'أيام فائتة' : 'missed days');
+
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF0F2416) : const Color(0xFFECFDF5),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: AppColors.success.withValues(alpha: 0.35),
+        ),
+      ),
+      child: Column(
+        children: [
+          // ── Celebration header ────────────────────────────────────
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 12, 14, 10),
+            child: Row(
+              children: [
+                const Icon(
+                  Icons.check_circle_rounded,
+                  color: AppColors.success,
+                  size: 18,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    isAr
+                        ? 'أحسنت! أتممت ورد اليوم ✨'
+                        : "Well done! Today's wird is complete ✨",
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
+                      color: AppColors.success,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          // ── Gentle قضاء nudge ────────────────────────────────────
+          Container(
+            margin: const EdgeInsets.fromLTRB(10, 0, 10, 10),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: Colors.amber.withValues(alpha: isDark ? 0.1 : 0.09),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: Colors.amber.shade700.withValues(alpha: 0.3),
+              ),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.only(top: 1),
+                  child: Icon(
+                    Icons.lightbulb_rounded,
+                    color: Colors.amber.shade700,
+                    size: 15,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    isAr
+                        ? 'لديك $count $dayWord — الأفضل أن تلحقها قبل ورد الغد. كل يوم تقضيه يُقربك من إتمام ختمتك 💚'
+                        : 'You have $count $dayWord — best to catch up before tomorrow\'s wird. Each day you make up brings you closer to your khatm 💚',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: isDark
+                          ? Colors.amber.shade300
+                          : Colors.amber.shade900,
+                      height: 1.5,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          // ── Primary: start قضاء ──────────────────────────────────
+          Padding(
+            padding: const EdgeInsets.fromLTRB(10, 0, 10, 6),
+            child: SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: onMakeup,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  elevation: 0,
+                ),
+                icon: const Icon(Icons.history_edu_rounded, size: 17),
+                label: Text(
+                  isAr ? 'ابدأ ورد القضاء' : 'Start Makeup Wird',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 13,
+                  ),
+                ),
+              ),
+            ),
+          ),
+          // ── Secondary: tomorrow's wird ───────────────────────────
+          if (hasTomorrow && onTomorrow != null)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(10, 0, 10, 10),
+              child: SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: onTomorrow,
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: isDark
+                        ? AppColors.primaryLight
+                        : AppColors.primary,
+                    side: BorderSide(
+                      color: AppColors.primary.withValues(alpha: 0.3),
+                    ),
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  icon: Icon(
+                    isAr
+                        ? Icons.arrow_back_ios_rounded
+                        : Icons.arrow_forward_ios_rounded,
+                    size: 13,
+                  ),
+                  label: Text(
+                    isAr
+                        ? 'أو ابدأ وِرْدَ يَوْمِ الغَدِ'
+                        : "Or start tomorrow's wird",
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Completion widget: today done, no missed days ───────────────────────────
+
+class _NextDayWidget extends StatelessWidget {
+  final bool isAr;
+  final bool isDark;
+  final VoidCallback onTap;
+
+  const _NextDayWidget({
+    required this.isAr,
+    required this.isDark,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: AppColors.primary.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
+      ),
+      child: Column(
+        crossAxisAlignment:
+            isAr ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(
+                Icons.celebration_rounded,
+                color: AppColors.success,
+                size: 16,
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  isAr
+                      ? 'أتممت ورد اليوم! 🎉 يمكنك البدء في ورد الغد الآن.'
+                      : "Today's wird done! 🎉 You can start tomorrow's now.",
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: isDark
+                        ? AppColors.darkTextSecondary
+                        : AppColors.textSecondary,
+                    height: 1.4,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: onTap,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              icon: Icon(
+                isAr
+                    ? Icons.arrow_back_ios_rounded
+                    : Icons.arrow_forward_ios_rounded,
+                size: 16,
+              ),
+              label: Text(
+                isAr ? 'ابدأ وِرْدَ يَوْمِ الغَدِ' : "Start Tomorrow's Wird",
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 13,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ────────────────────────────────────────────────────────────────────────────
 
 class _WirdModeToggle extends StatelessWidget {
   final bool isAr;
@@ -2449,123 +3008,6 @@ class _ToggleTab extends StatelessWidget {
   }
 }
 
-// ── Reminder Card ────────────────────────────────────────────────────────────
-
-class _ReminderCard extends StatelessWidget {
-  final bool isAr;
-  final bool isDark;
-  final int? reminderHour;
-  final int? reminderMinute;
-
-  const _ReminderCard({
-    required this.isAr,
-    required this.isDark,
-    this.reminderHour,
-    this.reminderMinute,
-  });
-
-  bool get _hasReminder => reminderHour != null && reminderMinute != null;
-
-  @override
-  Widget build(BuildContext context) {
-    final String timeLabel;
-    if (_hasReminder) {
-      final tod = TimeOfDay(hour: reminderHour!, minute: reminderMinute!);
-      timeLabel = _formatTime12h(tod, isAr: isAr);
-    } else {
-      timeLabel = isAr ? 'لم يُحدَد وقت' : 'Not set';
-    }
-
-    final iconColor = _hasReminder
-        ? AppColors.primary
-        : AppColors.textSecondary;
-
-    return Card(
-      margin: EdgeInsets.zero,
-      elevation: 1,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        child: Row(
-          children: [
-            Icon(
-              Icons.notifications_active_outlined,
-              color: iconColor,
-              size: 22,
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    isAr ? 'وقت التذكير اليومي' : 'Daily Reminder',
-                    style: TextStyle(
-                      color: iconColor,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 13,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    _hasReminder
-                        ? timeLabel
-                        : (isAr ? 'لم يُحدَد وقت بعد' : 'No reminder set'),
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: AppColors.textSecondary,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 8),
-            OutlinedButton.icon(
-              onPressed: () => _editReminder(context),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: AppColors.primary,
-                side: const BorderSide(color: AppColors.primary, width: 1.2),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 8,
-                ),
-              ),
-              icon: const Icon(Icons.edit_rounded, size: 15),
-              label: Text(
-                isAr ? 'تعديل' : 'Edit',
-                style: const TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Future<void> _editReminder(BuildContext context) async {
-    final initial = _hasReminder
-        ? TimeOfDay(hour: reminderHour!, minute: reminderMinute!)
-        : const TimeOfDay(hour: 20, minute: 0);
-
-    final picked = await showTimePicker(
-      context: context,
-      initialTime: initial,
-      helpText: isAr ? 'وقت التذكير اليومي' : 'Daily reminder time',
-    );
-    if (picked != null && context.mounted) {
-      await context.read<WirdCubit>().updateReminderTime(
-        picked.hour,
-        picked.minute,
-      );
-    }
-  }
-}
-
 // ── Today's Wird Card ───────────────────────────────────────────────────────
 
 class _TodayCard extends StatelessWidget {
@@ -2578,7 +3020,10 @@ class _TodayCard extends StatelessWidget {
   final bool isDark;
   final int? lastReadSurah;
   final int? lastReadAyah;
+  final int? lastReadPage;
   final int daysBehind;
+  final void Function(BuildContext, ReadingRange, int, PageReadingRange?)? onShowBookmarkDialog;
+  final VoidCallback? onSwitchToMakeup;
 
   const _TodayCard({
     super.key,
@@ -2591,10 +3036,15 @@ class _TodayCard extends StatelessWidget {
     required this.isDark,
     this.lastReadSurah,
     this.lastReadAyah,
+    this.lastReadPage,
     this.daysBehind = 0,
+    this.onShowBookmarkDialog,
+    this.onSwitchToMakeup,
   });
 
-  bool get _hasBookmark => lastReadSurah != null && lastReadAyah != null;
+  bool get _hasBookmark =>
+      lastReadPage != null ||
+      (lastReadSurah != null && lastReadAyah != null);
 
   // ── Surah name helper (prefers SurahBloc, falls back to hard-coded map) ───
 
@@ -2617,6 +3067,13 @@ class _TodayCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final bool isPagesBased = plan.isPagesBased && pageRange != null;
+    final pct = (plan.progressPercent * 100).round();
+    final completedCount = plan.completedDays.length;
+    final currentDesc = WirdService.getDayDescription(
+      today,
+      plan.targetDays,
+      isArabic: isAr,
+    );
 
     // ── Identify today's juz (for the big header text) ───────────────────
     final juzList = isPagesBased
@@ -2634,11 +3091,11 @@ class _TodayCard extends StatelessWidget {
     final String rangeLineEn;
     if (range.isSingleSurah) {
       rangeLineAr =
-          '$startName  ${_arabicNumerals(range.start.ayah)} – ${_arabicNumerals(range.end.ayah)}';
+          'سورة $startName  ${_arabicNumerals(range.start.ayah)} – ${_arabicNumerals(range.end.ayah)}';
       rangeLineEn = '$startName  ${range.start.ayah}–${range.end.ayah}';
     } else {
       rangeLineAr =
-          'من $startName ${_arabicNumerals(range.start.ayah)} إلى $endName ${_arabicNumerals(range.end.ayah)}';
+          'من سورة $startName ${_arabicNumerals(range.start.ayah)} إلى سورة $endName ${_arabicNumerals(range.end.ayah)}';
       rangeLineEn =
           'From $startName ${range.start.ayah} to $endName ${range.end.ayah}';
     }
@@ -2675,148 +3132,249 @@ class _TodayCard extends StatelessWidget {
               ? CrossAxisAlignment.end
               : CrossAxisAlignment.start,
           children: [
-            // ── Header row ──────────────────────────────────────────────
+            // ── Merged: Khatm progress + today header ───────────────────
             Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
+                Text(
+                  isAr ? 'الختمة الحالية' : 'Current Khatm',
+                  style: const TextStyle(
+                    color: AppColors.primary,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 17,
+                  ),
+                ),
                 Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 5,
-                  ),
+                  padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: AppColors.primary.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(
-                      color: AppColors.primary.withValues(alpha: 0.3),
-                    ),
+                    color: AppColors.secondary.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(10),
                   ),
-                  child: Text(
-                    isAr ? 'اليوم ${_arabicNumerals(today)}' : 'Day $today',
-                    style: const TextStyle(
-                      color: AppColors.primary,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 13,
+                  child: const Icon(
+                    Icons.menu_book_rounded,
+                    color: AppColors.secondary,
+                    size: 20,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Align(
+              alignment: isAr ? Alignment.centerRight : Alignment.centerLeft,
+              child: Text(
+                isAr
+                    ? 'أنت الآن في $currentDesc'
+                    : 'You are now at $currentDesc',
+                style: const TextStyle(
+                  color: AppColors.textSecondary,
+                  fontSize: 13,
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  _surahName(context, range.start.surah),
+                  style: const TextStyle(
+                    color: AppColors.primary,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                Text(
+                  isAr
+                      ? '${_arabicNumerals(pct)}٪ مكتمل'
+                      : '$pct% completed',
+                  style: const TextStyle(
+                    color: AppColors.secondary,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            // Progress bar
+            ClipRRect(
+              borderRadius: BorderRadius.circular(6),
+              child: Container(
+                height: 10,
+                decoration: BoxDecoration(
+                  color: AppColors.divider.withValues(alpha: 0.5),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Align(
+                  alignment: isAr
+                      ? Alignment.centerRight
+                      : Alignment.centerLeft,
+                  child: FractionallySizedBox(
+                    widthFactor: plan.progressPercent,
+                    child: Container(
+                      decoration: const BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [Color(0xFF0D5E3A), Color(0xFFD4AF37)],
+                        ),
+                        borderRadius: BorderRadius.all(Radius.circular(6)),
+                      ),
                     ),
                   ),
                 ),
-                if (daysBehind > 0 && !isComplete) ...[
-                  const SizedBox(width: 8),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 5,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.amber.withValues(alpha: 0.15),
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(
-                        color: Colors.amber.shade700.withValues(alpha: 0.5),
-                      ),
-                    ),
-                    child: Text(
-                      isAr
-                          ? '${_arabicNumerals(daysBehind)} يوم متأخر'
-                          : '$daysBehind day${daysBehind > 1 ? "s" : ""} behind',
-                      style: TextStyle(
-                        color: Colors.amber.shade800,
-                        fontWeight: FontWeight.w600,
-                        fontSize: 11,
-                      ),
-                    ),
-                  ),
-                ],
-                const Spacer(),
-                if (isComplete)
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 5,
-                    ),
-                    decoration: BoxDecoration(
-                      color: AppColors.success.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(
-                        color: AppColors.success.withValues(alpha: 0.4),
-                      ),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(
-                          Icons.check_circle_rounded,
-                          color: AppColors.success,
-                          size: 14,
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          isAr ? 'مكتمل ✓' : 'Done ✓',
-                          style: const TextStyle(
-                            color: AppColors.success,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 12,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-              ],
+              ),
             ),
-            const SizedBox(height: 16),
-
-            // ── Juz title (big Arabic name) ─────────────────────────────
-            if (firstJuzInfo != null)
-              Center(
-                child: Column(
+            const SizedBox(height: 12),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
                   children: [
-                    Text(
-                      WirdService.getDayDescription(
-                        today,
-                        plan.targetDays,
-                        isArabic: true,
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 4,
                       ),
-                      style: GoogleFonts.amiriQuran(
-                        fontSize: 26,
-                        color: AppColors.primary,
-                        fontWeight: FontWeight.bold,
+                      decoration: BoxDecoration(
+                        color: isDark
+                            ? AppColors.darkCard
+                            : const Color(0xFFF0FDF4),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: const Color(0xFF059669).withValues(alpha: 0.3),
+                        ),
+                      ),
+                      child: Text(
+                        isAr ? _arabicNumerals(completedCount) : '$completedCount',
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.primary,
+                          fontSize: 13,
+                        ),
                       ),
                     ),
-                    const SizedBox(height: 4),
+                    const SizedBox(width: 6),
                     Text(
-                      firstJuzInfo.arabicName,
-                      textAlign: TextAlign.center,
-                      style: GoogleFonts.amiriQuran(
-                        fontSize: 17,
-                        color: AppColors.secondary,
-                        height: 1.8,
+                      isAr ? 'أيام' : 'days',
+                      style: const TextStyle(
+                        color: AppColors.textSecondary,
+                        fontSize: 12,
                       ),
                     ),
                   ],
+                ),
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 5,
+                      ),
+                      decoration: BoxDecoration(
+                        color: AppColors.primary.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: AppColors.primary.withValues(alpha: 0.3),
+                        ),
+                      ),
+                      child: Text(
+                        isAr ? 'اليوم ${_arabicNumerals(today)}' : 'Day $today',
+                        style: const TextStyle(
+                          color: AppColors.primary,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ),
+                    if (daysBehind > 0 && !isComplete) ...[
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 5,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.amber.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(
+                            color: Colors.amber.shade700.withValues(alpha: 0.5),
+                          ),
+                        ),
+                        child: Text(
+                          isAr
+                              ? '${_arabicNumerals(daysBehind)} يوم متأخر'
+                              : '$daysBehind day${daysBehind > 1 ? "s" : ""} behind',
+                          style: TextStyle(
+                            color: Colors.amber.shade800,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 11,
+                          ),
+                        ),
+                      ),
+                    ],
+                    if (isComplete) ...[
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 5,
+                        ),
+                        decoration: BoxDecoration(
+                          color: AppColors.success.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(
+                            color: AppColors.success.withValues(alpha: 0.4),
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(
+                              Icons.check_circle_rounded,
+                              color: AppColors.success,
+                              size: 14,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              isAr ? 'مكتمل ✓' : 'Done ✓',
+                              style: const TextStyle(
+                                color: AppColors.success,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ],
+            ),
+            const Divider(height: 24),
+
+            // ── Day / pages heading ──────────────────────────────────────
+            if (firstJuzInfo != null)
+              Center(
+                child: Text(
+                  firstJuzInfo.arabicName,
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.notoNaskhArabic(
+                    fontSize: 18,
+                    color: AppColors.secondary,
+                    fontWeight: FontWeight.w600,
+                    height: 1.7,
+                  ),
                 ),
               ),
             if (isPagesBased)
               Center(
-                child: Column(
-                  children: [
-                    Text(
-                      isAr
-                          ? '${_arabicNumerals(plan.pagesPerDay ?? 1)} صفحات يوميًا'
-                          : '${plan.pagesPerDay ?? 1} pages/day',
-                      style: GoogleFonts.amiriQuran(
-                        fontSize: 23,
-                        color: AppColors.primary,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      pageLine ?? '',
-                      textAlign: TextAlign.center,
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: AppColors.secondary,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ],
+                child: Text(
+                  isAr
+                      ? '${_arabicNumerals(plan.pagesPerDay ?? 1)} صفحات يوميًا'
+                      : '${plan.pagesPerDay ?? 1} pages/day',
+                  style: GoogleFonts.notoNaskhArabic(
+                    fontSize: 22,
+                    color: AppColors.primary,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
               ),
             const SizedBox(height: 14),
@@ -2873,12 +3431,12 @@ class _TodayCard extends StatelessWidget {
                         Text(
                           isAr ? rangeLineAr : rangeLineEn,
                           textAlign: isAr ? TextAlign.right : TextAlign.left,
-                          style: Theme.of(context).textTheme.bodyMedium
-                              ?.copyWith(
-                                color: AppColors.primary,
-                                fontWeight: FontWeight.bold,
-                                height: 1.5,
-                              ),
+                          style: GoogleFonts.notoNaskhArabic(
+                            fontSize: 14,
+                            color: AppColors.primary,
+                            fontWeight: FontWeight.w700,
+                            height: 1.6,
+                          ),
                         ),
                       ],
                     ),
@@ -2913,9 +3471,13 @@ class _TodayCard extends StatelessWidget {
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        isAr
-                            ? 'وصلت إلى: ${_surahArabicNames[lastReadSurah] ?? "سورة $lastReadSurah"} آية ${_arabicNumerals(lastReadAyah!)}'
-                            : 'Stopped at: ${_surahArabicNames[lastReadSurah] ?? "Surah $lastReadSurah"} $lastReadAyah',
+                        lastReadPage != null
+                            ? (isAr
+                                ? 'وصلت إلى: صفحة ${_arabicNumerals(lastReadPage!)}'
+                                : 'Stopped at: Page $lastReadPage')
+                            : (isAr
+                                ? 'وصلت إلى: ${_surahArabicNames[lastReadSurah] ?? "سورة $lastReadSurah"} آية ${_arabicNumerals(lastReadAyah!)}'
+                                : 'Stopped at: ${_surahArabicNames[lastReadSurah] ?? "Surah $lastReadSurah"} $lastReadAyah'),
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
                           color: AppColors.accent,
                           fontWeight: FontWeight.w600,
@@ -2979,7 +3541,7 @@ class _TodayCard extends StatelessWidget {
                 // Update bookmark button
                 if (!isComplete)
                   ElevatedButton(
-                    onPressed: () => _showBookmarkDialog(context),
+                    onPressed: () => onShowBookmarkDialog?.call(context, range, today, pageRange),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.secondary.withValues(
                         alpha: 0.12,
@@ -3035,6 +3597,28 @@ class _TodayCard extends StatelessWidget {
                 ),
               ],
             ),
+
+            // ── Completion actions ────────────────────────────────────────
+            if (isComplete) ...[
+              const SizedBox(height: 14),
+              if (daysBehind > 0)
+                _CompletedWithMissedWidget(
+                  isAr: isAr,
+                  isDark: isDark,
+                  daysBehind: daysBehind,
+                  hasTomorrow: today < plan.targetDays,
+                  onMakeup: onSwitchToMakeup,
+                  onTomorrow: today < plan.targetDays
+                      ? () => _navigateToNextDay(context)
+                      : null,
+                )
+              else if (today < plan.targetDays)
+                _NextDayWidget(
+                  isAr: isAr,
+                  isDark: isDark,
+                  onTap: () => _navigateToNextDay(context),
+                ),
+            ],
           ],
         ),
       ),
@@ -3044,11 +3628,50 @@ class _TodayCard extends StatelessWidget {
   // ── Navigate to reading screen ──────────────────────────────────────────
 
   void _navigateToRead(BuildContext context) {
-    // If user has a bookmark, resume from there; otherwise start from range start.
-    final int targetSurah = _hasBookmark ? lastReadSurah! : range.start.surah;
-    final int targetAyah = _hasBookmark ? lastReadAyah! : range.start.ayah;
+    final cubit = context.read<WirdCubit>();
+    final cubitState = cubit.state;
+    final savedPage = (cubitState is WirdPlanLoaded) ? cubitState.lastReadPage : null;
+    final savedSurah = (cubitState is WirdPlanLoaded) ? cubitState.lastReadSurah : null;
+    final savedAyah = (cubitState is WirdPlanLoaded) ? cubitState.lastReadAyah : null;
+
+    // Check if saved page is within the today range.
+    final startPage = pageRange?.startPage;
+    final endPage = pageRange?.endPage;
+    final pageInRange = savedPage != null &&
+        startPage != null &&
+        endPage != null &&
+        savedPage >= startPage &&
+        savedPage <= endPage;
+
+    int targetSurah;
+    int? targetPage;
+    int targetAyah;
+
+    if (pageInRange) {
+      // Resume from saved page (mushaf mode).
+      targetPage = savedPage!;
+      final pos = pageStartPosition(targetPage);
+      targetSurah = pos.surah;
+      targetAyah = pos.ayah;
+    } else {
+      // Fall back to surah+ayah bookmark or day start.
+      final surahInRange = savedSurah != null &&
+          savedSurah >= range.start.surah &&
+          savedSurah <= range.end.surah;
+      targetSurah = surahInRange ? savedSurah! : range.start.surah;
+      targetAyah = (surahInRange && savedAyah != null)
+          ? savedAyah
+          : range.start.ayah;
+    }
 
     final surahName = _surahName(context, targetSurah);
+
+    // Save immediately in case the app is closed.
+    if (targetPage != null) {
+      cubit.saveLastReadPage(targetPage!);
+    } else {
+      cubit.saveLastRead(targetSurah, targetAyah);
+    }
 
     Navigator.push(
       context,
@@ -3056,156 +3679,92 @@ class _TodayCard extends StatelessWidget {
         builder: (_) => SurahDetailScreen(
           surahNumber: targetSurah,
           surahName: surahName,
-          initialAyahNumber: targetAyah,
+          initialPageNumber: targetPage,
+          initialAyahNumber: targetPage == null ? targetAyah : null,
+          // Save on surah navigation.
+          onPositionChanged: (s, a) => cubit.saveLastRead(s, a),
+          // Save on every page swipe (primary tracking).
+          onPageChanged: (p) => cubit.saveLastReadPage(p),
         ),
       ),
-    );
+    ).then((_) {
+      if (!context.mounted) return;
+      onShowBookmarkDialog?.call(context, range, today, pageRange);
+    });
   }
 
-  // ── Bookmark / progress dialog ──────────────────────────────────────────
-
-  void _showBookmarkDialog(BuildContext context) {
-    // Clamp initial selection to the day's range.
-    final startS = range.start.surah;
-    final endS = range.end.surah;
-    int selectedSurah =
-        (_hasBookmark && lastReadSurah! >= startS && lastReadSurah! <= endS)
-        ? lastReadSurah!
-        : startS;
-    int enteredAyah = (_hasBookmark && lastReadSurah! == selectedSurah)
-        ? lastReadAyah!
-        : range.start.ayah;
+  void _navigateToNextDay(BuildContext context) {
+    final nextDay = today + 1;
+    if (nextDay > plan.targetDays) return;
+    final nextRange = _readingRangeForPlanDay(plan, nextDay);
+    final nextPageRange = plan.isPagesBased
+        ? getPageRangeForDay(nextDay, plan.pagesPerDay!)
+        : null;
     final cubit = context.read<WirdCubit>();
+    final cubitState = cubit.state;
 
-    // Ayah limits for a given surah within this day's range.
-    int minAyahFor(int s) => s == startS ? range.start.ayah : 1;
-    int maxAyahFor(int s) =>
-        s == endS ? range.end.ayah : kSurahAyahCounts[s - 1];
+    // Check if a saved page already falls in next day's range.
+    final savedPage = (cubitState is WirdPlanLoaded) ? cubitState.lastReadPage : null;
+    final savedSurah = (cubitState is WirdPlanLoaded) ? cubitState.lastReadSurah : null;
+    final savedAyah = (cubitState is WirdPlanLoaded) ? cubitState.lastReadAyah : null;
 
-    showDialog(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setDialogState) {
-          final minAyah = minAyahFor(selectedSurah);
-          final maxAyah = maxAyahFor(selectedSurah);
-          // Clamp whenever surah changes.
-          if (enteredAyah < minAyah) enteredAyah = minAyah;
-          if (enteredAyah > maxAyah) enteredAyah = maxAyah;
-          final ayahCtrl = TextEditingController(text: enteredAyah.toString());
+    final pageInRange = savedPage != null &&
+        nextPageRange != null &&
+        savedPage >= nextPageRange.startPage &&
+        savedPage <= nextPageRange.endPage;
+    final surahInRange = !pageInRange &&
+        savedSurah != null &&
+        savedSurah >= nextRange.start.surah &&
+        savedSurah <= nextRange.end.surah;
 
-          return AlertDialog(
-            title: Text(
-              isAr ? 'حدّث موضعك في القراءة' : 'Update Reading Position',
-            ),
-            content: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: isAr
-                    ? CrossAxisAlignment.end
-                    : CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    isAr ? 'السورة:' : 'Surah:',
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 13,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  // Only surahs within today's range
-                  DropdownButtonFormField<int>(
-                    initialValue: selectedSurah,
-                    isExpanded: true,
-                    decoration: InputDecoration(
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 8,
-                      ),
-                    ),
-                    items: List.generate(endS - startS + 1, (i) {
-                      final n = startS + i;
-                      return DropdownMenuItem(
-                        value: n,
-                        child: Text(
-                          isAr
-                              ? '${_arabicNumerals(n)}. ${_surahArabicNames[n] ?? n.toString()}'
-                              : '$n. Surah $n',
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      );
-                    }),
-                    onChanged: (v) {
-                      if (v != null) {
-                        setDialogState(() {
-                          selectedSurah = v;
-                          enteredAyah = minAyahFor(v);
-                        });
-                      }
-                    },
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    isAr
-                        ? 'رقم الآية (${_arabicNumerals(minAyah)} – ${_arabicNumerals(maxAyah)}):'
-                        : 'Ayah number ($minAyah–$maxAyah):',
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 13,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  TextFormField(
-                    controller: ayahCtrl,
-                    keyboardType: TextInputType.number,
-                    textAlign: TextAlign.center,
-                    decoration: InputDecoration(
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 8,
-                      ),
-                      hintText: '$minAyah – $maxAyah',
-                    ),
-                    onChanged: (v) {
-                      final n = int.tryParse(v);
-                      if (n != null && n >= minAyah && n <= maxAyah) {
-                        enteredAyah = n;
-                      }
-                    },
-                  ),
-                ],
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(ctx),
-                child: Text(isAr ? 'إلغاء' : 'Cancel'),
-              ),
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  foregroundColor: Colors.white,
-                ),
-                onPressed: () {
-                  final n = int.tryParse(ayahCtrl.text);
-                  final ayah = (n != null && n >= minAyah && n <= maxAyah)
-                      ? n
-                      : enteredAyah;
-                  cubit.saveLastRead(selectedSurah, ayah);
-                  Navigator.pop(ctx);
-                },
-                child: Text(isAr ? 'حفظ' : 'Save'),
-              ),
-            ],
-          );
-        },
+    int? targetPage;
+    int targetSurah;
+    int targetAyah;
+
+    if (pageInRange) {
+      targetPage = savedPage!;
+      final pos = pageStartPosition(targetPage);
+      targetSurah = pos.surah;
+      targetAyah = pos.ayah;
+    } else if (surahInRange) {
+      targetSurah = savedSurah!;
+      targetAyah = savedAyah ?? nextRange.start.ayah;
+    } else {
+      targetSurah = nextRange.start.surah;
+      targetAyah = nextRange.start.ayah;
+      if (nextPageRange != null) {
+        targetPage = nextPageRange.startPage;
+        final pos = pageStartPosition(targetPage);
+        targetSurah = pos.surah;
+        targetAyah = pos.ayah;
+      }
+    }
+
+    final surahName = _surahName(context, targetSurah);
+
+    // Save immediately in case the app is closed.
+    if (targetPage != null) {
+      cubit.saveLastReadPage(targetPage!);
+    } else {
+      cubit.saveLastRead(targetSurah, targetAyah);
+    }
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => SurahDetailScreen(
+          surahNumber: targetSurah,
+          surahName: surahName,
+          initialPageNumber: targetPage,
+          initialAyahNumber: targetPage == null ? targetAyah : null,
+          onPositionChanged: (s, a) => cubit.saveLastRead(s, a),
+          onPageChanged: (p) => cubit.saveLastReadPage(p),
+        ),
       ),
-    );
+    ).then((_) {
+      if (!context.mounted) return;
+      onShowBookmarkDialog?.call(context, nextRange, nextDay, nextPageRange);
+    });
   }
 }
 
@@ -3696,10 +4255,10 @@ class _MakeupCardState extends State<_MakeupCard> {
                     if (juzList.isNotEmpty || isPagesBased)
                       Text(
                         dayDesc,
-                        style: GoogleFonts.amiriQuran(
-                          fontSize: 18,
+                        style: GoogleFonts.notoNaskhArabic(
+                          fontSize: 17,
                           color: _kOrange,
-                          fontWeight: FontWeight.bold,
+                          fontWeight: FontWeight.w700,
                         ),
                       ),
                   ],
@@ -3928,6 +4487,7 @@ class _MakeupCardState extends State<_MakeupCard> {
     int day,
   ) {
     final isAr = widget.isAr;
+    final isDark = widget.isDark;
     final startS = range.start.surah;
     final endS = range.end.surah;
     final hasBookmark =
@@ -3935,7 +4495,6 @@ class _MakeupCardState extends State<_MakeupCard> {
         widget.makeupBookmarkSurah != null &&
         widget.makeupBookmarkAyah != null;
 
-    // Clamp initial selection within this day's range.
     int selectedSurah =
         (hasBookmark &&
             widget.makeupBookmarkSurah! >= startS &&
@@ -3948,52 +4507,95 @@ class _MakeupCardState extends State<_MakeupCard> {
         : range.start.ayah;
     final cubit = context.read<WirdCubit>();
 
-    // Ayah limits for a given surah within this day's range.
     int minAyahFor(int s) => s == startS ? range.start.ayah : 1;
     int maxAyahFor(int s) =>
         s == endS ? range.end.ayah : kSurahAyahCounts[s - 1];
 
-    showDialog(
+    showModalBottomSheet(
       context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
       builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setDialogState) {
+        builder: (ctx, setSheetState) {
           final minAyah = minAyahFor(selectedSurah);
           final maxAyah = maxAyahFor(selectedSurah);
           if (enteredAyah < minAyah) enteredAyah = minAyah;
           if (enteredAyah > maxAyah) enteredAyah = maxAyah;
           final ayahCtrl = TextEditingController(text: enteredAyah.toString());
 
-          return AlertDialog(
-            title: Text(
-              isAr ? 'حدّث موضعك في القضاء' : 'Update Makeup Position',
+          return Padding(
+            padding: EdgeInsets.only(
+              bottom: MediaQuery.of(ctx).viewInsets.bottom,
             ),
-            content: SingleChildScrollView(
+            child: Container(
+              decoration: BoxDecoration(
+                color: isDark ? AppColors.darkSurface : Colors.white,
+                borderRadius:
+                    const BorderRadius.vertical(top: Radius.circular(24)),
+              ),
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: isAr
                     ? CrossAxisAlignment.end
                     : CrossAxisAlignment.start,
                 children: [
+                  Center(
+                    child: Container(
+                      width: 36,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: AppColors.divider,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      const Icon(Icons.bookmark_add_rounded,
+                          color: _kOrange, size: 20),
+                      const SizedBox(width: 8),
+                      Text(
+                        isAr ? 'حتى أين وصلت في القضاء؟' : 'Where did you stop in makeup?',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                          color: isDark
+                              ? AppColors.darkTextPrimary
+                              : _kOrange,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    isAr
+                        ? 'سيُحفظ موضعك لتتابع منه في المرة القادمة'
+                        : 'Your position will be saved to resume next time',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: isDark
+                          ? AppColors.darkTextSecondary
+                          : AppColors.textSecondary,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
                   Text(
                     isAr ? 'السورة:' : 'Surah:',
                     style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 13,
-                    ),
+                        fontWeight: FontWeight.bold, fontSize: 13),
                   ),
                   const SizedBox(height: 6),
-                  // Only surahs within this day's range
                   DropdownButtonFormField<int>(
-                    initialValue: selectedSurah,
+                    value: selectedSurah,
                     isExpanded: true,
                     decoration: InputDecoration(
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(10),
                       ),
                       contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 8,
-                      ),
+                          horizontal: 12, vertical: 8),
                     ),
                     items: List.generate(endS - startS + 1, (i) {
                       final n = startS + i;
@@ -4009,7 +4611,7 @@ class _MakeupCardState extends State<_MakeupCard> {
                     }),
                     onChanged: (v) {
                       if (v != null) {
-                        setDialogState(() {
+                        setSheetState(() {
                           selectedSurah = v;
                           enteredAyah = minAyahFor(v);
                         });
@@ -4019,12 +4621,10 @@ class _MakeupCardState extends State<_MakeupCard> {
                   const SizedBox(height: 12),
                   Text(
                     isAr
-                        ? 'رقم الآية (${_arabicNumerals(minAyah)} – ${_arabicNumerals(maxAyah)}):'
+                        ? 'رقم الآية ($minAyah – $maxAyah):'
                         : 'Ayah number ($minAyah–$maxAyah):',
                     style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 13,
-                    ),
+                        fontWeight: FontWeight.bold, fontSize: 13),
                   ),
                   const SizedBox(height: 6),
                   TextFormField(
@@ -4036,9 +4636,7 @@ class _MakeupCardState extends State<_MakeupCard> {
                         borderRadius: BorderRadius.circular(10),
                       ),
                       contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 8,
-                      ),
+                          horizontal: 12, vertical: 8),
                       hintText: '$minAyah – $maxAyah',
                     ),
                     onChanged: (v) {
@@ -4048,30 +4646,57 @@ class _MakeupCardState extends State<_MakeupCard> {
                       }
                     },
                   ),
+                  const SizedBox(height: 20),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () => Navigator.pop(ctx),
+                          style: OutlinedButton.styleFrom(
+                            padding:
+                                const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          child: Text(isAr ? 'تخطي' : 'Skip'),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        flex: 2,
+                        child: ElevatedButton.icon(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: _kOrange,
+                            foregroundColor: Colors.white,
+                            padding:
+                                const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          icon: const Icon(Icons.save_rounded, size: 18),
+                          onPressed: () {
+                            final n = int.tryParse(ayahCtrl.text);
+                            final ayah =
+                                (n != null && n >= minAyah && n <= maxAyah)
+                                    ? n
+                                    : enteredAyah;
+                            cubit.saveMakeupBookmark(day, selectedSurah, ayah);
+                            Navigator.pop(ctx);
+                          },
+                          label: Text(
+                            isAr ? 'حفظ الموضع' : 'Save Position',
+                            style: const TextStyle(
+                                fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ],
               ),
             ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(ctx),
-                child: Text(isAr ? 'إلغاء' : 'Cancel'),
-              ),
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: _kOrange,
-                  foregroundColor: Colors.white,
-                ),
-                onPressed: () {
-                  final n = int.tryParse(ayahCtrl.text);
-                  final ayah = (n != null && n >= minAyah && n <= maxAyah)
-                      ? n
-                      : enteredAyah;
-                  cubit.saveMakeupBookmark(day, selectedSurah, ayah);
-                  Navigator.pop(ctx);
-                },
-                child: Text(isAr ? 'حفظ' : 'Save'),
-              ),
-            ],
           );
         },
       ),
@@ -4079,8 +4704,6 @@ class _MakeupCardState extends State<_MakeupCard> {
   }
 
   void _navigateToRead(BuildContext context, ReadingRange range, int day) {
-    // If a bookmark already exists for this day, resume from it;
-    // otherwise save range.start as the initial bookmark.
     final hasBookmark =
         widget.makeupBookmarkDay == day &&
         widget.makeupBookmarkSurah != null &&
@@ -4092,15 +4715,10 @@ class _MakeupCardState extends State<_MakeupCard> {
     final int targetAyah = hasBookmark
         ? widget.makeupBookmarkAyah!
         : range.start.ayah;
+    final cubit = context.read<WirdCubit>();
 
-    if (!hasBookmark) {
-      // Save starting position only when no bookmark exists yet
-      context.read<WirdCubit>().saveMakeupBookmark(
-        day,
-        range.start.surah,
-        range.start.ayah,
-      );
-    }
+    // Always save the starting position immediately (handles app-close).
+    cubit.saveMakeupBookmark(day, targetSurah, targetAyah);
 
     Navigator.push(
       context,
@@ -4109,9 +4727,15 @@ class _MakeupCardState extends State<_MakeupCard> {
           surahNumber: targetSurah,
           surahName: _surahName(context, targetSurah),
           initialAyahNumber: targetAyah,
+          // Auto-save every time the user navigates to a new surah.
+          onPositionChanged: (s, a) => cubit.saveMakeupBookmark(day, s, a),
         ),
       ),
-    );
+    ).then((_) {
+      if (!context.mounted) return;
+      // Auto-show position sheet so the user can confirm/adjust where they stopped.
+      _showMakeupBookmarkDialog(context, range, day);
+    });
   }
 }
 
@@ -4200,7 +4824,9 @@ class _BenefitCard extends StatelessWidget {
         color: isDark ? AppColors.darkCard : Colors.white,
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
-          color: const Color(0xFFDCFCE7).withValues(alpha: 0.5),
+          color: isDark
+              ? AppColors.darkBorder
+              : const Color(0xFFDCFCE7).withValues(alpha: 0.5),
         ),
         boxShadow: [
           BoxShadow(
@@ -4216,11 +4842,11 @@ class _BenefitCard extends StatelessWidget {
           Container(
             width: 44,
             height: 44,
-            decoration: const BoxDecoration(
-              color: Color(0xFFF0FDF4),
+            decoration: BoxDecoration(
+              color: isDark ? AppColors.darkSurface : const Color(0xFFF0FDF4),
               shape: BoxShape.circle,
             ),
-            child: Icon(icon, color: const Color(0xFF059669), size: 22),
+            child: Icon(icon, color: isDark ? AppColors.primaryLight : const Color(0xFF059669), size: 22),
           ),
           const SizedBox(height: 14),
           Text(
@@ -4234,8 +4860,8 @@ class _BenefitCard extends StatelessWidget {
           const SizedBox(height: 6),
           Text(
             subtitle,
-            style: const TextStyle(
-              color: AppColors.textSecondary,
+            style: TextStyle(
+              color: isDark ? AppColors.darkTextSecondary : AppColors.textSecondary,
               fontSize: 12,
               height: 1.5,
             ),
@@ -4254,6 +4880,7 @@ class _QuickReminderCard extends StatelessWidget {
   final int? reminderHour;
   final int? reminderMinute;
   final bool notificationsEnabled;
+  final int followUpIntervalHours;
 
   const _QuickReminderCard({
     required this.isAr,
@@ -4261,7 +4888,25 @@ class _QuickReminderCard extends StatelessWidget {
     this.reminderHour,
     this.reminderMinute,
     required this.notificationsEnabled,
+    this.followUpIntervalHours = 2,
   });
+
+  Future<void> _editTime(BuildContext context) async {
+    final initial = (reminderHour != null && reminderMinute != null)
+        ? TimeOfDay(hour: reminderHour!, minute: reminderMinute!)
+        : const TimeOfDay(hour: 20, minute: 0);
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: initial,
+      helpText: isAr ? 'وقت التذكير اليومي' : 'Daily reminder time',
+    );
+    if (picked != null && context.mounted) {
+      await context.read<WirdCubit>().updateReminderTime(
+        picked.hour,
+        picked.minute,
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -4271,56 +4916,77 @@ class _QuickReminderCard extends StatelessWidget {
             TimeOfDay(hour: reminderHour!, minute: reminderMinute!),
             isAr: isAr,
           )
-        : (isAr ? 'لم يُحدَد وقت' : 'Not set');
+        : (isAr ? 'اضغط لضبط الوقت' : 'Tap to set time');
 
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       decoration: BoxDecoration(
-        color: const Color(0xFFF0FDF4),
+        color: isDark ? AppColors.darkCard : const Color(0xFFF0FDF4),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: const Color(0xFFDCFCE7).withValues(alpha: 0.5),
+          color: isDark
+              ? AppColors.darkBorder
+              : const Color(0xFFDCFCE7).withValues(alpha: 0.5),
         ),
       ),
       child: Row(
         children: [
           Container(
-            width: 44,
-            height: 44,
+            width: 40,
+            height: 40,
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: isDark ? AppColors.darkSurface : Colors.white,
               borderRadius: BorderRadius.circular(10),
             ),
             child: const Icon(
               Icons.notifications_active_rounded,
               color: AppColors.secondary,
-              size: 22,
+              size: 20,
             ),
           ),
-          const SizedBox(width: 14),
+          const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   isAr ? 'تذكير يومي' : 'Daily Reminder',
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontWeight: FontWeight.bold,
-                    color: AppColors.primary,
-                    fontSize: 14,
+                    color: isDark ? AppColors.darkTextPrimary : AppColors.primary,
+                    fontSize: 13,
                   ),
                 ),
-                if (hasReminder)
-                  Text(
-                    isAr ? 'تم ضبطه على $timeLabel' : 'Set at $timeLabel',
-                    style: const TextStyle(
-                      color: AppColors.textSecondary,
-                      fontSize: 11,
-                    ),
+                const SizedBox(height: 2),
+                Text(
+                  hasReminder
+                      ? (isAr ? 'تم ضبطه على $timeLabel' : 'Set at $timeLabel')
+                      : timeLabel,
+                  style: TextStyle(
+                    color: isDark
+                        ? AppColors.darkTextSecondary
+                        : AppColors.textSecondary,
+                    fontSize: 11,
                   ),
+                ),
               ],
             ),
           ),
+          GestureDetector(
+            onTap: () => _editTime(context),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              child: Icon(
+                Icons.edit_rounded,
+                size: 18,
+                color: isDark ? AppColors.darkTextSecondary : AppColors.textSecondary,
+              ),
+            ),
+          ),
+          const SizedBox(width: 4),
           Switch(
             value: notificationsEnabled,
             activeThumbColor: Colors.white,
@@ -4330,72 +4996,233 @@ class _QuickReminderCard extends StatelessWidget {
           ),
         ],
       ),
+        ),
+        if (notificationsEnabled) ..._buildFollowUpRow(context),
+      ],
     );
+  }
+
+  List<Widget> _buildFollowUpRow(BuildContext context) {
+    const options = [0, 1, 2, 3, 4, 6, 8];
+    String label(int h) {
+      if (h == 0) return isAr ? 'أبدًا' : 'Never';
+      if (isAr) return h == 1 ? 'كل ساعة' : 'كل $h ساعات';
+      return h == 1 ? 'Every hour' : 'Every $h hours';
+    }
+    final current = options.contains(followUpIntervalHours) ? followUpIntervalHours : 2;
+    return [
+      const Divider(height: 1, indent: 16, endIndent: 16),
+      Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        child: Row(
+          children: [
+            Icon(
+              Icons.timer_outlined,
+              size: 18,
+              color: isDark ? AppColors.darkTextSecondary : AppColors.textSecondary,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                isAr ? 'إعادة التذكير' : 'Re-remind every',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: isDark ? AppColors.darkTextSecondary : AppColors.textSecondary,
+                ),
+              ),
+            ),
+            DropdownButton<int>(
+              value: current,
+              underline: const SizedBox(),
+              borderRadius: BorderRadius.circular(12),
+              isDense: true,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: isDark ? AppColors.darkTextPrimary : AppColors.primary,
+              ),
+              items: options
+                  .map((h) => DropdownMenuItem(
+                        value: h,
+                        child: Text(label(h)),
+                      ))
+                  .toList(),
+              onChanged: (v) {
+                if (v != null) {
+                  context.read<WirdCubit>().setFollowUpIntervalHours(v);
+                }
+              },
+            ),
+          ],
+        ),
+      ),
+    ];
   }
 }
 
-// ── Mini info card (for _ActivePlanView bento) ────────────────────────────────
+// ── Smart Stats Card ──────────────────────────────────────────────────────────
 
-class _MiniInfoCard extends StatelessWidget {
-  final IconData icon;
-  final Color iconColor;
-  final String title;
-  final String subtitle;
+class _SmartStatsCard extends StatelessWidget {
+  final WirdPlan plan;
+  final bool isAr;
   final bool isDark;
-  final VoidCallback onTap;
 
-  const _MiniInfoCard({
-    required this.icon,
-    required this.iconColor,
-    required this.title,
-    required this.subtitle,
+  const _SmartStatsCard({
+    required this.plan,
+    required this.isAr,
     required this.isDark,
-    required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: isDark
-              ? AppColors.darkCard
-              : const Color(0xFFF3F4F5),
-          borderRadius: BorderRadius.circular(14),
+    final streak = plan.currentStreak;
+    final best = plan.bestStreak;
+    final pct = (plan.progressPercent * 100).round();
+    final today = plan.currentDay;
+    final completed = plan.completedDays.length;
+    // How many days behind? (expected = today-1, since day N should be done yesterday)
+    final expected = (today - 1).clamp(0, plan.targetDays);
+    final behindDays = (expected - completed).clamp(0, expected);
+    final isOnTrack = behindDays == 0;
+
+    String insightAr;
+    String insightEn;
+    if (streak >= 7) {
+      insightAr = 'ماشاء الله! $streak أيام متتالية 🔥';
+      insightEn = 'MashaAllah! $streak-day streak 🔥';
+    } else if (streak >= 3) {
+      insightAr = 'أحسنت! ${_arabicNumerals(streak)} أيام متتالية 💪';
+      insightEn = 'Well done! $streak days in a row 💪';
+    } else if (isOnTrack) {
+      insightAr = 'أنت على الهدف! واصل 🌿';
+      insightEn = 'You\'re on track! Keep going 🌿';
+    } else if (behindDays == 1) {
+      insightAr = 'متأخر يوم واحد — يمكنك تعويضه 🤲';
+      insightEn = '1 day behind — you can catch up 🤲';
+    } else {
+      insightAr = 'متأخر ${_arabicNumerals(behindDays)} أيام — ابدأ القضاء 🕌';
+      insightEn = '$behindDays days behind — work on makeup 🕌';
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: isDark ? AppColors.darkCard : Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isDark ? AppColors.darkBorder : const Color(0xFFE2E8E0),
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              width: 38,
-              height: 38,
-              decoration: BoxDecoration(
-                color: iconColor.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(10),
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: _StatPill(
+                  icon: Icons.local_fire_department_rounded,
+                  iconColor: streak > 0 ? const Color(0xFFEF6C00) : AppColors.textSecondary,
+                  label: isAr ? 'السلسلة' : 'Streak',
+                  value: isAr
+                      ? (streak == 0 ? '—' : '${_arabicNumerals(streak)} 🔥')
+                      : (streak == 0 ? '—' : '$streak 🔥'),
+                  isDark: isDark,
+                ),
               ),
-              child: Icon(icon, color: iconColor, size: 20),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _StatPill(
+                  icon: Icons.emoji_events_rounded,
+                  iconColor: AppColors.secondary,
+                  label: isAr ? 'الأفضل' : 'Best',
+                  value: isAr
+                      ? (best == 0 ? '—' : _arabicNumerals(best))
+                      : (best == 0 ? '—' : '$best'),
+                  isDark: isDark,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _StatPill(
+                  icon: Icons.percent_rounded,
+                  iconColor: AppColors.primary,
+                  label: isAr ? 'الإنجاز' : 'Done',
+                  value: isAr ? '${_arabicNumerals(pct)}٪' : '$pct%',
+                  isDark: isDark,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: (isOnTrack ? AppColors.primary : const Color(0xFFEF6C00))
+                  .withValues(alpha: 0.07),
+              borderRadius: BorderRadius.circular(10),
             ),
-            const SizedBox(height: 10),
-            Text(
-              title,
-              style: const TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 13,
+            child: Text(
+              isAr ? insightAr : insightEn,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: isOnTrack
+                    ? (isDark ? AppColors.primaryLight : AppColors.primary)
+                    : const Color(0xFFBF360C),
               ),
             ),
-            const SizedBox(height: 4),
-            Text(
-              subtitle,
-              style: const TextStyle(
-                color: AppColors.textSecondary,
-                fontSize: 11,
-                height: 1.4,
-              ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _StatPill extends StatelessWidget {
+  final IconData icon;
+  final Color iconColor;
+  final String label;
+  final String value;
+  final bool isDark;
+
+  const _StatPill({
+    required this.icon,
+    required this.iconColor,
+    required this.label,
+    required this.value,
+    required this.isDark,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 6),
+      decoration: BoxDecoration(
+        color: isDark ? AppColors.darkSurface : const Color(0xFFF6F8F6),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Column(
+        children: [
+          Icon(icon, color: iconColor, size: 18),
+          const SizedBox(height: 4),
+          Text(
+            value,
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 13,
+              color: isDark ? AppColors.darkTextPrimary : AppColors.primary,
             ),
-          ],
-        ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 10,
+              color: isDark ? AppColors.darkTextSecondary : AppColors.textSecondary,
+            ),
+          ),
+        ],
       ),
     );
   }

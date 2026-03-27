@@ -103,6 +103,9 @@ class SettingsService {
 
   final SharedPreferences _prefs;
 
+  /// Called whenever a cloud-synced setting is changed.
+  void Function()? onDataChanged;
+
   SettingsService(this._prefs);
 
   // ── Generic accessors for ad-hoc keys ──────────────────────────────────
@@ -114,7 +117,9 @@ class SettingsService {
 
   // Arabic Font Size
   Future<bool> setArabicFontSize(double size) async {
-    return await _prefs.setDouble(_keyArabicFontSize, size);
+    final result = await _prefs.setDouble(_keyArabicFontSize, size);
+    if (result) onDataChanged?.call();
+    return result;
   }
 
   double getArabicFontSize() {
@@ -131,7 +136,9 @@ class SettingsService {
 
   // Translation Font Size
   Future<bool> setTranslationFontSize(double size) async {
-    return await _prefs.setDouble(_keyTranslationFontSize, size);
+    final result = await _prefs.setDouble(_keyTranslationFontSize, size);
+    if (result) onDataChanged?.call();
+    return result;
   }
 
   double getTranslationFontSize() {
@@ -140,7 +147,9 @@ class SettingsService {
 
   // Dark Mode
   Future<bool> setDarkMode(bool enabled) async {
-    return await _prefs.setBool(_keyDarkMode, enabled);
+    final result = await _prefs.setBool(_keyDarkMode, enabled);
+    if (result) onDataChanged?.call();
+    return result;
   }
 
   bool getDarkMode() {
@@ -154,7 +163,9 @@ class SettingsService {
 
   // Show Translation
   Future<bool> setShowTranslation(bool enabled) async {
-    return await _prefs.setBool(_keyShowTranslation, enabled);
+    final result = await _prefs.setBool(_keyShowTranslation, enabled);
+    if (result) onDataChanged?.call();
+    return result;
   }
 
   bool getShowTranslation() {
@@ -163,7 +174,9 @@ class SettingsService {
 
   // App Language
   Future<bool> setAppLanguage(String languageCode) async {
-    return await _prefs.setString(_keyAppLanguage, languageCode);
+    final result = await _prefs.setString(_keyAppLanguage, languageCode);
+    if (result) onDataChanged?.call();
+    return result;
   }
 
   String getAppLanguage() {
@@ -174,7 +187,9 @@ class SettingsService {
 
   // Use Uthmani Script
   Future<bool> setUseUthmaniScript(bool enabled) async {
-    return await _prefs.setBool(_keyUseUthmaniScript, enabled);
+    final result = await _prefs.setBool(_keyUseUthmaniScript, enabled);
+    if (result) onDataChanged?.call();
+    return result;
   }
 
   bool getUseUthmaniScript() {
@@ -183,7 +198,9 @@ class SettingsService {
 
   // Use QCF font (sub-option of Mushaf view)
   Future<bool> setUseQcfFont(bool enabled) async {
-    return await _prefs.setBool(_keyUseQcfFont, enabled);
+    final result = await _prefs.setBool(_keyUseQcfFont, enabled);
+    if (result) onDataChanged?.call();
+    return result;
   }
 
   bool getUseQcfFont() {
@@ -203,7 +220,9 @@ class SettingsService {
 
   // Page Flip Direction (RTL = true, LTR = false)
   Future<bool> setPageFlipRightToLeft(bool rtl) async {
-    return await _prefs.setBool(_keyPageFlipRightToLeft, rtl);
+    final result = await _prefs.setBool(_keyPageFlipRightToLeft, rtl);
+    if (result) onDataChanged?.call();
+    return result;
   }
 
   bool getPageFlipRightToLeft() {
@@ -225,7 +244,9 @@ class SettingsService {
   // 'subtle' = diacritics slightly lighter
   // 'different' = diacritics in clearly different color
   Future<bool> setDiacriticsColorMode(String mode) async {
-    return await _prefs.setString(_keyDiacriticsColorMode, mode);
+    final result = await _prefs.setString(_keyDiacriticsColorMode, mode);
+    if (result) onDataChanged?.call();
+    return result;
   }
 
   String getDiacriticsColorMode() {
@@ -378,7 +399,9 @@ class SettingsService {
   /// The API edition identifier used when fetching Quran text.
   /// e.g. 'quran-uthmani', 'quran-simple', 'quran-kids' …
   Future<bool> setQuranEdition(String edition) async {
-    return await _prefs.setString(_keyQuranEdition, edition);
+    final result = await _prefs.setString(_keyQuranEdition, edition);
+    if (result) onDataChanged?.call();
+    return result;
   }
 
   String getQuranEdition() {
@@ -390,7 +413,9 @@ class SettingsService {
   /// One of: 'amiri_quran', 'amiri', 'scheherazade', 'noto_naskh',
   ///   'lateef', 'markazi', 'noto_kufi', 'reem_kufi', 'tajawal', 'cairo'
   Future<bool> setQuranFont(String font) async {
-    return await _prefs.setString(_keyQuranFont, font);
+    final result = await _prefs.setString(_keyQuranFont, font);
+    if (result) onDataChanged?.call();
+    return result;
   }
 
   String getQuranFont() {
@@ -439,12 +464,19 @@ class SettingsService {
 
   // ── Scroll mode (تصفح المصحف بالسحب من أسفل لأعلى) ──────────────────────
   bool getScrollMode() => _prefs.getBool(_keyScrollMode) ?? false;
-  Future<bool> setScrollMode(bool v) => _prefs.setBool(_keyScrollMode, v);
+  Future<bool> setScrollMode(bool v) async {
+    final result = await _prefs.setBool(_keyScrollMode, v);
+    if (result) onDataChanged?.call();
+    return result;
+  }
 
   // ── Word-by-word audio (اضغط كلمة لتسمعها) ─────────────────────────────
   bool getWordByWordAudio() => _prefs.getBool(_keyWordByWordAudio) ?? false;
-  Future<bool> setWordByWordAudio(bool v) =>
-      _prefs.setBool(_keyWordByWordAudio, v);
+  Future<bool> setWordByWordAudio(bool v) async {
+    final result = await _prefs.setBool(_keyWordByWordAudio, v);
+    if (result) onDataChanged?.call();
+    return result;
+  }
 
   bool getTajweedEnabled() => _prefs.getBool(_keyTajweedEnabled) ?? false;
   Future<bool> setTajweedEnabled(bool v) =>
@@ -453,14 +485,20 @@ class SettingsService {
   // ── Mushaf continue-recitation ────────────────────────────────────────────
   bool getMushafContinueTilawa() =>
       _prefs.getBool(_keyMushafContinueTilawa) ?? false;
-  Future<bool> setMushafContinueTilawa(bool v) =>
-      _prefs.setBool(_keyMushafContinueTilawa, v);
+  Future<bool> setMushafContinueTilawa(bool v) async {
+    final result = await _prefs.setBool(_keyMushafContinueTilawa, v);
+    if (result) onDataChanged?.call();
+    return result;
+  }
 
   /// Scope for continue-recitation: 'page' (default) or 'surah'.
   String getMushafContinueScope() =>
       _prefs.getString(_keyMushafContinueScope) ?? 'page';
-  Future<bool> setMushafContinueScope(String v) =>
-      _prefs.setString(_keyMushafContinueScope, v);
+  Future<bool> setMushafContinueScope(String v) async {
+    final result = await _prefs.setString(_keyMushafContinueScope, v);
+    if (result) onDataChanged?.call();
+    return result;
+  }
 
   // ── Gemini API key (for tajweed recitation assistant) ────────────────────
   Future<bool> setGeminiApiKey(String key) {
@@ -554,6 +592,9 @@ class SettingsService {
   // ── Hijri date offset: clamped to [-3, +3] ────────────────────────────────
   int getHijriDateOffset() =>
       (_prefs.getInt(_keyHijriDateOffset) ?? 0).clamp(-3, 3);
-  Future<bool> setHijriDateOffset(int v) =>
-      _prefs.setInt(_keyHijriDateOffset, v.clamp(-3, 3));
+  Future<bool> setHijriDateOffset(int v) async {
+    final result = await _prefs.setInt(_keyHijriDateOffset, v.clamp(-3, 3));
+    if (result) onDataChanged?.call();
+    return result;
+  }
 }

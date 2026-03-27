@@ -46,10 +46,13 @@ class AuthCubit extends Cubit<AuthState> {
   }
 
   Future<void> _syncInBackground(User user) async {
+    emit(state.copyWith(isSyncing: true));
     try {
       await _syncService.syncAll(user);
     } catch (e) {
       debugPrint('AuthCubit: background sync failed: $e');
+    } finally {
+      emit(state.copyWith(isSyncing: false));
     }
   }
 
@@ -60,7 +63,8 @@ class AuthCubit extends Cubit<AuthState> {
     try {
       await _authService.signInWithGoogle();
       // State update happens via _onAuthChanged
-    } catch (e) {
+    } catch (e, st) {
+      debugPrint('AuthCubit: signInWithGoogle error: $e\n$st');
       emit(state.copyWith(
         isLoading: false,
         errorMessage: _mapError(e),
@@ -199,7 +203,8 @@ class AuthCubit extends Cubit<AuthState> {
           return 'حدث خطأ: ${e.message ?? e.code}';
       }
     }
-    return 'حدث خطأ غير متوقع';
+    debugPrint('AuthCubit: unexpected error (${e.runtimeType}): $e');
+    return 'حدث خطأ غير متوقع: $e';
   }
 
   @override

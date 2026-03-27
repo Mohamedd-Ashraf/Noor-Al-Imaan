@@ -273,8 +273,6 @@ class AppQcfPage extends StatelessWidget {
   /// Unicode Arabic text, no QCF-style explicit line-breaks.
   Widget _buildTajweedPage(BuildContext context) {
     final ranges = getPageData(pageNumber);
-    final isPortrait =
-        MediaQuery.of(context).orientation == Orientation.portrait;
 
     // QCF baseFontSize is calibrated for large PUA glyphs.
     // UthmanicHafs is a normal Uthmanic Arabic font — derive size from screen
@@ -349,7 +347,7 @@ class AppQcfPage extends StatelessWidget {
         spans.add(TextSpan(
           text: ' \u06DD${_toHafsArabicNum(v)} ',
           style: hafsBase.copyWith(
-            color: theme.verseNumberColor ?? const Color(0xFFB8860B),
+            color: theme.verseNumberColor,
             fontSize: fs * 0.8,
           ),
         ));

@@ -22,6 +22,9 @@ class BookmarkService {
 
   final SharedPreferences _prefs;
 
+  /// Called whenever bookmarks are mutated so cloud sync can be triggered.
+  void Function()? onDataChanged;
+
   BookmarkService(this._prefs);
 
   // Get all bookmarks
@@ -93,7 +96,9 @@ class BookmarkService {
 
     bookmarks.add(newBookmark);
 
-    return await _saveBookmarks(bookmarks);
+    final result = await _saveBookmarks(bookmarks);
+    if (result) onDataChanged?.call();
+    return result;
   }
 
   // Remove a bookmark
@@ -101,7 +106,9 @@ class BookmarkService {
     final bookmarks = getBookmarks();
     final normalizedId = _normalizeBookmark({'id': id})['id'];
     bookmarks.removeWhere((b) => b['id'] == id || b['id'] == normalizedId);
-    return await _saveBookmarks(bookmarks);
+    final result = await _saveBookmarks(bookmarks);
+    if (result) onDataChanged?.call();
+    return result;
   }
 
   // Check if an ayah is bookmarked
@@ -113,7 +120,9 @@ class BookmarkService {
 
   // Clear all bookmarks
   Future<bool> clearAllBookmarks() async {
-    return await _prefs.remove(_keyBookmarks);
+    final result = await _prefs.remove(_keyBookmarks);
+    if (result) onDataChanged?.call();
+    return result;
   }
 
   // Save bookmarks to SharedPreferences

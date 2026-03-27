@@ -9,7 +9,7 @@ import '../hadith_data.dart';
 /// v2: cached_hadiths + cached_sections for online CDN data
 class HadithDatabase {
   static const _dbName = 'hadiths.db';
-  static const _dbVersion = 2;
+  static const _dbVersion = 3;
 
   Database? _database;
 
@@ -45,6 +45,41 @@ class HadithDatabase {
     if (oldVersion < 2) {
       await _createCacheSchema(db);
     }
+    if (oldVersion < 3) {
+      await _insertMissingHadiths(db);
+    }
+  }
+
+  /// Inserts any hadiths from the static source that are missing from the DB.
+  /// Uses INSERT OR IGNORE so existing rows are never touched.
+  Future<void> _insertMissingHadiths(Database db) async {
+    final batch = db.batch();
+    final categories = HadithData.categories;
+    for (final category in categories) {
+      for (var i = 0; i < category.items.length; i++) {
+        final hadith = category.items[i];
+        batch.rawInsert(
+          'INSERT OR IGNORE INTO hadiths VALUES '
+          '(?,?,?,?,?,?,?,?,?,?,?,?,?)',
+          [
+            hadith.id,
+            category.id,
+            hadith.arabicText,
+            hadith.reference,
+            hadith.bookReference,
+            hadith.sanad,
+            hadith.narrator,
+            hadith.grade.name,
+            hadith.gradedBy,
+            hadith.topicAr,
+            hadith.topicEn,
+            hadith.explanation,
+            i,
+          ],
+        );
+      }
+    }
+    await batch.commit(noResult: true);
   }
 
   Future<void> _createBaseSchema(Database db) async {

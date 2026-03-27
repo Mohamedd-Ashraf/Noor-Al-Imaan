@@ -1,17 +1,33 @@
+import 'dart:async';
+
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:google_sign_in/google_sign_in.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
+import 'package:google_sign_in/google_sign_in.dart';
+import 'package:google_sign_in_platform_interface/google_sign_in_platform_interface.dart';
 
 /// Wraps Firebase Authentication and Google Sign-In into a single service.
 class AuthService {
+  static const String _googleServerClientId =
+      '1039427063284-md9k0adeefljpu1rr0vg8sksboq7el7u.apps.googleusercontent.com';
+
   final FirebaseAuth _auth;
   final GoogleSignIn _googleSignIn;
+  Future<void>? _androidGoogleInitFuture;
 
   AuthService({
     FirebaseAuth? auth,
     GoogleSignIn? googleSignIn,
   })  : _auth = auth ?? FirebaseAuth.instance,
-        _googleSignIn = googleSignIn ?? GoogleSignIn();
+        _googleSignIn = googleSignIn ??
+            GoogleSignIn(
+              // Web client ID (client_type: 3) from google-services.json.
+              // Required by google_sign_in_android 6.2+ to obtain idToken
+              // via the Credential Manager API on Android 14+.
+              serverClientId: _googleServerClientId,
+            ) {
+    unawaited(_warmUpGoogleSignIn());
+  }
 
   /// Current Firebase user (null when signed out or guest).
   User? get currentUser => _auth.currentUser;
@@ -33,9 +49,44 @@ class AuthService {
 
   // ── Google Sign-In ──────────────────────────────────────────────────────
 
+  Future<void> _warmUpGoogleSignIn() async {
+    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+      try {
+        await _ensureAndroidGoogleSignInInitialized();
+      } catch (e) {
+        debugPrint('Google sign-in warm-up failed: $e');
+      }
+    }
+  }
+
+  Future<void> _ensureAndroidGoogleSignInInitialized() {
+    return _androidGoogleInitFuture ??=
+        GoogleSignInPlatform.instance.initWithParams(
+          SignInInitParameters(
+            signInOption: SignInOption.standard,
+            scopes: const <String>[],
+            serverClientId: _googleServerClientId,
+          ),
+        );
+  }
+
   /// Signs in with Google. Returns the [UserCredential] on success.
   Future<UserCredential> signInWithGoogle() async {
-    final googleUser = await _googleSignIn.signIn();
+    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+      return _signInWithGoogleOnAndroid();
+    }
+
+    GoogleSignInAccount? googleUser;
+    try {
+      googleUser = await _googleSignIn.signIn();
+    } on PlatformException catch (e, st) {
+      debugPrint(
+        'GoogleSignIn.signIn() PlatformException — '
+        'code: ${e.code} | message: ${e.message} | details: ${e.details}',
+      );
+      debugPrint('Stack trace: $st');
+      rethrow;
+    }
     if (googleUser == null) {
       throw AuthCancelledException(
         code: 'sign-in-cancelled',
@@ -44,9 +95,19 @@ class AuthService {
     }
 
     final googleAuth = await googleUser.authentication;
+    final idToken = googleAuth.idToken;
+    if (idToken == null) {
+      await _googleSignIn.signOut();
+      throw AuthCancelledException(
+        code: 'missing-id-token',
+        message: 'Google sign-in did not return an ID token. '
+            'Ensure the serverClientId is correct and the SHA-1 '
+            'fingerprint is registered in Firebase Console.',
+      );
+    }
     final credential = GoogleAuthProvider.credential(
       accessToken: googleAuth.accessToken,
-      idToken: googleAuth.idToken,
+      idToken: idToken,
     );
 
     // If already signed in anonymously, link the Google credential.
@@ -58,6 +119,42 @@ class AuthService {
         if (e.code == 'credential-already-in-use') {
           // Another account already uses this Google credential.
           // Sign out anonymous, sign in with Google directly.
+          await _auth.signOut();
+          return await _auth.signInWithCredential(credential);
+        }
+        rethrow;
+      }
+    }
+
+    return await _auth.signInWithCredential(credential);
+  }
+
+  Future<UserCredential> _signInWithGoogleOnAndroid() async {
+    await _ensureAndroidGoogleSignInInitialized();
+
+    final googleUser = await GoogleSignInPlatform.instance.signIn();
+    if (googleUser == null) {
+      throw AuthCancelledException(
+        code: 'sign-in-cancelled',
+        message: 'Google sign-in was cancelled by the user.',
+      );
+    }
+
+    final idToken = googleUser.idToken;
+    if (idToken == null || idToken.isEmpty) {
+      throw AuthCancelledException(
+        code: 'missing-id-token',
+        message: 'Google sign-in completed without an ID token.',
+      );
+    }
+
+    final credential = GoogleAuthProvider.credential(idToken: idToken);
+    final user = _auth.currentUser;
+    if (user != null && user.isAnonymous) {
+      try {
+        return await user.linkWithCredential(credential);
+      } on FirebaseAuthException catch (e) {
+        if (e.code == 'credential-already-in-use') {
           await _auth.signOut();
           return await _auth.signInWithCredential(credential);
         }
@@ -129,10 +226,18 @@ class AuthService {
 
   /// Signs out of Firebase and Google.
   Future<void> signOut() async {
-    try {
-      await _googleSignIn.signOut();
-    } catch (e) {
-      debugPrint('GoogleSignIn.signOut failed: $e');
+    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+      try {
+        await GoogleSignInPlatform.instance.signOut();
+      } catch (e) {
+        debugPrint('GoogleSignInPlatform.signOut failed: $e');
+      }
+    } else {
+      try {
+        await _googleSignIn.signOut();
+      } catch (e) {
+        debugPrint('GoogleSignIn.signOut failed: $e');
+      }
     }
     await _auth.signOut();
   }
@@ -143,9 +248,15 @@ class AuthService {
   Future<void> deleteAccount() async {
     final user = _auth.currentUser;
     if (user == null) return;
-    try {
-      await _googleSignIn.signOut();
-    } catch (_) {}
+    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+      try {
+        await GoogleSignInPlatform.instance.signOut();
+      } catch (_) {}
+    } else {
+      try {
+        await _googleSignIn.signOut();
+      } catch (_) {}
+    }
     await user.delete();
   }
 }

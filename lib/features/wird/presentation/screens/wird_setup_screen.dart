@@ -127,9 +127,9 @@ class _WirdSetupScreenState extends State<WirdSetupScreen> {
               isDark ? AppColors.darkSurface : const Color(0xFFF0FEF9),
           elevation: 0,
           leading: IconButton(
-            icon: const Icon(
+            icon: Icon(
               Icons.arrow_back_rounded,
-              color: Color(0xFF003527),
+              color: isDark ? AppColors.darkTextPrimary : const Color(0xFF003527),
             ),
             onPressed: () => Navigator.pop(context),
           ),
@@ -137,7 +137,7 @@ class _WirdSetupScreenState extends State<WirdSetupScreen> {
             isAr ? 'إنشاء خطة تلاوة' : 'Create Reading Plan',
             style: GoogleFonts.notoSerif(
               fontWeight: FontWeight.bold,
-              color: const Color(0xFF003527),
+              color: isDark ? AppColors.darkTextPrimary : const Color(0xFF003527),
             ),
           ),
         ),
@@ -150,8 +150,8 @@ class _WirdSetupScreenState extends State<WirdSetupScreen> {
                 isAr
                     ? 'صمم رحلتك الروحية الخاصة مع القرآن الكريم'
                     : 'Design your personal journey with the Holy Quran',
-                style: const TextStyle(
-                  color: AppColors.textSecondary,
+                style: TextStyle(
+                  color: isDark ? AppColors.darkTextSecondary : AppColors.textSecondary,
                   fontWeight: FontWeight.w500,
                   fontSize: 13.5,
                 ),
@@ -194,8 +194,8 @@ class _WirdSetupScreenState extends State<WirdSetupScreen> {
                     isAr
                         ? (_pagesBased ? 'الصفحات اليومية' : 'المدة الزمنية')
                         : (_pagesBased ? 'Daily Pages' : 'Duration'),
-                    style: const TextStyle(
-                      color: Color(0xFF003527),
+                    style: TextStyle(
+                      color: isDark ? AppColors.darkTextPrimary : const Color(0xFF003527),
                       fontWeight: FontWeight.bold,
                       fontSize: 16,
                     ),
@@ -344,8 +344,8 @@ class _WirdSetupScreenState extends State<WirdSetupScreen> {
                         ),
                         Text(
                           isAr ? 'يوم' : 'days',
-                          style: const TextStyle(
-                            color: AppColors.textSecondary,
+                          style: TextStyle(
+                            color: isDark ? AppColors.darkTextSecondary : AppColors.textSecondary,
                             fontWeight: FontWeight.w600,
                           ),
                         ),
@@ -483,8 +483,8 @@ class _WirdSetupScreenState extends State<WirdSetupScreen> {
                         ),
                         Text(
                           isAr ? 'صفحة' : 'pages',
-                          style: const TextStyle(
-                            color: AppColors.textSecondary,
+                          style: TextStyle(
+                            color: isDark ? AppColors.darkTextSecondary : AppColors.textSecondary,
                             fontWeight: FontWeight.w600,
                           ),
                         ),
@@ -506,24 +506,25 @@ class _WirdSetupScreenState extends State<WirdSetupScreen> {
                       child: _SetupCard(
                         isDark: isDark,
                         child: Column(
+                          mainAxisSize: MainAxisSize.min,
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Row(
                               children: [
                                 _SetupIconBox(
-                                  color: const Color(0xFFF0FEF9),
-                                  child: const Icon(
+                                  color: isDark ? AppColors.darkSurface : const Color(0xFFF0FEF9),
+                                  child: Icon(
                                     Icons.event_rounded,
-                                    color: Color(0xFF003527),
+                                    color: isDark ? AppColors.primaryLight : const Color(0xFF003527),
                                     size: 20,
                                   ),
                                 ),
                                 const SizedBox(width: 10),
                                 Text(
                                   isAr ? 'تاريخ البدء' : 'Start Date',
-                                  style: const TextStyle(
+                                  style: TextStyle(
                                     fontWeight: FontWeight.bold,
-                                    color: Color(0xFF003527),
+                                    color: isDark ? AppColors.darkTextPrimary : const Color(0xFF003527),
                                     fontSize: 13,
                                   ),
                                 ),
@@ -535,15 +536,15 @@ class _WirdSetupScreenState extends State<WirdSetupScreen> {
                               children: [
                                 Text(
                                   _fmtDateSS(_start, isAr: isAr),
-                                  style: const TextStyle(
+                                  style: TextStyle(
                                     fontWeight: FontWeight.w600,
-                                    color: AppColors.textSecondary,
+                                    color: isDark ? AppColors.darkTextSecondary : AppColors.textSecondary,
                                     fontSize: 13,
                                   ),
                                 ),
-                                const Icon(
+                                Icon(
                                   Icons.expand_more_rounded,
-                                  color: AppColors.textSecondary,
+                                  color: isDark ? AppColors.darkTextSecondary : AppColors.textSecondary,
                                   size: 20,
                                 ),
                               ],
@@ -558,38 +559,68 @@ class _WirdSetupScreenState extends State<WirdSetupScreen> {
                     child: _SetupCard(
                       isDark: isDark,
                       child: Column(
+                        mainAxisSize: MainAxisSize.min,
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              Flexible(
-                                child: Row(
-                                  children: [
-                                    _SetupIconBox(
-                                      color: const Color(0xFFFFFBEB),
-                                      child: const Icon(
-                                        Icons.notifications_active_rounded,
-                                        color: AppColors.secondary,
-                                        size: 20,
+                              _SetupIconBox(
+                                color: isDark ? AppColors.darkSurface : const Color(0xFFFFFBEB),
+                                child: const Icon(
+                                  Icons.notifications_active_rounded,
+                                  color: AppColors.secondary,
+                                  size: 20,
+                                ),
+                              ),
+                          const SizedBox(width: 8),
+
+                               Text(
+                            isAr ? 'تذكير يومي' : 'Reminder',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: isDark ? AppColors.darkTextPrimary : const Color(0xFF003527),
+                              fontSize: 12,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                            ],
+                          ),
+                         
+                          // const SizedBox(height: 8),
+                          Row(
+                            children: [
+                             
+                              if (_reminderOn) ...[
+                                Flexible(
+                                  child: GestureDetector(
+                                    onTap: _pickTime,
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 10,
+                                        vertical: 8,
                                       ),
-                                    ),
-                                    const SizedBox(width: 8),
-                                    Flexible(
+                                      decoration: BoxDecoration(
+                                        color: isDark
+                                            ? AppColors.darkBackground
+                                            : const Color(0xFFF3F4F5),
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
                                       child: Text(
-                                        isAr ? 'تذكير يومي' : 'Reminder',
-                                        style: const TextStyle(
-                                          fontWeight: FontWeight.bold,
-                                          color: Color(0xFF003527),
-                                          fontSize: 12,
+                                        _fmtTimeSS(_reminderTime, isAr: isAr),
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.w600,
+                                          color: isDark ? AppColors.darkTextPrimary : const Color(0xFF003527),
+                                          fontSize: 13,
                                         ),
                                         overflow: TextOverflow.ellipsis,
                                       ),
                                     ),
-                                  ],
+                                  ),
                                 ),
-                              ),
-                              Transform.scale(
+                              ],
+                                const SizedBox(width:5),
+
+                               Transform.scale(
                                 scale: 0.75,
                                 child: Switch(
                                   value: _reminderOn,
@@ -601,32 +632,6 @@ class _WirdSetupScreenState extends State<WirdSetupScreen> {
                               ),
                             ],
                           ),
-                          if (_reminderOn) ...[
-                            const SizedBox(height: 8),
-                            GestureDetector(
-                              onTap: _pickTime,
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 10,
-                                  vertical: 8,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: isDark
-                                      ? AppColors.darkBackground
-                                      : const Color(0xFFF3F4F5),
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: Text(
-                                  _fmtTimeSS(_reminderTime, isAr: isAr),
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.w600,
-                                    color: Color(0xFF003527),
-                                    fontSize: 13,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ],
                         ],
                       ),
                     ),
@@ -671,8 +676,8 @@ class _WirdSetupScreenState extends State<WirdSetupScreen> {
                           const SizedBox(height: 6),
                           Text.rich(
                             TextSpan(
-                              style: const TextStyle(
-                                color: AppColors.textSecondary,
+                              style: TextStyle(
+                                color: isDark ? AppColors.darkTextSecondary : AppColors.textSecondary,
                                 fontSize: 13,
                               ),
                               children: [
@@ -685,8 +690,8 @@ class _WirdSetupScreenState extends State<WirdSetupScreen> {
                                   text: isAr
                                       ? '${_toArNum(_targetDays)} يوماً'
                                       : '$_targetDays days',
-                                  style: const TextStyle(
-                                    color: Color(0xFF003527),
+                                  style: TextStyle(
+                                    color: isDark ? AppColors.primaryLight : const Color(0xFF003527),
                                     fontWeight: FontWeight.bold,
                                   ),
                                 ),
@@ -697,8 +702,8 @@ class _WirdSetupScreenState extends State<WirdSetupScreen> {
                                   text: isAr
                                       ? '${_toArNum(_pagesDisplay)} صفحة'
                                       : '$_pagesDisplay pages',
-                                  style: const TextStyle(
-                                    color: Color(0xFF003527),
+                                  style: TextStyle(
+                                    color: isDark ? AppColors.primaryLight : const Color(0xFF003527),
                                     fontWeight: FontWeight.bold,
                                   ),
                                 ),
@@ -712,10 +717,12 @@ class _WirdSetupScreenState extends State<WirdSetupScreen> {
                       ),
                     ),
                     const SizedBox(width: 12),
-                    const Icon(
+                    Icon(
                       Icons.auto_awesome_rounded,
                       size: 48,
-                      color: Color(0x1A003527),
+                      color: isDark
+                          ? AppColors.primary.withValues(alpha: 0.5)
+                          : const Color(0x1A003527),
                     ),
                   ],
                 ),
@@ -826,7 +833,7 @@ class _StrategyCard extends StatelessWidget {
               style: TextStyle(
                 color: selected
                     ? const Color(0xFF80BEA6)
-                    : AppColors.textSecondary,
+                    : (isDark ? AppColors.darkTextSecondary : AppColors.textSecondary),
                 fontSize: 12,
               ),
             ),
@@ -886,7 +893,9 @@ class _DurChip extends StatelessWidget {
           child: Text(
             label,
             style: TextStyle(
-              color: selected ? Colors.white : AppColors.textSecondary,
+              color: selected
+                  ? Colors.white
+                  : (isDark ? AppColors.darkTextPrimary : AppColors.textSecondary),
               fontWeight: FontWeight.bold,
               fontSize: 15,
             ),

@@ -20,12 +20,15 @@ class AuthState extends Equatable {
   final User? user;
   final String? errorMessage;
   final bool isLoading;
+  /// True while cloud sync is running in the background after sign-in.
+  final bool isSyncing;
 
   const AuthState({
     this.status = AuthStatus.unknown,
     this.user,
     this.errorMessage,
     this.isLoading = false,
+    this.isSyncing = false,
   });
 
   /// Display name: Google/email name, or guest fallback.
@@ -46,6 +49,7 @@ class AuthState extends Equatable {
     User? user,
     String? errorMessage,
     bool? isLoading,
+    bool? isSyncing,
     bool clearError = false,
     bool clearUser = false,
   }) {
@@ -54,9 +58,10 @@ class AuthState extends Equatable {
       user: clearUser ? null : (user ?? this.user),
       errorMessage: clearError ? null : (errorMessage ?? this.errorMessage),
       isLoading: isLoading ?? this.isLoading,
+      isSyncing: isSyncing ?? this.isSyncing,
     );
   }
 
   @override
-  List<Object?> get props => [status, user?.uid, errorMessage, isLoading];
+  List<Object?> get props => [status, user?.uid, errorMessage, isLoading, isSyncing];
 }

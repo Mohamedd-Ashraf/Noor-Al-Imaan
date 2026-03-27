@@ -215,6 +215,22 @@ class _OnboardingGateState extends State<OnboardingGate> {
     }
 
     // ── 6. Main app ────────────────────────────────────────────────────────
-    return const MainNavigator();
+    return BlocBuilder<AuthCubit, AuthState>(
+      buildWhen: (prev, curr) => prev.isSyncing != curr.isSyncing,
+      builder: (context, authState) {
+        return Stack(
+          children: [
+            const MainNavigator(),
+            if (authState.isSyncing)
+              const Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
+                child: LinearProgressIndicator(minHeight: 2),
+              ),
+          ],
+        );
+      },
+    );
   }
 }

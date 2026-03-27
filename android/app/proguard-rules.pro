@@ -16,6 +16,52 @@
 -dontwarn com.google.firebase.**
 -dontwarn com.google.android.gms.**
 
+# ── google_sign_in_android 6.2+ / Credential Manager / Google Identity ──────
+# On Android 14+ (API 34+) the plugin uses the Credential Manager API.
+#
+# ROOT CAUSE of PlatformException(exception, ERROR) in release:
+# R8 "full mode" (AGP 7.3+) removes ServiceLoader registrations unless the
+# implementing classes are explicitly kept.  credentials-play-services-auth
+# registers CredentialProviderPlayServicesImpl via ServiceLoader.  Without
+# the rule below, CredentialManager.create() gets a no-op manager, signIn()
+# falls back to the legacy GoogleAuthUtil.getToken() path, which returns
+# "ERROR" on Android 14+ (Samsung Galaxy A-series, Pixel, etc.).
+
+# ❶  THE CRITICAL FIX — keep every CredentialProvider implementation so the
+#    ServiceLoader can find CredentialProviderPlayServicesImpl at runtime.
+-keep class * implements androidx.credentials.CredentialProvider { *; }
+-keepclassmembers class * implements androidx.credentials.CredentialProvider { *; }
+
+# ❷  GoogleIdTokenCredential — instantiated via createFrom(Bundle) reflection.
+-keep class com.google.android.libraries.identity.googleid.GoogleIdTokenCredential {
+    public static final java.lang.String TYPE_GOOGLE_ID_TOKEN_CREDENTIAL;
+    public static com.google.android.libraries.identity.googleid.GoogleIdTokenCredential createFrom(android.os.Bundle);
+    public java.lang.String getIdToken();
+    public <methods>;
+}
+-keep class com.google.android.libraries.identity.googleid.GoogleIdTokenCredential$Builder { *; }
+
+# ❸  GetGoogleIdOption / GetSignInWithGoogleOption — Builder used in signIn().
+-keep class com.google.android.libraries.identity.googleid.GetGoogleIdOption { *; }
+-keep class com.google.android.libraries.identity.googleid.GetGoogleIdOption$Builder { *; }
+-keep class com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption { *; }
+-keep class com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption$Builder { *; }
+
+# ❹  Full package safety net (covers Companion objects, etc.)
+-keep class com.google.android.libraries.identity.googleid.** { *; }
+-keep interface com.google.android.libraries.identity.googleid.** { *; }
+-dontwarn com.google.android.libraries.identity.googleid.**
+
+# ❺  AndroidX Credential Manager core + Play Services bridge.
+-keep class androidx.credentials.** { *; }
+-keep interface androidx.credentials.** { *; }
+-keepclassmembers class androidx.credentials.** { *; }
+-dontwarn androidx.credentials.**
+
+# ❻  Google Sign-In identity bridge (Play Services).
+-keep class com.google.android.gms.auth.api.identity.** { *; }
+-keep interface com.google.android.gms.auth.api.identity.** { *; }
+
 # just_audio / ExoPlayer
 -keep class com.google.android.exoplayer2.** { *; }
 -dontwarn com.google.android.exoplayer2.**

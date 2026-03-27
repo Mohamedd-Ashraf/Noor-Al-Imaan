@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
@@ -8,7 +6,6 @@ import '../../../../../core/error/exceptions.dart';
 import '../../../../../core/services/tafsir_download_state_service.dart';
 import '../../../../../features/quran/data/datasources/ibn_kathir_remote_data_source.dart';
 import '../../../../../features/quran/data/datasources/quran_local_tafsir_data_source.dart';
-import '../../../../../features/quran/domain/usecases/get_ayah.dart';
 import '../../../../../features/quran/domain/usecases/get_surah.dart';
 import '../../../../wird/data/quran_boundaries.dart';
 import 'tafsir_download_state.dart';
