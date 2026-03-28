@@ -2187,6 +2187,7 @@ class _AccountSection extends StatelessWidget {
   }
 
   void _showLinkEmailForm(BuildContext context, bool isAr) {
+    final nameCtrl = TextEditingController();
     final emailCtrl = TextEditingController();
     final passwordCtrl = TextEditingController();
     final formKey = GlobalKey<FormState>();
@@ -2225,6 +2226,27 @@ class _AccountSection extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 20),
+                    if (isSignUp) ...[
+                      TextFormField(
+                        controller: nameCtrl,
+                        keyboardType: TextInputType.name,
+                        textCapitalization: TextCapitalization.words,
+                        decoration: InputDecoration(
+                          labelText: isAr ? 'الاسم' : 'Full Name',
+                          prefixIcon: const Icon(Icons.person_outline_rounded),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                        ),
+                        validator: (v) {
+                          if (v == null || v.trim().isEmpty) {
+                            return isAr ? 'أدخل اسمك' : 'Enter your name';
+                          }
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: 12),
+                    ],
                     TextFormField(
                       controller: emailCtrl,
                       keyboardType: TextInputType.emailAddress,
@@ -2293,7 +2315,7 @@ class _AccountSection extends StatelessWidget {
                                     Navigator.pop(ctx);
                                     final cubit = context.read<AuthCubit>();
                                     if (isSignUp) {
-                                      cubit.signUpWithEmail(email, password);
+                                      cubit.signUpWithEmail(email, password, nameCtrl.text.trim());
                                     } else {
                                       cubit.signInWithEmail(email, password);
                                     }

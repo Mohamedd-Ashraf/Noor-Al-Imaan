@@ -110,6 +110,9 @@ class HadithFirestoreDataSource {
   /// Fetches a single hadith by its number.
   /// Reads [hadiths_meta] and [hadiths_details] in parallel, then merges
   /// them so the caller receives both metadata and full Arabic text / sanad.
+  ///
+  /// If [hadiths_details] is missing, falls back to [hadiths_meta] preview
+  /// so the detail screen never shows a blank hadith body.
   Future<FirestoreHadith?> getHadith(int hadithNumber) async {
     try {
       final results = await Future.wait([
@@ -124,15 +127,22 @@ class HadithFirestoreDataSource {
       final m = metaSnap.data() ?? {};
       final d = detailsSnap.data() ?? {};
 
+      // When hadiths_details is absent or incomplete, gracefully fall back:
+      // rawText → metaPreview (truncated) so at least some content is visible.
+      final String storedRawText =
+          (d['rawText'] as String?)?.isNotEmpty == true
+              ? (d['rawText'] as String)
+              : ((m['preview'] as String?) ?? '');
+
       return FirestoreHadith(
-        number:      (m['number']      as int?)    ?? hadithNumber,
-        text:        (d['rawText']     as String?) ?? '',
-        bookNumber:  (m['bookNumber']  as int?)    ?? 0,
-        isnad:       (d['fullSanad']   as String?) ?? '',
-        matn:        (d['arabicText']  as String?) ?? '',
-        title:       (m['title']       as String?) ?? '',
-        narrator:    (m['narrator']    as String?) ?? '',
-        category:    (m['category']    as String?) ?? '',
+        number:      (m['number']     as int?)    ?? hadithNumber,
+        text:        storedRawText,
+        bookNumber:  (m['bookNumber'] as int?)    ?? 0,
+        isnad:       (d['fullSanad']  as String?) ?? '',
+        matn:        (d['arabicText'] as String?) ?? '',
+        title:       (m['title']      as String?) ?? '',
+        narrator:    (m['narrator']   as String?) ?? '',
+        category:    (m['category']   as String?) ?? '',
         subcategory: (m['subcategory'] as String?) ?? '',
       );
     } catch (e) {
@@ -210,12 +220,55 @@ class FirestoreHadith {
   HadithItem toHadithItem({
     required String bookNameAr,
   }) {
-    // Prefer stored fields; fall back to runtime splitting for legacy docs
-    final String effectiveMatn = matn.isNotEmpty ? matn : _splitSanadMatn(text).$2;
-    final String effectiveIsnad = isnad.isNotEmpty ? isnad : _splitSanadMatn(text).$1;
+    // ── Determine the best Arabic text to display ──────────────────────────
+    // Priority:
+    //  1. arabicText (matn) from Firestore — the extracted matn stored by the
+    //     upload script.  Use it if it is non-empty AND substantial (at least
+    //     25 % of rawText length, or rawText is absent/short).
+    //  2. rawText (full original) — always complete, may include narrator chain.
+    //     Fall back to this when arabicText is missing or suspiciously short.
+    //  3. Runtime split of rawText — tries to strip the narrator chain via
+    //     known phrase markers.
+    //  4. If nothing is available, show an empty string.
+    final String effectiveArabicText;
+    if (matn.isNotEmpty) {
+      // If rawText is available and arabicText is < 25 % of rawText, it likely
+      // missed narrative context — prefer the full rawText.
+      final bool matnTooShort =
+          text.isNotEmpty && text.length > 150 && matn.length < (text.length * 0.25);
+      if (matnTooShort) {
+        // Use a runtime split of rawText which may do better now
+        final splitResult = _splitSanadMatn(text);
+        final runtimeMatn = splitResult.$2;
+        // Accept runtime split only if it's substantially longer than stored matn
+        effectiveArabicText = (runtimeMatn.length > matn.length * 1.3)
+            ? runtimeMatn
+            : text; // last resort: full rawText
+      } else {
+        effectiveArabicText = matn;
+      }
+    } else if (text.isNotEmpty) {
+      // No stored arabicText — split or use full rawText
+      final splitResult = _splitSanadMatn(text);
+      effectiveArabicText =
+          splitResult.$2.isNotEmpty ? splitResult.$2 : text;
+    } else {
+      effectiveArabicText = '';
+    }
+
+    // ── Determine the best sanad/chain text ───────────────────────────────
+    final String effectiveIsnad;
+    if (isnad.isNotEmpty) {
+      effectiveIsnad = isnad;
+    } else if (text.isNotEmpty) {
+      effectiveIsnad = _splitSanadMatn(text).$1;
+    } else {
+      effectiveIsnad = '';
+    }
+
     return HadithItem(
       id: 'bukhari_${bookNumber}_$number',
-      arabicText: effectiveMatn.isNotEmpty ? effectiveMatn : text,
+      arabicText: effectiveArabicText,
       reference: 'صحيح البخاري $number',
       bookReference: 'صحيح البخاري: $bookNameAr، حديث $number',
       sanad: effectiveIsnad,
@@ -236,11 +289,20 @@ class FirestoreHadith {
     required String bookNameAr,
     required int sortOrder,
   }) {
-    final String effectiveMatn = matn.isNotEmpty ? matn : _splitSanadMatn(text).$2;
-    final displayText = effectiveMatn.isNotEmpty ? effectiveMatn : text;
+    // For the list card, matn contains the 140-char preview from Firestore.
+    // If empty (missing Firestore doc), fall back to a runtime split of text.
+    String displayText;
+    if (matn.isNotEmpty) {
+      displayText = matn;
+    } else if (text.isNotEmpty) {
+      final splitResult = _splitSanadMatn(text);
+      displayText = splitResult.$2.isNotEmpty ? splitResult.$2 : text;
+    } else {
+      displayText = '';
+    }
     final preview =
         displayText.length > 150 ? displayText.substring(0, 150) : displayText;
-    // Truncate title to 60 chars — some Firestore titles are the hadith text itself
+    // Truncate title to 30 chars — some Firestore titles are the hadith text itself
     final rawTitle = title.isNotEmpty ? title : bookNameAr;
     final shortTitle =
         rawTitle.length > 30 ? '${rawTitle.substring(0, 30)}...' : rawTitle;
@@ -258,28 +320,139 @@ class FirestoreHadith {
     );
   }
 
-  /// Best-effort split into sanad (chain) and matn (body).
+  /// Comprehensive runtime split of a raw Bukhari hadith text into
+  /// (sanad/isnad, matn).
+  ///
+  /// Strategy A – Companion honorific (رضى/رضي الله):
+  ///   Finds the FIRST occurrence and takes everything after it as matn.
+  ///   This correctly handles narrative hadiths (e.g. Aisha's long stories)
+  ///   by not cutting at the first quote inside the narrative.
+  ///
+  /// Strategy B – Attribution phrases embedded in text:
+  ///   Looks for أَنَّهَا قَالَتْ / أَنَّهُ / patterns after the chain.
+  ///
+  /// Strategy C – Prophet ﷺ mention (first occurrence):
+  ///   Everything after صلى الله عليه وسلم + optional قال verb is the matn.
+  ///
+  /// Strategy D – Quote mark at ≤ 60 % position:
+  ///   Only when the quote appears early (indicating it opens the matn
+  ///   directly, not embedded mid-narrative).
+  ///
+  /// Strategy E – First attribution verb after position 50:
+  ///   Last-resort split at قال/قالت/أنه/أنها.
+  ///
+  /// Returns ('', raw) when no boundary is found — the whole text is matn.
   static (String, String) _splitSanadMatn(String raw) {
-    const markers = [
-      'قَالَ رَسُولُ اللَّهِ صَلَّى اللَّهُ عَلَيْهِ وَسَلَّمَ',
-      'قَالَ رَسُولُ اللَّهِ صلى الله عليه وسلم',
-      'قَالَ رَسُولُ اللَّهِ',
-      'أَنَّ النَّبِيَّ صَلَّى اللَّهُ عَلَيْهِ وَسَلَّمَ',
-      'أَنَّ النَّبِيَّ صلى الله عليه وسلم',
-      'عَنِ النَّبِيِّ صَلَّى',
-      'عَنِ النَّبِيِّ صلى',
-      'سَمِعْتُ رَسُولَ اللَّهِ',
-      'أَنَّ رَسُولَ اللَّهِ',
-      'عَنْ رَسُولِ اللَّهِ',
-      'قَالَ النَّبِيُّ صلى',
-      'قَالَ النَّبِيُّ',
-    ];
-    for (final m in markers) {
-      final idx = raw.indexOf(m);
-      if (idx > 30) {
-        return (raw.substring(0, idx).trim(), raw.substring(idx).trim());
+    if (raw.isEmpty) return ('', '');
+    final total = raw.length;
+
+    String stripTrailing(String s) {
+      // Remove trailing quotes, dots, RTL marks, commas
+      return s.replaceAll(RegExp(r'["\u201c\u201d\s.\u200f\u060c]+$'), '').trim();
+    }
+
+    // ── Strategy A: رضى / رضي الله ──────────────────────────────────────
+    for (final rida in ['رضى الله', 'رضي الله']) {
+      final ridx = raw.indexOf(rida);
+      if (ridx < 20) continue;
+      final afterRida = raw.substring(ridx);
+      for (final suffix in ['عنهما', 'عنهم', 'عنها', 'عنه']) {
+        final sidx = afterRida.indexOf(suffix);
+        if (sidx < 0) continue;
+        var end = sidx + suffix.length;
+        while (end < afterRida.length &&
+            ' ـ\t،,'.contains(afterRida[end])) {
+          end++;
+        }
+        final contentStart = ridx + end;
+        final m = stripTrailing(raw.substring(contentStart).trim());
+        if (m.length >= 10 && m.length >= total * 0.20) {
+          return (raw.substring(0, contentStart).trim(), m);
+        }
+        break;
       }
     }
+
+    // ── Strategy B: Attribution phrases (أَنَّهَا قَالَتْ / أَنَّهُ) ──────
+    const chainVerbs = [
+      'حَدَّثَنَا', 'أَخْبَرَنَا', 'حَدَّثَنِي', 'أَخْبَرَنِي',
+      'حدثنا', 'أخبرنا', 'حدثني', 'أخبرني',
+    ];
+    final attrPatterns = [
+      ' أَنَّهَا قَالَتْ ', ' أَنَّهُ قَالَ ',
+      ' أَنَّهَا ', ' أَنَّهُ ',
+      ' قَالَتْ ', ' قَالَ ',
+    ];
+    for (final sep in attrPatterns) {
+      int searchFrom = 50;
+      while (true) {
+        final idx = raw.indexOf(sep, searchFrom);
+        if (idx < 0 || idx >= total * 0.70) break;
+        final rest = raw.substring(idx + sep.length).trim();
+        if (chainVerbs.any((cv) => rest.startsWith(cv))) {
+          searchFrom = idx + 1;
+          continue;
+        }
+        final m = stripTrailing(rest);
+        if (m.length >= 20 && m.length >= total * 0.25) {
+          return (raw.substring(0, idx).trim(), m);
+        }
+        break;
+      }
+    }
+
+    // ── Strategy C: First صلى الله عليه وسلم ─────────────────────────────
+    const sallaMarkers = [
+      'صَلَّى اللَّهُ عَلَيْهِ وَسَلَّمَ',
+      'صلى الله عليه وسلم',
+    ];
+    int firstSalla = -1;
+    int firstSallaLen = 0;
+    for (final sm in sallaMarkers) {
+      final idx = raw.indexOf(sm);
+      if (idx > 20 && (firstSalla < 0 || idx < firstSalla)) {
+        firstSalla = idx;
+        firstSallaLen = sm.length;
+      }
+    }
+    if (firstSalla > 20) {
+      var afterSalla = raw
+          .substring(firstSalla + firstSallaLen)
+          .replaceFirst(RegExp(r'^[\s،,.]+'), '');
+      for (final verb in ['قَالَ ', 'قَالَتْ ', 'أَنَّهُ ', 'أَنَّهَا ']) {
+        if (afterSalla.startsWith(verb)) {
+          afterSalla = afterSalla.substring(verb.length);
+          break;
+        }
+      }
+      final m = stripTrailing(afterSalla.trim());
+      if (m.length >= 20 && m.length >= total * 0.20) {
+        return (raw.substring(0, firstSalla + firstSallaLen).trim(), m);
+      }
+    }
+
+    // ── Strategy D: Quote mark in first 60 % of text ─────────────────────
+    final q = raw.indexOf('"');
+    if (q > 30 && q < total * 0.60) {
+      final m = stripTrailing(raw.substring(q + 1).trim());
+      if (m.length >= 20 && m.length >= total * 0.25) {
+        return (raw.substring(0, q).trim(), m);
+      }
+    }
+
+    // ── Strategy E: First attribution verb after position 50 ─────────────
+    for (final sep in [
+      ' قَالَ ', ' قَالَتْ ', ' أَنَّهُ ', ' أَنَّهَا ', ' أَنَّ '
+    ]) {
+      final idx = raw.indexOf(sep, 50);
+      if (idx > 50 && idx < total * 2 ~/ 3) {
+        final rest = raw.substring(idx + sep.length).trim();
+        if (chainVerbs.any((cv) => rest.startsWith(cv))) continue;
+        return (raw.substring(0, idx).trim(), rest);
+      }
+    }
+
+    // ── Fallback: entire text is matn ─────────────────────────────────────
     return ('', raw.trim());
   }
 }

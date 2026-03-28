@@ -213,7 +213,7 @@ class HomeScreenState extends State<HomeScreen>
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(
-                isArabicUi ? 'القرآن الكريم' : 'Quran',
+                isArabicUi ? 'نور الأيمان' : 'Noor Al-Imaan',
                 style: const TextStyle(
                   color: Colors.white,
                   fontWeight: FontWeight.bold,

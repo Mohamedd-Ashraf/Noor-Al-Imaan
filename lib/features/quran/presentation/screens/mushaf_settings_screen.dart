@@ -8,6 +8,7 @@ import '../../../../core/constants/app_colors.dart';
 import '../../../../core/settings/app_settings_cubit.dart';
 import '../../../../core/utils/arabic_text_style_helper.dart';
 import 'qcf_pageview_demo_screen.dart';
+import 'nur_ayah_test_screen.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // MushafSettingsScreen
@@ -331,6 +332,38 @@ class _MushafSettingsScreenState extends State<MushafSettingsScreen>
                         MaterialPageRoute(
                           builder: (_) =>
                               const QcfPageviewDemoScreen(initialPage: 2),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.primary,
+                      side: const BorderSide(color: AppColors.primary),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10)),
+                    ),
+                    icon: const Icon(Icons.science_outlined, size: 20),
+                    label: Text(
+                      isAr
+                          ? 'تجربة رسم المصحف — سورة النور ٣٥'
+                          : 'Quran Rendering Test — An-Nur 35',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 13,
+                      ),
+                    ),
+                    onPressed: () {
+                      HapticFeedback.selectionClick();
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => const NurAyahTestScreen(),
                         ),
                       );
                     },

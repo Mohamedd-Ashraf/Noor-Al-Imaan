@@ -89,84 +89,153 @@ def _extract_matn_isnad(text: str) -> tuple[str, str]:
     """
     Split raw hadith text into (isnad, matn).
 
+    The ISNAD is the transmission chain (حَدَّثَنَا/أَخْبَرَنَا ... عَن الصحابي).
+    The MATN is everything from the Sahabi's narration onward — including any
+    narrative context AND the Prophet's direct speech.  We must NOT cut the
+    matn at the first quote mark when that quote is embedded mid-narrative.
+
     Strategy (ordered by reliability):
-      1. Explicit quote mark  "…"  →  isnad = before quote, matn = inside quote
-      2. Prophet-speech markers  (قال ﷺ / عن النبي ﷺ قال …)
-         We find the text AFTER the ﷺ marker and the following  قال  to get the matn.
-      3. Last-resort chain verb split  (قال / قالت / أنّه)
+      A. رضى/رضي الله FIRST occurrence  →  matn starts right after the
+         companion honorific.  This captures the full Sahabi narrative.
+      B. Attribution phrase:  أَنَّهَا قَالَتْ / أَنَّهُ قَالَ / قَالَ : …
+         following the last chain connector in the isnad.
+      C. Prophet صلى الله عليه وسلم marker + following verb   قال/أمر/نهى…
+      D. Quote mark "…" — ONLY when it appears in the first 60 % of the text
+         (i.e. the quote is opening the matn right after a short isnad, not
+         embedded deep inside a narrative).
+      E. Last-resort: split at the first attribution verb after position 50.
+      F. Fallback: return the entire cleaned text as matn with no isnad.
+
+    After computing (isnad, matn): if the matn is shorter than 25 % of the
+    full text AND the full text is longer than 150 chars, we discard the split
+    and return the full text as the matn to avoid showing incomplete content.
     """
     clean = _CTRL_RE.sub('', text)
+    total = len(clean)
 
-    # ── 1) Explicit quote  "…"  ──────────────────────────────────────────────
-    q = clean.find('"')
-    if q > 30:
-        isnad = clean[:q].strip()
-        matn  = clean[q + 1:].strip()
-        matn  = re.sub(r'["\u201c\u201d\s.\u200f\u060c]+$', '', matn).strip()
-        return (isnad, matn)
+    def _strip_matn(m: str) -> str:
+        return re.sub(r'["\u201c\u201d\s.\u200f\u060c]+$', '', m).strip()
 
-    # ── 2) Prophet mention  صلى الله عليه وسلم  +  قال  ────────────────────
-    #    Find the LAST  صلى الله عليه وسلم  — the text after it is the hadith content.
+    # ── A) رضى/رضي الله  –  FIRST occurrence (captures narrative hadiths) ──
+    rida_result: tuple[str, str] | None = None
+    for rida in ['رضى الله', 'رضي الله']:
+        # Use the FIRST occurrence so we land at the main Sahabi's attribution
+        ridx = clean.find(rida)
+        if ridx < 20:
+            continue
+        after_rida = clean[ridx:]
+        for suffix in ['عنهما', 'عنهم', 'عنها', 'عنه']:
+            sidx = after_rida.find(suffix)
+            if sidx >= 0:
+                end = sidx + len(suffix)
+                # skip trailing dashes / spaces / commas after the honorific
+                while end < len(after_rida) and after_rida[end] in ' ـ\t،,':
+                    end += 1
+                content_start = ridx + end
+                m = clean[content_start:].strip()
+                m = _strip_matn(m)
+                if m and len(m) > 10:
+                    rida_result = (clean[:content_start].strip(), m)
+                break
+        if rida_result:
+            break
+    if rida_result:
+        isnad, matn = rida_result
+        # Accept only if matn is substantial
+        if len(matn) >= max(20, total * 0.20):
+            return (isnad, matn)
+
+    # ── B) Attribution phrase after last chain link ────────────────────────
+    #    Find the LAST chain-transmission verb and the attribution that follows.
+    _chain_verbs = ('حَدَّثَنَا', 'أَخْبَرَنَا', 'حَدَّثَنِي', 'أَخْبَرَنِي',
+                    'حدثنا', 'أخبرنا', 'حدثني', 'أخبرني')
+    attr_patterns = [
+        ' أَنَّهَا قَالَتْ ', ' أَنَّهُ قَالَ ', ' أَنَّهَا ', ' أَنَّهُ ',
+        ' قَالَتْ ', ' قَالَ ',
+    ]
+    # Find all  قَالَ / أَنَّهُ  occurrences, skip those still in isnad
+    for sep in attr_patterns:
+        search_from = 50
+        last_valid = -1
+        while True:
+            idx = clean.find(sep, search_from)
+            if idx < 0:
+                break
+            rest = clean[idx + len(sep):].strip()
+            # Skip if immediately followed by another chain verb
+            if any(rest.startswith(cv) for cv in _chain_verbs):
+                search_from = idx + 1
+                continue
+            # Accept the FIRST non-chain attribution in the first 70 % of text
+            if idx < total * 0.70:
+                last_valid = idx
+            search_from = idx + 1
+        if last_valid > 50:
+            m = clean[last_valid + len(sep):].strip()
+            m = _strip_matn(m)
+            if m and len(m) >= max(20, total * 0.25):
+                return (clean[:last_valid].strip(), m)
+
+    # ── C) Prophet  صلى الله عليه وسلم  marker  ──────────────────────────
     salla_markers = [
         'صلى الله عليه وسلم',
         'صَلَّى اللَّهُ عَلَيْهِ وَسَلَّمَ',
     ]
-    last_salla = -1
-    salla_len  = 0
+    # Use the FIRST ﷺ occurrence — this is typically within the isnad when
+    # the Prophet ﷺ is mentioned as the source, and the matn follows.
+    first_salla = -1
+    first_salla_len = 0
     for sm in salla_markers:
-        idx = clean.rfind(sm)
-        if idx > last_salla:
-            last_salla = idx
-            salla_len  = len(sm)
-
-    if last_salla > 20:
-        after_salla = clean[last_salla + salla_len:].lstrip(' \u200f،,.')
-        # After ﷺ there's often  قَالَ  or  أَنَّهُ  etc.
-        for verb in ('قَالَ ', 'قَالَتْ ', 'أَنَّهُ ', 'أَنَّهَا '):
+        idx = clean.find(sm)
+        if idx > 20 and (first_salla < 0 or idx < first_salla):
+            first_salla = idx
+            first_salla_len = len(sm)
+    if first_salla > 20:
+        after_salla = clean[first_salla + first_salla_len:].lstrip(' ،,.')
+        for verb in ('قَالَ ', 'قَالَتْ ', 'أَنَّهُ ', 'أَنَّهَا ', 'قال ', 'يقول '):
             if after_salla.startswith(verb):
                 after_salla = after_salla[len(verb):]
                 break
-        # After ﷺ text might directly continue (e.g. أنّ النبي ﷺ نهى عن …)
-        isnad = clean[:last_salla + salla_len].strip()
-        matn  = after_salla.strip()
-        matn  = re.sub(r'["\u201c\u201d\s.\u200f\u060c]+$', '', matn).strip()
-        if matn:
-            return (isnad, matn)
+        m = _strip_matn(after_salla)
+        if m and len(m) >= max(20, total * 0.20):
+            isnad_part = clean[:first_salla + first_salla_len].strip()
+            return (isnad_part, m)
 
-    # ── 2.5) رضى/رضي الله  boundary  ──────────────────────────────────────
-    #    Pattern:  عن [companion] ـ رضى الله عنه ـ [content]
-    #    The  رضى الله  text is always plain (no tashkeel) in the source.
-    for rida in ['رضى الله', 'رضي الله']:
-        ridx = clean.rfind(rida)
-        if ridx > 20:
-            after_rida = clean[ridx:]
-            for suffix in ['عنهما', 'عنهم', 'عنها', 'عنه']:
-                sidx = after_rida.find(suffix)
-                if sidx >= 0:
-                    end = sidx + len(suffix)
-                    # skip trailing  ـ  dashes and spaces
-                    while end < len(after_rida) and after_rida[end] in ' ـ\t':
-                        end += 1
-                    content_start = ridx + end
-                    matn = clean[content_start:].strip()
-                    matn = re.sub(r'["\u201c\u201d\s.\u200f\u060c]+$', '', matn).strip()
-                    if matn and len(matn) > 5:
-                        isnad = clean[:content_start].strip()
-                        return (isnad, matn)
-                    break
+    # ── D) Quote mark "…" — only when in the FIRST 60 % of text ─────────
+    q = clean.find('"')
+    if 30 < q < total * 0.60:
+        m = clean[q + 1:].strip()
+        m = _strip_matn(m)
+        if m and len(m) >= max(20, total * 0.25):
+            return (clean[:q].strip(), m)
 
-    # ── 3) Last-resort: split at  قال  /  قالت / أنّ  after isnad  ──────────
+    # ── E) Last-resort: split at first attribution verb after pos 50 ──────
     _chain_starts = ('حَدَّثَنَا', 'أَخْبَرَنَا', 'حَدَّثَنِي', 'أَخْبَرَنِي')
     for sep in (' قَالَ ', ' قَالَتْ ', ' أَنَّهُ ', ' أَنَّهَا ', ' أَنَّ '):
         idx = clean.find(sep, 50)
-        if 50 < idx < len(clean) * 2 // 3:
+        if 50 < idx < total * 2 // 3:
             rest = clean[idx + len(sep):].strip()
-            # Skip  قَالَ  that is followed by chain verbs (still in isnad)
             if sep in (' قَالَ ', ' قَالَتْ ') and any(rest.startswith(cv) for cv in _chain_starts):
                 continue
             return (clean[:idx].strip(), rest)
 
-    return ('', clean.strip())
+    # ── F) Fallback: return entire text as matn ────────────────────────────
+    return ('', _strip_matn(clean))
+
+
+def _ensure_complete_matn(isnad: str, matn: str, raw_clean: str) -> tuple[str, str]:
+    """
+    Safety check: if the extracted matn is unreasonably short relative to the
+    full cleaned text (< 25 % AND full text > 150 chars), discard the split
+    and return the full text as the matn so the user always sees complete content.
+    """
+    total = len(raw_clean)
+    if matn and total > 150 and len(matn) < total * 0.25:
+        # Extraction probably cut the text at a wrong boundary.
+        # Store full cleaned text — the Chain tab will be empty but that is
+        # better than showing an incomplete hadith body.
+        return ('', raw_clean.strip())
+    return (isnad, matn)
 
 
 def _extract_narrator(isnad: str, full_text: str = '') -> str:
@@ -886,7 +955,10 @@ def parse_file(filepath: str) -> list[dict]:
 
             seen_numbers.add(number)
             book_num          = get_book_number(number)
+            raw_clean         = _CTRL_RE.sub('', text)
             isnad, matn       = _extract_matn_isnad(text)
+            # Safety: if the matn is suspiciously short, use the full text
+            isnad, matn       = _ensure_complete_matn(isnad, matn, raw_clean)
             narrator          = _extract_narrator(isnad, text)
             narrator          = _clean_narrator(narrator)
             narrator          = _format_narrator(narrator)

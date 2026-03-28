@@ -74,10 +74,20 @@ class AuthCubit extends Cubit<AuthState> {
 
   // ── Email / Password ────────────────────────────────────────────────────
 
-  Future<void> signUpWithEmail(String email, String password) async {
+  Future<void> signUpWithEmail(String email, String password, String displayName) async {
     emit(state.copyWith(isLoading: true, clearError: true));
     try {
-      await _authService.signUpWithEmail(email: email, password: password);
+      await _authService.signUpWithEmail(email: email, password: password, displayName: displayName);
+      // updateDisplayName completes after authStateChanges fires, so re-emit with fresh user
+      final updatedUser = _authService.currentUser;
+      if (updatedUser != null && !updatedUser.isAnonymous) {
+        emit(state.copyWith(
+          status: AuthStatus.authenticated,
+          user: updatedUser,
+          clearError: true,
+          isLoading: false,
+        ));
+      }
     } catch (e) {
       emit(state.copyWith(
         isLoading: false,

@@ -23,11 +23,10 @@ class _AuthScreenState extends State<AuthScreen>
   bool _showEmailForm = false;
   bool _isSignUp = true;
   bool _obscurePassword = true;
-  bool _obscureConfirmPassword = true;
 
+  final _nameController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
-  final _confirmPasswordController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
 
   late final AnimationController _fadeController;
@@ -49,9 +48,9 @@ class _AuthScreenState extends State<AuthScreen>
 
   @override
   void dispose() {
+    _nameController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
-    _confirmPasswordController.dispose();
     _fadeController.dispose();
     super.dispose();
   }
@@ -202,6 +201,52 @@ class _AuthScreenState extends State<AuthScreen>
       key: _formKey,
       child: Column(
         children: [
+          if (_isSignUp) ...[
+            TextFormField(
+              controller: _nameController,
+              keyboardType: TextInputType.name,
+              textCapitalization: TextCapitalization.words,
+              decoration: InputDecoration(
+                labelText: isArabic ? 'الاسم' : 'Full Name',
+                prefixIcon: Icon(
+                  Icons.person_outline_rounded,
+                  color: isDark
+                      ? AppColors.darkTextSecondary
+                      : AppColors.primary.withValues(alpha: 0.7),
+                ),
+                filled: true,
+                fillColor: isDark
+                    ? AppColors.darkCard
+                    : AppColors.primary.withValues(alpha: 0.04),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: BorderSide.none,
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: BorderSide(
+                    color: isDark
+                        ? AppColors.darkBorder
+                        : AppColors.primary.withValues(alpha: 0.15),
+                  ),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: const BorderSide(
+                    color: AppColors.primary,
+                    width: 1.5,
+                  ),
+                ),
+              ),
+              validator: (value) {
+                if (value == null || value.trim().isEmpty) {
+                  return isArabic ? 'أدخل اسمك' : 'Enter your name';
+                }
+                return null;
+              },
+            ),
+            const SizedBox(height: 12),
+          ],
           TextFormField(
             controller: _emailController,
             keyboardType: TextInputType.emailAddress,
@@ -310,70 +355,6 @@ class _AuthScreenState extends State<AuthScreen>
               return null;
             },
           ),
-          const SizedBox(height: 12),
-
-          if (_isSignUp)
-            TextFormField(
-              controller: _confirmPasswordController,
-              obscureText: _obscureConfirmPassword,
-              textDirection: TextDirection.ltr,
-              decoration: InputDecoration(
-                labelText: isArabic ? 'تأكيد كلمة المرور' : 'Confirm Password',
-                prefixIcon: Icon(
-                  Icons.lock_outlined,
-                  color: isDark ? AppColors.darkTextSecondary : AppColors.primary.withValues(alpha: 0.7),
-                ),
-                suffixIcon: IconButton(
-                  icon: Icon(
-                    _obscureConfirmPassword
-                        ? Icons.visibility_outlined
-                        : Icons.visibility_off_outlined,
-                    color: isDark
-                        ? AppColors.darkTextSecondary
-                        : AppColors.textHint,
-                  ),
-                  onPressed: () => setState(
-                      () => _obscureConfirmPassword = !_obscureConfirmPassword),
-                ),
-                filled: true,
-                fillColor: isDark
-                    ? AppColors.darkCard
-                    : AppColors.primary.withValues(alpha: 0.04),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(14),
-                  borderSide: BorderSide.none,
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(14),
-                  borderSide: BorderSide(
-                    color: isDark
-                        ? AppColors.darkBorder
-                        : AppColors.primary.withValues(alpha: 0.15),
-                  ),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(14),
-                  borderSide: const BorderSide(
-                    color: AppColors.primary,
-                    width: 1.5,
-                  ),
-                ),
-              ),
-              validator: (value) {
-                if (value == null || value.isEmpty) {
-                  return isArabic
-                      ? 'أكّد كلمة المرور'
-                      : 'Confirm your password';
-                }
-                if (value != _passwordController.text) {
-                  return isArabic
-                      ? 'كلمتا المرور غير متطابقتين'
-                      : 'Passwords do not match';
-                }
-                return null;
-              },
-            ),
-
           const SizedBox(height: 8),
 
           if (!_isSignUp)
@@ -436,7 +417,7 @@ class _AuthScreenState extends State<AuthScreen>
           TextButton(
             onPressed: () => setState(() {
               _isSignUp = !_isSignUp;
-              _confirmPasswordController.clear();
+              _nameController.clear();
             }),
             child: Text(
               _isSignUp
@@ -465,7 +446,7 @@ class _AuthScreenState extends State<AuthScreen>
     final password = _passwordController.text;
     final cubit = context.read<AuthCubit>();
     if (_isSignUp) {
-      cubit.signUpWithEmail(email, password);
+      cubit.signUpWithEmail(email, password, _nameController.text.trim());
     } else {
       cubit.signInWithEmail(email, password);
     }

@@ -167,10 +167,11 @@ class AuthService {
 
   // ── Email / Password ────────────────────────────────────────────────────
 
-  /// Creates a new account with email & password.
+  /// Creates a new account with email & password, then sets [displayName].
   Future<UserCredential> signUpWithEmail({
     required String email,
     required String password,
+    required String displayName,
   }) async {
     // If already signed in anonymously, link email credential.
     final user = _auth.currentUser;
@@ -180,7 +181,9 @@ class AuthService {
         password: password,
       );
       try {
-        return await user.linkWithCredential(credential);
+        final result = await user.linkWithCredential(credential);
+        await result.user?.updateDisplayName(displayName);
+        return result;
       } on FirebaseAuthException catch (e) {
         if (e.code == 'email-already-in-use') {
           await _auth.signOut();
@@ -193,10 +196,12 @@ class AuthService {
       }
     }
 
-    return await _auth.createUserWithEmailAndPassword(
+    final result = await _auth.createUserWithEmailAndPassword(
       email: email,
       password: password,
     );
+    await result.user?.updateDisplayName(displayName);
+    return result;
   }
 
   /// Signs in with an existing email & password.

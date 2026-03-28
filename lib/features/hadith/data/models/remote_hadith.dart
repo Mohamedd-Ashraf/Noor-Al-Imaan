@@ -83,29 +83,75 @@ class RemoteHadith {
       '${book}_${sectionNumber}_$hadithNumber';
 
   /// Attempts to split the raw text into sanad (chain) and matn (content).
-  /// The sanad is the part ending at the narrator keyword.
+  /// Uses the same comprehensive strategy as the Firestore datasource.
   /// Returns (sanad, matn).
   static (String, String) _splitSanadMatn(String raw) {
-    // Common markers that indicate where the matn begins
-    const markers = [
-      'قَالَ رَسُولُ اللَّهِ',
-      'قَالَ رَسُولُ اللَّهِ صَلَّى اللَّهُ عَلَيْهِ وَسَلَّمَ',
-      'أَنَّ النَّبِيَّ صَلَّى اللَّهُ عَلَيْهِ وَسَلَّمَ',
-      'عَنِ النَّبِيِّ صَلَّى',
-      'سَمِعْتُ رَسُولَ اللَّهِ',
-      'أَنَّ رَسُولَ اللَّهِ',
-      'عَنْ رَسُولِ اللَّهِ',
-      'قَالَ النَّبِيُّ',
-    ];
+    if (raw.isEmpty) return ('', '');
+    final total = raw.length;
 
-    for (final marker in markers) {
-      final idx = raw.indexOf(marker);
-      if (idx > 30) {
-        // Enough sanad before marker
-        return (raw.substring(0, idx).trim(), raw.substring(idx).trim());
+    String stripTrailing(String s) =>
+        s.replaceAll(RegExp(r'["\u201c\u201d\s.\u200f\u060c]+$'), '').trim();
+
+    // Strategy A: رضى/رضي الله – FIRST occurrence
+    for (final rida in ['رضى الله', 'رضي الله']) {
+      final ridx = raw.indexOf(rida);
+      if (ridx < 20) continue;
+      final afterRida = raw.substring(ridx);
+      for (final suffix in ['عنهما', 'عنهم', 'عنها', 'عنه']) {
+        final sidx = afterRida.indexOf(suffix);
+        if (sidx < 0) continue;
+        var end = sidx + suffix.length;
+        while (end < afterRida.length &&
+            ' ـ\t،,'.contains(afterRida[end])) {
+          end++;
+        }
+        final contentStart = ridx + end;
+        final m = stripTrailing(raw.substring(contentStart).trim());
+        if (m.length >= 10 && m.length >= total * 0.20) {
+          return (raw.substring(0, contentStart).trim(), m);
+        }
+        break;
       }
     }
-    // Fallback: entire text is both
+
+    // Strategy B: Prophet ﷺ marker (first occurrence)
+    const sallaMarkers = [
+      'صَلَّى اللَّهُ عَلَيْهِ وَسَلَّمَ',
+      'صلى الله عليه وسلم',
+    ];
+    int firstSalla = -1;
+    int firstSallaLen = 0;
+    for (final sm in sallaMarkers) {
+      final idx = raw.indexOf(sm);
+      if (idx > 20 && (firstSalla < 0 || idx < firstSalla)) {
+        firstSalla = idx;
+        firstSallaLen = sm.length;
+      }
+    }
+    if (firstSalla > 20) {
+      var after = raw
+          .substring(firstSalla + firstSallaLen)
+          .replaceFirst(RegExp(r'^[\s،,.]+'), '');
+      for (final verb in ['قَالَ ', 'قَالَتْ ', 'أَنَّهُ ', 'قال ', 'يقول ']) {
+        if (after.startsWith(verb)) {
+          after = after.substring(verb.length);
+          break;
+        }
+      }
+      final m = stripTrailing(after.trim());
+      if (m.length >= 20 && m.length >= total * 0.20) {
+        return (raw.substring(0, firstSalla + firstSallaLen).trim(), m);
+      }
+    }
+
+    // Strategy C: Quote mark in first 60 % of text
+    final q = raw.indexOf('"');
+    if (q > 30 && q < total * 0.60) {
+      final m = stripTrailing(raw.substring(q + 1).trim());
+      if (m.length >= 20) return (raw.substring(0, q).trim(), m);
+    }
+
+    // Fallback: whole text is matn
     return ('', raw.trim());
   }
 

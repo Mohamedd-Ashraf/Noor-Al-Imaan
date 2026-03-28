@@ -3158,70 +3158,51 @@ class _TodayCard extends StatelessWidget {
                 ),
               ],
             ),
-            const SizedBox(height: 6),
-            Align(
-              alignment: isAr ? Alignment.centerRight : Alignment.centerLeft,
-              child: Text(
-                isAr
-                    ? 'أنت الآن في $currentDesc'
-                    : 'You are now at $currentDesc',
-                style: const TextStyle(
-                  color: AppColors.textSecondary,
-                  fontSize: 13,
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 10),
+            // ── Progress bar + % inline ──────────────────────────────────
             Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(
-                  _surahName(context, range.start.surah),
-                  style: const TextStyle(
-                    color: AppColors.primary,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                Text(
-                  isAr
-                      ? '${_arabicNumerals(pct)}٪ مكتمل'
-                      : '$pct% completed',
-                  style: const TextStyle(
-                    color: AppColors.secondary,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            // Progress bar
-            ClipRRect(
-              borderRadius: BorderRadius.circular(6),
-              child: Container(
-                height: 10,
-                decoration: BoxDecoration(
-                  color: AppColors.divider.withValues(alpha: 0.5),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: Align(
-                  alignment: isAr
-                      ? Alignment.centerRight
-                      : Alignment.centerLeft,
-                  child: FractionallySizedBox(
-                    widthFactor: plan.progressPercent,
+                Expanded(
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(6),
                     child: Container(
-                      decoration: const BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: [Color(0xFF0D5E3A), Color(0xFFD4AF37)],
+                      height: 10,
+                      decoration: BoxDecoration(
+                        color: AppColors.divider.withValues(alpha: 0.5),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Align(
+                        alignment: isAr
+                            ? Alignment.centerRight
+                            : Alignment.centerLeft,
+                        child: FractionallySizedBox(
+                          widthFactor: plan.progressPercent,
+                          child: Container(
+                            decoration: const BoxDecoration(
+                              gradient: LinearGradient(
+                                colors: [Color(0xFF0D5E3A), Color(0xFFD4AF37)],
+                              ),
+                              borderRadius:
+                                  BorderRadius.all(Radius.circular(6)),
+                            ),
+                          ),
                         ),
-                        borderRadius: BorderRadius.all(Radius.circular(6)),
                       ),
                     ),
                   ),
                 ),
-              ),
+                const SizedBox(width: 10),
+                Text(
+                  isAr ? '${_arabicNumerals(pct)}٪' : '$pct%',
+                  style: const TextStyle(
+                    color: AppColors.secondary,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 13,
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 10),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -3283,32 +3264,6 @@ class _TodayCard extends StatelessWidget {
                         ),
                       ),
                     ),
-                    if (daysBehind > 0 && !isComplete) ...[
-                      const SizedBox(width: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 5,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.amber.withValues(alpha: 0.15),
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(
-                            color: Colors.amber.shade700.withValues(alpha: 0.5),
-                          ),
-                        ),
-                        child: Text(
-                          isAr
-                              ? '${_arabicNumerals(daysBehind)} يوم متأخر'
-                              : '$daysBehind day${daysBehind > 1 ? "s" : ""} behind',
-                          style: TextStyle(
-                            color: Colors.amber.shade800,
-                            fontWeight: FontWeight.w600,
-                            fontSize: 11,
-                          ),
-                        ),
-                      ),
-                    ],
                     if (isComplete) ...[
                       const SizedBox(width: 8),
                       Container(
@@ -5143,10 +5098,12 @@ class _SmartStatsCard extends StatelessWidget {
               const SizedBox(width: 8),
               Expanded(
                 child: _StatPill(
-                  icon: Icons.percent_rounded,
+                  icon: Icons.today_rounded,
                   iconColor: AppColors.primary,
-                  label: isAr ? 'الإنجاز' : 'Done',
-                  value: isAr ? '${_arabicNumerals(pct)}٪' : '$pct%',
+                  label: isAr ? 'اليوم' : 'Day',
+                  value: isAr
+                      ? '${_arabicNumerals(today)} / ${_arabicNumerals(plan.targetDays)}'
+                      : '$today / ${plan.targetDays}',
                   isDark: isDark,
                 ),
               ),
