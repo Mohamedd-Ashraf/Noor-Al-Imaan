@@ -14,7 +14,8 @@ import '../../../quran/presentation/screens/feedback_screen.dart';
 import '../../../quran/presentation/screens/offline_tafsir_screen.dart';
 import '../../../ruqyah/presentation/screens/ruqyah_screen.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:qcf_quran/qcf_quran.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:qcf_quran_lite/qcf_quran_lite.dart' show getSurahNameArabic;
 import '../../../quiz/presentation/screens/quiz_screen.dart';
 import '../../../quiz/presentation/widgets/quiz_sign_in_sheet.dart';
 import '../../../../core/services/tutorial_service.dart';
@@ -935,20 +936,19 @@ class _SurahCheckTile extends StatelessWidget {
                       ? CrossAxisAlignment.end
                       : CrossAxisAlignment.start,
                   children: [
-                    // IMPORTANT: Do not change this back to normal text. The user explicitly requested the specialized Quran font for Arabic Surah names.
+                    // Surah name - Arabic calligraphic style
                     Text(
                       isArabicUi
-                          ? 'surah${surah.number.toString().padLeft(3, '0')}'
+                          ? getSurahNameArabic(surah.number)
                           : surah.englishName,
                       textDirection: isArabicUi
                           ? TextDirection.rtl
                           : TextDirection.ltr,
                       locale: isArabicUi ? const Locale('ar') : null,
                       style: isArabicUi
-                          ? TextStyle(
-                              fontFamily: SurahFontHelper.fontFamily,
-                              package: 'qcf_quran',
-                              fontSize: 32,
+                          ? GoogleFonts.arefRuqaa(
+                              fontSize: 22,
+                              fontWeight: FontWeight.w700,
                               color: isDark
                                   ? AppColors.onPrimary
                                   : AppColors.textPrimary,

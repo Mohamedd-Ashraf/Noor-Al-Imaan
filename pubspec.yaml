@@ -102,8 +102,10 @@ dependencies:
   # Interactive tutorial / walkthrough overlay
   tutorial_coach_mark: ^1.2.11
 
-  # QCF Quran rendering – full Madani Mushaf with bundled 604 QCF fonts
-  qcf_quran: ^0.0.5
+  # QCF Quran rendering – full Madani Mushaf with turnkey widgets
+  # Local fork: only 66 key pages bundled; remaining 538 downloaded on demand
+  qcf_quran_plus:
+    path: packages/qcf_quran_plus
   scrollable_positioned_list: ^0.3.8
 
   # QCF Quran Lite – lightweight local package for Bismillah / Hafs font

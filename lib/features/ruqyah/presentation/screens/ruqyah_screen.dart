@@ -1,10 +1,10 @@
-import 'dart:convert';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:qcf_quran/qcf_quran.dart';
+import 'package:qcf_quran_lite/qcf_quran_lite.dart'
+    show getVerseEndSymbol, getVerse;
 import '../../../../core/audio/ayah_audio_cubit.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/settings/app_settings_cubit.dart';
@@ -1171,40 +1171,9 @@ class _ExpandedContent extends StatefulWidget {
 class _ExpandedContentState extends State<_ExpandedContent> {
   bool _showTranslation = false;
 
-  // Fallback Arabic-text verses loaded from offline JSON (used for surah 7).
-  List<({int ayah, String text})>? _fallbackVerses;
-
   @override
   void initState() {
     super.initState();
-    if (widget.section.audio.surahNumber == 7) {
-      _loadFallbackVerses();
-    }
-  }
-
-  Future<void> _loadFallbackVerses() async {
-    final audio = widget.section.audio;
-    final first = audio.type == RuqyahAudioType.fullSurah ? 1 : audio.startAyah!;
-    final last = audio.type == RuqyahAudioType.fullSurah
-        ? audio.numberOfAyahs!
-        : audio.endAyah!;
-    try {
-      final raw = await rootBundle.loadString(
-        'assets/offline/surah_${audio.surahNumber}.json',
-      );
-      final data = jsonDecode(raw) as Map<String, dynamic>;
-      final ayahs = (data['ayahs'] as List)
-          .where((a) {
-            final n = a['numberInSurah'] as int;
-            return n >= first && n <= last;
-          })
-          .map((a) => (
-                ayah: a['numberInSurah'] as int,
-                text: (a['text'] as String?) ?? '',
-              ))
-          .toList();
-      if (mounted) setState(() => _fallbackVerses = ayahs);
-    } catch (_) {}
   }
 
   Widget _buildQcfContent(bool isDark) {
@@ -1214,49 +1183,25 @@ class _ExpandedContentState extends State<_ExpandedContent> {
         ? audio.numberOfAyahs!
         : audio.endAyah!;
 
-    // Use Arabic-text fallback for Al-A'raf (matches QcfFallbackPage approach).
-    if (audio.surahNumber == 7) {
-      final verses = _fallbackVerses;
-      if (verses == null) {
-        return const Padding(
-          padding: EdgeInsets.symmetric(vertical: 24),
-          child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
-        );
-      }
-      return _buildFallbackAyahs(verses, isDark);
-    }
-
-    final theme = QcfThemeData(
-      pageBackgroundColor: Colors.transparent,
-      verseTextColor: isDark ? const Color(0xFFF3F3F3) : const Color(0xFF141414),
-      verseNumberColor: isDark ? const Color(0xFFE6E6E6) : const Color(0xFF222222),
-      verseHeight: 1.95,
-      letterSpacing: 0,
-      wordSpacing: 0,
-    );
-
-    return QcfVerses(
+    final textColor = isDark ? const Color(0xFFF3F3F3) : const Color(0xFF141414);
+    final numberColor = isDark ? const Color(0xFFE6E6E6) : const Color(0xFF222222);
+    return _buildStandardAyahs(
       surahNumber: audio.surahNumber,
       firstVerse: firstVerse,
       lastVerse: lastVerse,
-      sp: 1.0,
-      h: 1.0,
-      textAlign: TextAlign.center,
-      showVerseNumbers: true,
-      theme: theme,
+      textColor: textColor,
+      numberColor: numberColor,
     );
   }
 
-  Widget _buildFallbackAyahs(
-    List<({int ayah, String text})> verses,
-    bool isDark,
-  ) {
+  Widget _buildStandardAyahs({
+    required int surahNumber,
+    required int firstVerse,
+    required int lastVerse,
+    required Color textColor,
+    required Color numberColor,
+  }) {
     final settings = context.read<AppSettingsCubit>().state;
-    final audio = widget.section.audio;
-    final textColor =
-        isDark ? const Color(0xFFF3F3F3) : const Color(0xFF1A1A1A);
-    final numberColor =
-        isDark ? const Color(0xFFE6E6E6) : const Color(0xFF222222);
     final style = ArabicTextStyleHelper.quranFontStyle(
       fontKey: settings.quranFont,
       fontSize: settings.arabicFontSize,
@@ -1266,39 +1211,36 @@ class _ExpandedContentState extends State<_ExpandedContent> {
     );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: verses
-          .map(
-            (v) {
-              // Get QCF verse number glyph and page for proper font
-              final verseNumberGlyph =
-                  getVerseNumberQCF(audio.surahNumber, v.ayah);
-              final pageNumber = getPageNumber(audio.surahNumber, v.ayah);
-              final qcfFontFamily =
-                  "QCF_P${pageNumber.toString().padLeft(3, '0')}";
-
-              return Text.rich(
-                TextSpan(
-                  text: v.text,
-                  style: style,
-                  children: [
-                    TextSpan(
-                      text: ' $verseNumberGlyph',
-                      style: TextStyle(
-                        fontFamily: qcfFontFamily,
-                        package: 'qcf_quran',
-                        color: numberColor,
-                        fontSize: settings.arabicFontSize,
-                        height: 2.1,
-                      ),
+      children: [
+        for (int v = firstVerse; v <= lastVerse; v++)
+          Builder(builder: (context) {
+            String text;
+            try {
+              text = getVerse(surahNumber, v);
+            } catch (_) {
+              return const SizedBox.shrink();
+            }
+            final endSymbol = getVerseEndSymbol(v, arabicNumeral: true);
+            return Text.rich(
+              TextSpan(
+                text: text,
+                style: style,
+                children: [
+                  TextSpan(
+                    text: ' $endSymbol',
+                    style: TextStyle(
+                      color: numberColor,
+                      fontSize: settings.arabicFontSize,
+                      height: 2.1,
                     ),
-                  ],
-                ),
-                textAlign: TextAlign.center,
-                textDirection: TextDirection.rtl,
-              );
-            },
-          )
-          .toList(),
+                  ),
+                ],
+              ),
+              textAlign: TextAlign.center,
+              textDirection: TextDirection.rtl,
+            );
+          }),
+      ],
     );
   }
 

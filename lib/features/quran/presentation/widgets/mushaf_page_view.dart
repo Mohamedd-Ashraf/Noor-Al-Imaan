@@ -2,11 +2,16 @@ import 'dart:convert';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:qcf_quran/qcf_quran.dart';
+import 'package:qcf_quran_plus/qcf_quran_plus.dart'
+    show QuranPageView, HighlightVerse, getPageNumber;
+import 'package:qcf_quran_lite/qcf_quran_lite.dart' show getPageData;
+
+import '../../../../core/services/qcf_font_download_service.dart';
+import '../screens/qcf_font_download_screen.dart';
+import 'qcf_fallback_page.dart';
 
 import '../../../../core/audio/ayah_audio_cubit.dart';
 import '../../../../core/constants/app_colors.dart';
@@ -18,15 +23,12 @@ import '../../../../core/services/offline_audio_service.dart';
 import '../../../../core/services/tutorial_service.dart';
 import '../../../../core/services/settings_service.dart';
 import '../../../../core/settings/app_settings_cubit.dart';
-import '../../../wird/data/quran_boundaries.dart';
 import '../../domain/entities/surah.dart';
 import '../../../../core/utils/tajweed_parser.dart';
 import '../bloc/tafsir/tafsir_cubit.dart';
 import '../screens/tafsir_screen.dart';
 import '../tutorials/mushaf_tutorial.dart';
-import 'app_qcf_page.dart';
 import 'ayah_share_card.dart';
-import 'qcf_fallback_page.dart';
 import 'islamic_audio_player.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -199,7 +201,7 @@ class MushafPageView extends StatefulWidget {
 class _MushafPageViewState extends State<MushafPageView>
     with SingleTickerProviderStateMixin {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
-  final ValueNotifier<List<_HighlightVerse>> _highlightsNotifier =
+  final ValueNotifier<List<HighlightVerse>> _highlightsNotifier =
       ValueNotifier([]);
 
   late PageController _pageController;
@@ -212,26 +214,22 @@ class _MushafPageViewState extends State<MushafPageView>
   final ValueNotifier<bool> _playerCollapsed = ValueNotifier(true);
 
   // Navigation highlight (jumps to ayah) – separate from audio highlight.
-  _HighlightVerse? _navHighlight;
+  HighlightVerse? _navHighlight;
 
   // Audio highlight – updated by BlocListener whenever the cubit changes.
-  _HighlightVerse? _audioHighlight;
-
-  // Verse that the user's finger is currently pressing (set on pointer-down,
-  // before the gesture arena resolves). Used to identify the correct verse
-  // when a long-press fires, since QcfPage can't expose both onTap and
-  // onLongPress simultaneously on the same TextSpan recognizer.
-  int? _tapDownSurah;
-  int? _tapDownVerse;
+  HighlightVerse? _audioHighlight;
 
   bool _tutorialShown = false;
   late final int _startPage;
 
   // ── Tajweed mode ───────────────────────────────────────────────────────────
   bool _tajweedMode = false;
-  // page → { "surah:verse" → raw tajweed-annotated text from alquran.cloud }
-  final Map<int, Map<String, String>> _tajweedCache = {};
-  final Map<int, bool> _tajweedLoading = {};
+
+  // Tracks the currently visible page number for the top bar / footer.
+  late int _currentPageNum;
+
+  // Tracks whether the QCF font for the current page is available on disk.
+  bool _currentPageFontAvailable = true;
 
   // ── Init / dispose ─────────────────────────────────────────────────────────
 
@@ -256,7 +254,13 @@ class _MushafPageViewState extends State<MushafPageView>
 
     final startPage = _getStartPage();
     _startPage = startPage;
+    _currentPageNum = startPage;
     _pageController = PageController(initialPage: startPage - 1);
+
+    // Check font availability for the initial page.
+    QcfFontDownloadService.isPageAvailable(startPage).then((available) {
+      if (mounted) setState(() => _currentPageFontAvailable = available);
+    });
 
     if (widget.initialAyahNumber != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -307,66 +311,36 @@ class _MushafPageViewState extends State<MushafPageView>
 
   // ── Tajweed helpers ────────────────────────────────────────────────────────
 
-  Future<void> _loadTajweedForPage(int page) async {
-    if (_tajweedCache.containsKey(page)) return;
-    if (_tajweedLoading[page] == true) return;
-    _tajweedLoading[page] = true;
-    try {
-      final uri = Uri.parse(
-        'https://api.alquran.cloud/v1/page/$page/quran-tajweed',
-      );
-      final res = await http.get(uri, headers: const {'Accept': 'application/json'});
-      if (res.statusCode != 200) return;
-      final decoded = jsonDecode(res.body) as Map<String, dynamic>;
-      final data = decoded['data'] as Map<String, dynamic>?;
-      final ayahs = data?['ayahs'] as List?;
-      if (ayahs == null) return;
-      final pageTexts = <String, String>{};
-      for (final a in ayahs) {
-        final surahInfo = a['surah'] as Map<String, dynamic>?;
-        final surahNum = surahInfo?['number'] as int? ?? 0;
-        final ayahNum = a['numberInSurah'] as int? ?? 0;
-        final text = a['text'] as String? ?? '';
-        if (surahNum > 0 && ayahNum > 0 && text.isNotEmpty) {
-          pageTexts['$surahNum:$ayahNum'] = text;
-        }
-      }
-      if (mounted) setState(() => _tajweedCache[page] = pageTexts);
-    } catch (_) {
-      // Network failure – silently ignore; caller falls back to plain text.
-    } finally {
-      _tajweedLoading.remove(page);
-    }
-  }
-
   void _toggleTajweed(int currentPage) {
     setState(() => _tajweedMode = !_tajweedMode);
-    if (_tajweedMode) {
-      _loadTajweedForPage(currentPage);
-      // Pre-fetch adjacent pages for smooth swiping.
-      if (currentPage > 1) _loadTajweedForPage(currentPage - 1);
-      if (currentPage < 604) _loadTajweedForPage(currentPage + 1);
-    }
   }
 
-  /// Ensures tajweed data is loaded for [page] when tajweed mode is active.
-  /// Called from the PageView itemBuilder so every visible page triggers a load.
-  void _ensureTajweedLoaded(int page) {
-    if (!_tajweedMode) return;
-    if (_tajweedCache.containsKey(page) || _tajweedLoading[page] == true) return;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || !_tajweedMode) return;
-      _loadTajweedForPage(page);
-      // Also pre-fetch neighbors.
-      if (page > 1) _loadTajweedForPage(page - 1);
-      if (page < 604) _loadTajweedForPage(page + 1);
-    });
+  // ── Font download prompt ───────────────────────────────────────────────────
+
+  void _promptFontDownload(BuildContext context) {
+    Navigator.of(context).push<void>(
+      MaterialPageRoute(
+        builder: (_) => QcfFontDownloadScreen(
+          onDone: () async {
+            Navigator.of(context).pop();
+            // Re-check availability after download attempt.
+            final available = await QcfFontDownloadService.isPageAvailable(
+              _currentPageNum,
+            );
+            if (mounted) {
+              setState(() => _currentPageFontAvailable = available);
+            }
+          },
+        ),
+        fullscreenDialog: true,
+      ),
+    );
   }
 
   // ── Highlight helpers ──────────────────────────────────────────────────────
 
   void _updateHighlightsNotifier() {
-    final list = <_HighlightVerse>[];
+    final list = <HighlightVerse>[];
     if (_audioHighlight != null) list.add(_audioHighlight!);
     if (_navHighlight != null) list.add(_navHighlight!);
     _highlightsNotifier.value = List.unmodifiable(list);
@@ -379,7 +353,7 @@ class _MushafPageViewState extends State<MushafPageView>
     } catch (_) {
       return;
     }
-    _navHighlight = _HighlightVerse(
+    _navHighlight = HighlightVerse(
       surah: surah,
       verseNumber: verse,
       page: page,
@@ -417,7 +391,7 @@ class _MushafPageViewState extends State<MushafPageView>
     final color = state.status == AyahAudioStatus.playing
         ? AppColors.secondary
         : AppColors.primary;
-    _audioHighlight = _HighlightVerse(
+    _audioHighlight = HighlightVerse(
       surah: state.surahNumber!,
       verseNumber: state.ayahNumber!,
       page: page,
@@ -428,62 +402,33 @@ class _MushafPageViewState extends State<MushafPageView>
 
   // ── Long-press → options sheet ────────────────────────────────────────────
 
-  /// Single tap → play the tapped ayah (or toggle play/pause if already playing).
-  void _onTap(int surah, int verse) {
-    HapticFeedback.selectionClick();
-    final cubit = context.read<AyahAudioCubit>();
-    final state = cubit.state;
-
-    // If already on this ayah → toggle play/pause.
-    if (state.isCurrent(surah, verse) &&
-        (state.status == AyahAudioStatus.playing ||
-            state.status == AyahAudioStatus.paused)) {
-      if (state.status == AyahAudioStatus.playing) {
-        cubit.pause();
-      } else {
-        cubit.resume();
-      }
-      _highlightAyah(surah, verse);
+  /// Single tap → toggle play/pause the first ayah on the current page.
+  void _onPageTap() {
+    final List rawRanges;
+    try {
+      rawRanges = getPageData(_currentPageNum);
+    } catch (_) {
       return;
     }
+    if (rawRanges.isEmpty) return;
 
-    final settings = context.read<AppSettingsCubit>().state;
-    if (settings.mushafContinueTilawa) {
-      if (settings.mushafContinueScope == 'surah') {
-        final idx = surah - 1;
-        final totalAyahs = (idx >= 0 && idx < kSurahAyahCounts.length)
-            ? kSurahAyahCounts[idx]
-            : verse;
-        cubit.playAyahRange(
-          surahNumber: surah,
-          startAyah: verse,
-          endAyah: totalAyahs,
-        );
-      } else {
-        // Page scope: find the last ayah of this surah on the current page.
-        int endAyah = verse;
-        try {
-          final pageNum = (_pageController.page?.round() ?? 0) + 1;
-          final ranges = getPageData(pageNum);
-          for (final r in ranges) {
-            final m = r as Map;
-            if (int.parse(m['surah'].toString()) == surah) {
-              endAyah = int.parse(m['end'].toString());
-              break;
-            }
-          }
-        } catch (_) {}
-        cubit.playAyahRange(
-          surahNumber: surah,
-          startAyah: verse,
-          endAyah: endAyah,
-        );
+    // Prefer the widget's surah if it falls on this page; otherwise use first range.
+    Map<dynamic, dynamic>? matched;
+    for (final r in rawRanges) {
+      final m = r as Map<dynamic, dynamic>;
+      if (int.tryParse(m['surah'].toString()) == widget.surahNumber) {
+        matched = m;
+        break;
       }
-    } else {
-      cubit.playAyah(surahNumber: surah, ayahNumber: verse);
     }
-    // Highlight the tapped ayah.
-    _highlightAyah(surah, verse);
+    final range = matched ?? (rawRanges.first as Map<dynamic, dynamic>);
+    final surahNum = int.parse(range['surah'].toString());
+    final startAyah = int.parse(range['start'].toString());
+
+    context.read<AyahAudioCubit>().togglePlayAyah(
+      surahNumber: surahNum,
+      ayahNumber: startAyah,
+    );
   }
 
   /// Long press → show options sheet (bookmark / share / tafsir).
@@ -605,192 +550,67 @@ class _MushafPageViewState extends State<MushafPageView>
                     bottom: playerVisible
                         ? (isCollapsed ? 0.0 : kPlayerHeight)
                         : 0.0,
-                    child: Directionality(
-                      textDirection: TextDirection.rtl,
-                      child: PageView.builder(
-                        controller: _pageController,
-                        itemCount: 604,
-                        onPageChanged: (index) {
-                          widget.onPageChanged?.call(index + 1);
-                        },
-                        itemBuilder: (ctx, index) {
-                          final pageNum = index + 1;
-                          // Ensure tajweed data is ready for this page.
-                          _ensureTajweedLoaded(pageNum);
-                          // Use regular-font fallback for pages whose QCF glyph
-                          // calibration is known to overflow the container.
-                          if (kEnableQcfFallback &&
-                              kQcfProblematicPages.contains(pageNum)) {
-                            return QcfFallbackPage(
-                              key: ValueKey('fb_$pageNum'),
-                              pageNumber: pageNum,
-                            );
-                          }
-                          final isInitial = pageNum == _startPage;
-                          return Column(
-                            children: [
-                              Directionality(
-                                textDirection: TextDirection.ltr,
-                                child: _buildTopBar(isDark, pageNum),
-                              ),
-                              Expanded(
-                                key: isInitial ? MushafTutorialKeys.quranPage : null,
-                                child: GestureDetector(
-                                  // the verse the user's finger is touching.
-                                  // _tapDownSurah/_tapDownVerse are set by QcfPage's
-                                  // onTapDown which fires on pointer-down (before
-                                  // the gesture arena resolves), so the correct verse
-                                  // is always known by the time onLongPress fires.
-                                  onLongPress: () {
-                                    int? s, v;
-                                    if (_tapDownSurah != null &&
-                                        _tapDownVerse != null) {
-                                      // Primary source: the verse the finger is on.
-                                      s = _tapDownSurah;
-                                      v = _tapDownVerse;
-                                    } else if (_audioHighlight != null) {
-                                      s = _audioHighlight!.surah;
-                                      v = _audioHighlight!.verseNumber;
-                                    } else if (_navHighlight != null) {
-                                      s = _navHighlight!.surah;
-                                      v = _navHighlight!.verseNumber;
-                                    } else {
-                                      // Last resort: first verse on the page.
-                                      try {
-                                        final ranges = getPageData(pageNum);
-                                        if (ranges.isNotEmpty) {
-                                          final r = ranges.first as Map;
-                                          s = int.parse(r['surah'].toString());
-                                          v = int.parse(r['start'].toString());
+                    child: Column(
+                      children: [
+                        Directionality(
+                          textDirection: TextDirection.ltr,
+                          child: _buildTopBar(isDark, _currentPageNum),
+                        ),
+                        Expanded(
+                          key: MushafTutorialKeys.quranPage,
+                          child: _currentPageFontAvailable
+                              ? ValueListenableBuilder<List<HighlightVerse>>(
+                                  valueListenable: _highlightsNotifier,
+                                  builder: (_, highlights, __) =>
+                                      GestureDetector(
+                                    behavior: HitTestBehavior.translucent,
+                                    onTap: _onPageTap,
+                                    child: QuranPageView(
+                                      pageController: _pageController,
+                                      highlights: highlights,
+                                      isDarkMode: isDark,
+                                      isTajweed: _tajweedMode,
+                                      onPageChanged: (page) {
+                                        widget.onPageChanged?.call(page);
+                                        if (mounted) {
+                                          setState(() =>
+                                              _currentPageNum = page);
                                         }
-                                      } catch (_) {}
-                                    }
-                                    if (s != null && v != null) {
-                                      _onLongPress(s, v);
-                                    }
-                                  },
-                                  child: ValueListenableBuilder<List<_HighlightVerse>>(
-                                    valueListenable: _highlightsNotifier,
-                                    builder: (_, highlights, child) => LayoutBuilder(
-                                      builder: (lbCtx, constraints) {
-                                        // Use the same formula as the reference app
-                                        // (flutter_screenutil 1.sp / 1.h):
-                                        //   sp = screenWidth  / designWidth
-                                        //   h  = screenHeight / designHeight
-                                        // Using full MediaQuery dimensions (not
-                                        // constraints) intentionally matches the
-                                        // reference app and makes the 15-line grid
-                                        // fill the visible page naturally.
-                                        const double kDesignWidth =
-                                            392.72727272727275;
-                                        const double kDesignHeight =
-                                            800.7272727272727;
-                                        final Size screen = MediaQuery.of(
-                                          lbCtx,
-                                        ).size;
-                                        final double effectiveWidth =
-                                            constraints.maxWidth.isFinite &&
-                                                constraints.maxWidth > 0
-                                            ? constraints.maxWidth
-                                            : screen.width;
-                                        // ---------- sp / font-size safety explanation ----------
-                                        // The qcf_quran package calibrates its page fonts for a
-                                        // reference device of ≈393 dp width.  Some pages (e.g.
-                                        // 387, 504, 579 …) were accidentally omitted from
-                                        // getFontSize()'s special-case list and get the default
-                                        // 23.1 px, which is too large – their QCF glyphs were
-                                        // designed for a slightly smaller size.  On a 393 dp
-                                        // phone sp ≈ 1.0 so capping at 1.0 does nothing; the
-                                        // overflow is baked into the font calibration itself.
-                                        //
-                                        // Fix: add a 20 dp safety margin to the design width
-                                        // denominator. This gives sp ≈ 0.952 on a 393 dp phone,
-                                        // reducing every font size by ~4.8 %.  Lines that exactly
-                                        // filled the container now span ~374 dp and sit centred
-                                        // with 9-10 dp breathing room each side – visually
-                                        // identical to a printed Mushaf page which also has
-                                        // slight margins.  For tablets (≥ 600 dp) getFontSize
-                                        // already returns 15 and needs sp > 1, so the margin is
-                                        // not applied there.
-                                        const double kSafeMargin = 20.0;
-                                        final bool isPhone =
-                                            effectiveWidth < 600;
-                                        final double rawSp =
-                                            effectiveWidth /
-                                            (isPhone
-                                                ? kDesignWidth + kSafeMargin
-                                                : kDesignWidth);
-                                        final double sp = rawSp;
-                                        final double h =
-                                            screen.height / kDesignHeight;
-                                        // Wrap in MediaQuery to neutralise the
-                                        // system font-size setting (the user may
-                                        // have Samsung font set to Large/Huge).
-                                        // Without this, Flutter applies the system
-                                        // textScaler to the QCF font, making every
-                                        // line wider than the container and
-                                        // clipping the first (rightmost) character.
-                                        return MediaQuery(
-                                          data: MediaQuery.of(lbCtx).copyWith(
-                                            textScaler: TextScaler.linear(1.0),
-                                          ),
-                                          child: AppQcfPage(
-                                            pageNumber: pageNum,
-                                            sp: sp,
-                                            h: h,
-                                            theme: QcfThemeData(
-                                              verseTextColor: textColor,
-                                              pageBackgroundColor:
-                                                  Colors.transparent,
-                                              basmalaColor: textColor,
-                                              customHeaderBuilder: (surahNum) =>
-                                                  _buildSurahHeader(
-                                                    surahNum,
-                                                    isDark,
-                                                  ),
-                                            ),
-                                            verseBackgroundColor:
-                                                (surah, verse) {
-                                                  for (final h in highlights) {
-                                                    if (h.surah == surah &&
-                                                        h.verseNumber ==
-                                                            verse) {
-                                                      return h.color.withValues(
-                                                        alpha: 0.3,
-                                                      );
-                                                    }
-                                                  }
-                                                  return null;
-                                                },
-                                            onTap: _onTap,
-                                            onTapDown: (s, v, _) {
-                                              _tapDownSurah = s;
-                                              _tapDownVerse = v;
-                                            },
-                                            tajweedTexts:
-                                                _tajweedMode
-                                                    ? _tajweedCache[pageNum]
-                                                    : null,
-                                            isDark: isDark,
-                                          ),
-                                        );
+                                        QcfFontDownloadService
+                                            .isPageAvailable(page)
+                                            .then((available) {
+                                          if (mounted) {
+                                            setState(() =>
+                                                _currentPageFontAvailable =
+                                                    available);
+                                          }
+                                        });
                                       },
+                                      onLongPress: (surah, verse, details) =>
+                                          _onLongPress(surah, verse),
+                                      ayahStyle: TextStyle(color: textColor),
                                     ),
                                   ),
+                                )
+                              : GestureDetector(
+                                  behavior: HitTestBehavior.translucent,
+                                  onTap: () =>
+                                      _promptFontDownload(context),
+                                  child: QcfFallbackPage(
+                                    pageNumber: _currentPageNum,
+                                    isDarkMode: isDark,
+                                  ),
                                 ),
-                              ),
-                              Directionality(
-                                key: isInitial ? MushafTutorialKeys.pageFooter : null,
-                                textDirection: TextDirection.ltr,
-                                child: _buildDecorativeFooter(
-                                  pageNum,
-                                  isDarkMode: isDark,
-                                ),
-                              ),
-                            ],
-                          );
-                        },
-                      ),
+                        ),
+                        Directionality(
+                          key: MushafTutorialKeys.pageFooter,
+                          textDirection: TextDirection.ltr,
+                          child: _buildDecorativeFooter(
+                            _currentPageNum,
+                            isDarkMode: isDark,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ),
@@ -812,59 +632,6 @@ class _MushafPageViewState extends State<MushafPageView>
           ),
         ),
       ),
-    );
-  }
-
-  /// Surah header that supports both light and dark modes.
-  /// In dark mode the cream banner image is tinted to blend with the dark background.
-  Widget _buildSurahHeader(int surahNumber, bool isDark) {
-    return LayoutBuilder(
-      builder: (ctx, constraints) {
-        final isPortrait =
-            MediaQuery.of(ctx).orientation == Orientation.portrait;
-        final headerWidth = isPortrait
-            ? constraints.maxWidth * 0.95
-            : constraints.maxWidth * 0.8;
-        final fontSize = isPortrait
-            ? headerWidth * 0.075
-            : constraints.maxWidth * 0.05;
-        final nameColor = isDark
-            ? const Color(0xFFE8C46A)
-            : const Color(0xFF3D2000);
-
-        return Padding(
-          padding: const EdgeInsets.symmetric(vertical: 4),
-          child: Stack(
-            alignment: Alignment.center,
-            children: [
-              // In dark mode: use BlendMode.color to recolor the cream image
-              // with the app's dark-green hue while preserving all ornamental
-              // detail (luminance). This keeps the flower patterns and borders
-              // clearly visible instead of blending into blackness.
-              Image.asset(
-                'assets/mainframe.png',
-                package: 'qcf_quran',
-                width: headerWidth,
-                fit: BoxFit.contain,
-                color: isDark ? const Color.fromARGB(255, 43, 63, 48) : null,
-                colorBlendMode: isDark ? BlendMode.color : null,
-              ),
-              RichText(
-                textAlign: TextAlign.center,
-                text: TextSpan(
-                  text: 'surah${surahNumber.toString().padLeft(3, '0')}',
-                  style: TextStyle(
-                    fontFamily: SurahFontHelper.fontFamily,
-                    package: 'qcf_quran',
-                    fontSize: fontSize,
-                    color: nameColor,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        );
-      },
     );
   }
 
@@ -1335,24 +1102,6 @@ class _MushafPageViewState extends State<MushafPageView>
         .map((d) => int.tryParse(d) != null ? arabicDigits[int.parse(d)] : d)
         .join();
   }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Local verse-highlight model (replaces qcf_quran_lite's HighlightVerse)
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _HighlightVerse {
-  final int surah;
-  final int verseNumber;
-  final int page;
-  final Color color;
-
-  const _HighlightVerse({
-    required this.surah,
-    required this.verseNumber,
-    required this.page,
-    required this.color,
-  });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

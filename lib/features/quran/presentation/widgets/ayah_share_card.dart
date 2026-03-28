@@ -7,7 +7,8 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter/rendering.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:qcf_quran/qcf_quran.dart';
+import 'package:qcf_quran_lite/qcf_quran_lite.dart'
+    show getVerseCount, getVerse, getVerseEndSymbol, getSurahNameArabic;
 import 'package:share_plus/share_plus.dart';
 
 import '../../../../core/constants/app_colors.dart';
@@ -688,29 +689,27 @@ class _SurahHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     const double headerWidth = 320.0;
+    final Color nameColor = isDarkMode ? const Color(0xFFE8C46A) : const Color(0xFF3D2000);
     return Stack(
       alignment: Alignment.center,
       children: [
-        // Ornamental frame – light mode (no color tint)
+        // Ornamental frame
         Image.asset(
-          'assets/mainframe.png',
-          package: 'qcf_quran',
+          'assets/surah_banner.png',
+          package: 'qcf_quran_lite',
           width: headerWidth,
           fit: BoxFit.contain,
           color: isDarkMode ? const Color.fromARGB(255, 43, 63, 48) : null,
           colorBlendMode: isDarkMode ? BlendMode.color : null,
         ),
-        // Surah name in QCF surahname font
-        RichText(
+        // Surah name in Arabic
+        Text(
+          getSurahNameArabic(surahNumber),
           textAlign: TextAlign.center,
-          text: TextSpan(
-            text: 'surah${surahNumber.toString().padLeft(3, '0')}',
-            style: TextStyle(
-              fontFamily: SurahFontHelper.fontFamily, // 'surahname'
-              package: 'qcf_quran',
-              fontSize: headerWidth * 0.075,
-              color: AyahShareCard.surahNameColor(isDarkMode),
-            ),
+          style: GoogleFonts.arefRuqaa(
+            fontSize: headerWidth * 0.065,
+            color: nameColor,
+            fontWeight: FontWeight.w700,
           ),
         ),
       ],
@@ -742,37 +741,20 @@ class _VerseContent extends StatelessWidget {
     Widget? basmala;
     if (startVerse == 1 && surahNumber != 1 && surahNumber != 9) {
       basmala = Text(
-        ' \uFC41  \uFC42\uFC43\uFC44', // Basmala glyphs in QCF_P001
+        'بِسۡمِ ٱللَّهِ ٱلرَّحۡمَـٰنِ ٱلرَّحِيمِ',
         textAlign: TextAlign.center,
         textDirection: TextDirection.rtl,
-        style: const TextStyle(
-          fontFamily: 'QCF_P001',
-          package: 'qcf_quran',
-          fontSize: 23,
-          height: 1.55,
+        style: GoogleFonts.amiriQuran(
+          fontSize: 20,
+          height: 1.8,
         ).copyWith(color: AyahShareCard.textColor(isDarkMode)),
       );
     }
 
-    // ── Group consecutive verses by their Mushaf page ─────────────────────
-    // Verses on the same page share one font (QCF_Pxxx) and should be
-    // rendered in a single Text block for natural, continuous flow.
-    final Map<int, List<int>> pageGroups  = {};
-    final List<int>            pageOrder  = [];
-
-    for (int v = startVerse; v <= endVerse; v++) {
-      int page;
-      try {
-        page = getPageNumber(surahNumber, v);
-      } catch (_) {
-        continue;
-      }
-      if (!pageGroups.containsKey(page)) {
-        pageGroups[page] = [];
-        pageOrder.add(page);
-      }
-      pageGroups[page]!.add(v);
-    }
+    // Collect all verses in order
+    final allVerses = <int>[
+      for (int v = startVerse; v <= endVerse; v++) v,
+    ];
 
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -781,13 +763,11 @@ class _VerseContent extends StatelessWidget {
           basmala,
           const SizedBox(height: 4),
         ],
-        for (final page in pageOrder)
-          _PageVerseBlock(
-            surahNumber: surahNumber,
-            page: page,
-            verses: pageGroups[page]!,
-            isDarkMode: isDarkMode,
-          ),
+        _PageVerseBlock(
+          surahNumber: surahNumber,
+          verses: allVerses,
+          isDarkMode: isDarkMode,
+        ),
       ],
     );
   }
@@ -799,88 +779,39 @@ class _VerseContent extends StatelessWidget {
 
 class _PageVerseBlock extends StatelessWidget {
   final int surahNumber;
-  final int page;
   final List<int> verses;
   final bool isDarkMode;
 
   const _PageVerseBlock({
     required this.surahNumber,
-    required this.page,
     required this.verses,
     required this.isDarkMode,
   });
 
   @override
   Widget build(BuildContext context) {
-    final pageFont = 'QCF_P${page.toString().padLeft(3, '0')}';
-
     final verseSpans = <InlineSpan>[];
     for (final v in verses) {
       try {
-        final rawQcf = getVerseQCF(surahNumber, v, verseEndSymbol: true);
-        if (rawQcf.isEmpty) continue;
-
-        final startsWithNewline = rawQcf.startsWith('\n');
-        if (startsWithNewline && verseSpans.isNotEmpty) {
-          verseSpans.add(const TextSpan(text: '\n'));
-        }
-
-        final stripped = startsWithNewline ? rawQcf.substring(1) : rawQcf;
-        final trailingNewline = stripped.endsWith('\n');
-        final noTrail = trailingNewline
-            ? stripped.substring(0, stripped.length - 1)
-            : stripped;
-        if (noTrail.isEmpty) continue;
-
-        final glyph = noTrail[noTrail.length - 1];
-        final verseText = noTrail.substring(0, noTrail.length - 1);
-
-        verseSpans.add(
-          TextSpan(
-            text: verseText,
-            children: [
-              TextSpan(
-                text: glyph,
-                style: TextStyle(
-                  fontFamily: pageFont,
-                  package: 'qcf_quran',
-                  color: AyahShareCard.textColor(isDarkMode),
-                  height: 1.0,
-                ),
-              ),
-              if (trailingNewline) const TextSpan(text: '\n'),
-            ],
-          ),
-        );
+        final text = getVerse(surahNumber, v);
+        if (text.isEmpty) continue;
+        final endSymbol = getVerseEndSymbol(v, arabicNumeral: true);
+        verseSpans.add(TextSpan(text: '$text$endSymbol '));
       } catch (_) {}
     }
 
     if (verseSpans.isEmpty) return const SizedBox.shrink();
 
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final scale = constraints.maxWidth / 392.72727272727275;
-        final fontSize = page == 1 || page == 2 ? 24.0 * scale : 22.2 * scale;
-        final lineHeight = page == 1 || page == 2 ? 2.0 : 1.95;
-
-        return Text.rich(
-          TextSpan(children: verseSpans),
-          locale: const Locale('ar'),
-          textAlign: TextAlign.center,
-          textDirection: TextDirection.rtl,
-          softWrap: false,
-          overflow: TextOverflow.clip,
-          style: TextStyle(
-            fontFamily: pageFont,
-            package: 'qcf_quran',
-            fontSize: fontSize,
-            color: AyahShareCard.textColor(isDarkMode),
-            height: lineHeight,
-            letterSpacing: 0,
-            wordSpacing: 0,
-          ),
-        );
-      },
+    return Text.rich(
+      TextSpan(children: verseSpans),
+      locale: const Locale('ar'),
+      textAlign: TextAlign.center,
+      textDirection: TextDirection.rtl,
+      style: GoogleFonts.amiriQuran(
+        fontSize: 20,
+        color: AyahShareCard.textColor(isDarkMode),
+        height: 2.0,
+      ),
     );
   }
 }

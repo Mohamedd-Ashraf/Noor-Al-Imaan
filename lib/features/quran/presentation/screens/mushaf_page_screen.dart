@@ -20,7 +20,8 @@ import '../../../../core/utils/arabic_text_style_helper.dart';
 import '../../../../core/utils/tajweed_parser.dart';
 import '../bloc/tafsir/tafsir_cubit.dart';
 import 'tafsir_screen.dart';
-import 'package:qcf_quran/qcf_quran.dart';
+import 'package:qcf_quran_lite/qcf_quran_lite.dart' show getPageData;
+import 'package:qcf_quran_plus/qcf_quran_plus.dart' show getSurahNameArabic;
 import '../tutorials/mushaf_tutorial.dart';
 import '../widgets/ayah_share_card.dart';
 import '../widgets/mushaf_page_view.dart'
@@ -1960,8 +1961,6 @@ class _PageTextState extends State<_PageText> {
                 children.add(_Basmala(
                   isDark: isDark,
                   quranFont: settings.quranFont,
-                  useQcfFont: settings.useQcfFont,
-                  page: widget.page,
                 ));
               }
 
@@ -2198,30 +2197,27 @@ class _SurahHeader extends StatelessWidget {
         final double w = portrait
             ? constraints.maxWidth * 0.95
             : constraints.maxWidth * 0.8;
-        final double fs = portrait ? w * 0.075 : constraints.maxWidth * 0.05;
+        final double fs = portrait ? w * 0.065 : constraints.maxWidth * 0.045;
         return Padding(
           padding: const EdgeInsets.symmetric(vertical: 4),
           child: Stack(
             alignment: Alignment.center,
             children: [
               Image.asset(
-                'assets/mainframe.png',
-                package: 'qcf_quran',
+                'assets/surah_banner.png',
+                package: 'qcf_quran_lite',
                 width: w,
                 fit: BoxFit.contain,
                 color: const Color.fromARGB(255, 43, 63, 48),
                 colorBlendMode: BlendMode.color,
               ),
-              RichText(
+              Text(
+                getSurahNameArabic(num),
                 textAlign: TextAlign.center,
-                text: TextSpan(
-                  text: 'surah${num.toString().padLeft(3, '0')}',
-                  style: TextStyle(
-                    fontFamily: SurahFontHelper.fontFamily,
-                    package: 'qcf_quran',
-                    color: nameColor,
-                    fontSize: fs,
-                  ),
+                style: GoogleFonts.arefRuqaa(
+                  fontSize: fs,
+                  color: nameColor,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
             ],
@@ -2236,12 +2232,41 @@ class _SurahHeader extends StatelessWidget {
     final Color nameColor = isDark
         ? const Color(0xFFE8C46A)
         : const Color(0xFF3D2000);
-    return HeaderWidget(
-      suraNumber: surahNum,
-      theme: QcfThemeData(
-        headerTextColor: nameColor,
-        customHeaderBuilder: isDark ? _darkFrame : null,
-      ),
+    return LayoutBuilder(
+      builder: (ctx, constraints) {
+        final bool portrait =
+            MediaQuery.of(ctx).orientation == Orientation.portrait;
+        final double w = portrait
+            ? constraints.maxWidth * 0.95
+            : constraints.maxWidth * 0.8;
+        final double fs =
+            portrait ? w * 0.065 : constraints.maxWidth * 0.045;
+        return Padding(
+          padding: const EdgeInsets.symmetric(vertical: 4),
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              Image.asset(
+                'assets/surah_banner.png',
+                package: 'qcf_quran_lite',
+                width: w,
+                fit: BoxFit.contain,
+                color: isDark ? const Color.fromARGB(255, 43, 63, 48) : null,
+                colorBlendMode: isDark ? BlendMode.color : null,
+              ),
+              Text(
+                getSurahNameArabic(surahNum),
+                textAlign: TextAlign.center,
+                style: GoogleFonts.arefRuqaa(
+                  fontSize: fs,
+                  color: nameColor,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 }
@@ -2250,37 +2275,14 @@ class _SurahHeader extends StatelessWidget {
 class _Basmala extends StatelessWidget {
   final bool isDark;
   final String quranFont;
-  final bool useQcfFont;
-  final int page;
   const _Basmala({
     required this.isDark,
     required this.quranFont,
-    required this.useQcfFont,
-    required this.page,
   });
 
   @override
   Widget build(BuildContext context) {
     final color = isDark ? const Color(0xFFD4A855) : AppColors.primary;
-    if (useQcfFont) {
-      // Use exact same font-size as QCF page so Basmala matches verse glyphs.
-      final fontSize = getFontSize(page, context);
-      return Padding(
-        padding: const EdgeInsets.symmetric(vertical: 4.0),
-        child: Text(
-          ' \uFC41  \uFC42\uFC43\uFC44',
-          textAlign: TextAlign.center,
-          textDirection: TextDirection.rtl,
-          style: TextStyle(
-            fontFamily: 'QCF_P001',
-            package: 'qcf_quran',
-            fontSize: fontSize,
-            color: color,
-            height: 2.0,
-          ),
-        ),
-      );
-    }
     // Regular Arabic font — matches the ayah text font the user selected.
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 10.0),

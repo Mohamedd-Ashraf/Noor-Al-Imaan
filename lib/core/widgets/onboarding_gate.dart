@@ -5,6 +5,7 @@ import '../di/injection_container.dart' as di;
 import '../services/settings_service.dart';
 import '../services/whats_new_service.dart';
 import '../services/feedback_service.dart';
+import '../services/qcf_font_download_service.dart';
 import '../settings/app_settings_cubit.dart';
 import '../widgets/whats_new_screen.dart';
 import '../widgets/feedback_dialog.dart';
@@ -14,6 +15,7 @@ import '../../features/auth/presentation/screens/auth_screen.dart';
 import '../../features/islamic/presentation/screens/onboarding_screen.dart';
 import '../../features/islamic/presentation/screens/splash_page.dart';
 import '../../features/quran/presentation/screens/main_navigator.dart';
+import '../../features/quran/presentation/screens/qcf_font_download_screen.dart';
 
 class OnboardingGate extends StatefulWidget {
   const OnboardingGate({super.key});
@@ -36,6 +38,8 @@ class _OnboardingGateState extends State<OnboardingGate> {
   String? _lastSeenVersion;
   // Guard: feedback prompt shown at most once per app session.
   bool _feedbackCheckDone = false;
+  // null = not checked, true = show reminder, false = complete/skipped
+  bool? _showFontReminder;
 
   @override
   void initState() {
@@ -100,12 +104,28 @@ class _OnboardingGateState extends State<OnboardingGate> {
       _appVersion = version;
       _lastSeenVersion = lastSeen;
     });
-    // No What's New to show → go straight to main app, then check feedback.
+    // No What's New to show → check font reminder, then feedback.
     if (!shouldShow) {
+      _checkFontReminder();
+    }
+  }
+
+  // Checks whether the font download reminder should be shown this session.
+  Future<void> _checkFontReminder() async {
+    final complete = await QcfFontDownloadService.isFullyDownloaded();
+    if (!mounted) return;
+    setState(() => _showFontReminder = !complete);
+    if (complete) {
       WidgetsBinding.instance.addPostFrameCallback(
         (_) => _maybeShowFeedback(),
       );
     }
+  }
+
+  void _dismissFontReminder() {
+    if (!mounted) return;
+    setState(() => _showFontReminder = false);
+    _maybeShowFeedback();
   }
 
   // Called when the user dismisses the What's New screen.
@@ -114,8 +134,8 @@ class _OnboardingGateState extends State<OnboardingGate> {
     setState(() {
       _showWhatsNew = false;
     });
-    // What's New just closed → safe to show the feedback prompt now.
-    _maybeShowFeedback();
+    // Check font reminder next, then feedback.
+    _checkFontReminder();
   }
 
   // Shows the feedback dialog only once per session, and only when appropriate.
@@ -212,6 +232,17 @@ class _OnboardingGateState extends State<OnboardingGate> {
         version: _appVersion,
         lastSeenVersion: _lastSeenVersion,
       );
+    }
+
+    // ── 5b. Font download reminder (shown each launch until complete) ──────
+    if (_showFontReminder == null) {
+      // Still checking font status — show spinner.
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+    if (_showFontReminder == true) {
+      return QcfFontDownloadScreen(onDone: _dismissFontReminder);
     }
 
     // ── 6. Main app ────────────────────────────────────────────────────────

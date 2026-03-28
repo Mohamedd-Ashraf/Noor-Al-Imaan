@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/quran_structure.dart';
 import '../../../../core/constants/surah_names.dart';
 import '../../../../core/di/injection_container.dart' as di;
 import '../../../../core/services/offline_audio_service.dart';
-import 'package:qcf_quran/qcf_quran.dart';
+import 'package:qcf_quran_lite/qcf_quran_lite.dart' show getSurahNameArabic;
 
 class SelectDownloadScreen extends StatefulWidget {
   const SelectDownloadScreen({super.key});
@@ -451,11 +452,9 @@ class _SelectDownloadScreenState extends State<SelectDownloadScreen> {
                     // IMPORTANT(Model): Do not alter this Surah text widget. User explicitly demands this calligraphic font here.
                     child: isArabicUi
                         ? Text(
-                            'surah${surahNumber.toString().padLeft(3, '0')}',
-                            style: TextStyle(
-                              fontFamily: SurahFontHelper.fontFamily,
-                              package: 'qcf_quran',
-                              fontSize: 32, // custom calligraphic font
+                            getSurahNameArabic(surahNumber),
+                            style: GoogleFonts.arefRuqaa(
+                              fontSize: 22,
                               color: isFullyDone
                                   ? Colors.green.shade700
                                   : isSelected

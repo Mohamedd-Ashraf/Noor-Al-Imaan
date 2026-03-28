@@ -640,13 +640,12 @@ class _IslamicHeader extends StatelessWidget {
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Text(
-                  ' \uFC41  \uFC42\uFC43\uFC44',
+                  'بِسۡمِ ٱللَّهِ ٱلرَّحۡمَـٰنِ ٱلرَّحِيمِ',
                   textAlign: TextAlign.center,
                   textDirection: TextDirection.rtl,
                   style: const TextStyle(
-                    fontFamily: 'QCF_P001',
-                    package: 'qcf_quran',
-                    fontSize: 26,
+                    fontFamily: 'Amiri',
+                    fontSize: 20,
                     color: Colors.white,
                     height: 2.0,
                   ),

@@ -2,11 +2,10 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
-import 'package:qcf_quran/qcf_quran.dart';
+import 'package:qcf_quran_plus/qcf_quran_plus.dart';
 
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/utils/tajweed_parser.dart';
-import '../widgets/app_qcf_page.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // NurAyahTestScreen
@@ -22,7 +21,6 @@ import '../widgets/app_qcf_page.dart';
 const int _kSurah = 24;
 const int _kAyah = 35;
 const int _kPage = 354; // صفحة الآية في المصحف (حفص عن عاصم)
-const String _kPageFont = 'QCF_P$_kPage'; // QCF_P354
 
 class NurAyahTestScreen extends StatefulWidget {
   const NurAyahTestScreen({super.key});
@@ -38,8 +36,6 @@ class _NurAyahTestScreenState extends State<NurAyahTestScreen>
   // ── data holders ──────────────────────────────────────────────────────────
   // Synchronous — available immediately from local qcf_quran package (no API)
   final String _uthmaniText = getVerse(_kSurah, _kAyah, verseEndSymbol: false);
-  final String _qcfGlyphText =
-      getVerseQCF(_kSurah, _kAyah, verseEndSymbol: false);
 
   // Asynchronous — fetched from alquran.cloud tajweed API
   String? _tajweedRaw;
@@ -298,52 +294,8 @@ class _NurAyahTestScreenState extends State<NurAyahTestScreen>
   // ══════════════════════════════════════════════════════════════════════════
   Widget _buildMethod0_QcfTajweed(bool isDark, Color bgColor) {
     final colorMap = isDark ? kTajweedColorsDark : kTajweedColorsLight;
-    final defaultColor =
-        isDark ? const Color(0xFFE8E8E8) : const Color(0xFF1A1A1A);
 
-    // 1) Build per-glyph color list.
-    //    _qcfGlyphText has \n between mushaf lines; each non-\n char = 1 word glyph.
-    //    Glyph 0 = ۞ rub-el-hizb marker → dimmed.
-    //    Glyphs 1..N → _wordRules[0..N-1].
-    final glyphColors = _buildQcfGlyphColors(colorMap, defaultColor);
-
-    // 2) Split into mushaf lines at \n and build colored TextSpan per line.
-    final glyphLines = _qcfGlyphText.split('\n');
-    int glyphCursor = 0;
-
-    final lineWidgets = <Widget>[];
-    for (final line in glyphLines) {
-      if (line.isEmpty) continue;
-      final lineSpans = <InlineSpan>[];
-      for (int ci = 0; ci < line.length; ci++) {
-        final glyph = line[ci];
-        final Color color = glyphCursor < glyphColors.length
-            ? glyphColors[glyphCursor]
-            : defaultColor;
-        lineSpans.add(TextSpan(
-          text: glyph,
-          style: TextStyle(
-            fontFamily: _kPageFont,
-            package: 'qcf_quran',
-            fontSize: 34,
-            color: color,
-            height: 2.1,
-          ),
-        ));
-        glyphCursor++;
-      }
-      lineWidgets.add(
-        Text.rich(
-          TextSpan(children: lineSpans),
-          textAlign: TextAlign.center,
-          textDirection: TextDirection.rtl,
-          locale: const Locale('ar'),
-          textScaler: TextScaler.noScaling,
-        ),
-      );
-    }
-
-    // 3) Collect unique rules for the legend.
+    // Collect unique tajweed rules for the legend.
     final rulesUsed = _wordRules
         .where((r) => r != null)
         .cast<TajweedRule>()
@@ -360,10 +312,10 @@ class _NurAyahTestScreenState extends State<NurAyahTestScreen>
           // ── Badge ─────────────────────────────────────────────────────────
           _MethodBadge(
             number: '⭐',
-            title: 'QCF + تجويد كلمة بكلمة (الأفضل)',
+            title: 'QCF + تجويد مدمج (الأفضل)',
             subtitle:
-                'رسم المصحف الحقيقي (QCF_P354) + ألوان التجويد كلمةً بكلمة\n'
-                'نفس الطريقة التي يستخدمها تطبيق quran.com والموقع',
+                'صفحة المصحف كاملة مع ألوان التجويد المدمجة\n'
+                'يستخدم qcf_quran_plus مع isTajweed: true',
             icon: Icons.auto_awesome,
             color: const Color(0xFFD4AF37),
             isRecommended: true,
@@ -410,25 +362,27 @@ class _NurAyahTestScreenState extends State<NurAyahTestScreen>
                   ),
                 ),
                 const Divider(height: 22),
-                // ── Per-mushaf-line QCF rendering with tajweed colors ─────
-                ...lineWidgets,
-                const SizedBox(height: 14),
-                // Verse number ornament
-                Container(
-                  width: 38,
-                  height: 38,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    border: Border.all(
-                        color: AppColors.secondary, width: 2),
-                  ),
-                  alignment: Alignment.center,
-                  child: Text(
-                    '٣٥',
-                    style: GoogleFonts.amiriQuran(
-                      fontSize: 14,
-                      color: AppColors.secondary,
-                      fontWeight: FontWeight.bold,
+                // ── Page with built-in tajweed colors ─────────────────
+                SizedBox(
+                  height: 400,
+                  child: QuranPageView(
+                    pageController: PageController(initialPage: _kPage - 1),
+                    highlights: [
+                      HighlightVerse(
+                        surah: _kSurah,
+                        verseNumber: _kAyah,
+                        page: _kPage,
+                        color: const Color(0xFFD4AF37),
+                      ),
+                    ],
+                    isDarkMode: isDark,
+                    isTajweed: true,
+                    onPageChanged: (_) {},
+                    onLongPress: (s, v, d) {},
+                    ayahStyle: TextStyle(
+                      color: isDark
+                          ? const Color(0xFFE8E8E8)
+                          : const Color(0xFF1A1A1A),
                     ),
                   ),
                 ),
@@ -497,8 +451,8 @@ class _NurAyahTestScreenState extends State<NurAyahTestScreen>
               '• رسم 100% مطابق للمصحف المطبوع — خط QCF الحجري الشريف',
               '• كل كلمة ملوّنة بحكمها التجويدي الصحيح',
               '• نفس الطريقة التي يعتمدها quran.com وتطبيقاته',
-              '• رموز QCF من package:qcf_quran — تعمل 100% بدون إنترنت',
-              '• أحكام التجويد من api.alquran.cloud المحترم',
+              '• خطوط QCF مدمجة في qcf_quran_plus — تعمل بدون إنترنت',
+              '• التجويد مدمج في الحزمة (isTajweed: true)',
             ],
             icon: Icons.check_circle_outline,
             color: const Color(0xFFD4AF37),
@@ -508,10 +462,10 @@ class _NurAyahTestScreenState extends State<NurAyahTestScreen>
           _TechCard(
             title: 'كيف يعمل؟',
             content:
-                '1. getVerseQCF(24,35) → رموز QCF المصحفية الصحيحة\n'
-                '2. api.alquran.cloud → نص التجويد بالأقواس\n'
-                '3. parseTajweedText() → القاعدة التجويدية لكل كلمة\n'
-                '4. QCF_P354 font + TextSpan ملوّن لكل رمز/كلمة',
+                'Package: qcf_quran_plus\n'
+                'Widget: QuranPageView(isTajweed: true)\n'
+                'Highlight: HighlightVerse(surah: 24, verseNumber: 35)\n'
+                'مدمج بالكامل في الحزمة — لا يحتاج API خارجي',
           ),
         ],
       ),
@@ -523,30 +477,6 @@ class _NurAyahTestScreenState extends State<NurAyahTestScreen>
   /// The first non-newline character in the QCF verse string is always the
   /// ۞ rub-el-hizb marker, which is given a dimmed version of [defaultColor].
   /// Subsequent glyphs are paired with [_wordRules] (index 0 = first word).
-  List<Color> _buildQcfGlyphColors(
-    Map<TajweedRule, Color> colorMap,
-    Color defaultColor,
-  ) {
-    final result = <Color>[];
-    int glyphCount = 0;
-    for (int i = 0; i < _qcfGlyphText.length; i++) {
-      if (_qcfGlyphText[i] == '\n') continue; // line-delimiter, not a glyph
-      if (glyphCount == 0) {
-        // First glyph = ۞ marker: use dimmed text color
-        result.add(defaultColor.withValues(alpha: 0.55));
-      } else {
-        final ruleIdx = glyphCount - 1;
-        final rule =
-            ruleIdx < _wordRules.length ? _wordRules[ruleIdx] : null;
-        result.add(
-          rule != null ? (colorMap[rule] ?? defaultColor) : defaultColor,
-        );
-      }
-      glyphCount++;
-    }
-    return result;
-  }
-
   // ══════════════════════════════════════════════════════════════════════════
   // الطريقة ② — QCF Glyph Page Fonts  (نظيف بدون ألوان)
   // ══════════════════════════════════════════════════════════════════════════
@@ -587,25 +517,25 @@ class _NurAyahTestScreenState extends State<NurAyahTestScreen>
             padding: const EdgeInsets.all(8),
             child: SizedBox(
               height: 550,
-              child: AppQcfPage(
-                pageNumber: _kPage,
-                sp: 1.0,
-                h: 1.0,
-                theme: QcfThemeData(
-                  verseTextColor: isDark
+              child: QuranPageView(
+                pageController: PageController(initialPage: _kPage - 1),
+                highlights: [
+                  HighlightVerse(
+                    surah: _kSurah,
+                    verseNumber: _kAyah,
+                    page: _kPage,
+                    color: const Color(0xFFD4AF37),
+                  ),
+                ],
+                isDarkMode: isDark,
+                isTajweed: false,
+                onPageChanged: (_) {},
+                onLongPress: (s, v, d) {},
+                ayahStyle: TextStyle(
+                  color: isDark
                       ? const Color(0xFFE8E8E8)
                       : const Color(0xFF1A1A1A),
-                  pageBackgroundColor: Colors.transparent,
-                  verseHeight: 2.2,
-                  showHeader: true,
-                  showBasmala: true,
                 ),
-                verseBackgroundColor: (surah, verse) {
-                  if (surah == _kSurah && verse == _kAyah) {
-                    return const Color(0xFFD4AF37).withValues(alpha: 0.25);
-                  }
-                  return null;
-                },
               ),
             ),
           ),
@@ -615,7 +545,7 @@ class _NurAyahTestScreenState extends State<NurAyahTestScreen>
             title: 'لماذا هي الأفضل؟',
             lines: const [
               '• الرسم 100% مطابق للمصحف المطبوع (رواية حفص)',
-              '• كل صفحة لها خط مستقل → دقة مثالية في توزيع الكلمات',
+              '• خطوط QCF مدمجة بالكامل → دقة مثالية في توزيع الكلمات',
               '• تعمل Offline بدون إنترنت بعد تحميل الخطوط',
               '• تدعم تمييز الآيات والكلمات بالألوان',
               '• المرجع: مجمع الملك فهد / مجمع قرآن كمبلكس',
@@ -628,8 +558,9 @@ class _NurAyahTestScreenState extends State<NurAyahTestScreen>
           _TechCard(
             title: 'التقنية',
             content:
-                'package: qcf_quran\nFont: QCF_P354 (صفحة $_kPage)\n'
-                'الخط: Glyph-based — كل رمز = صورة حرف من المصحف\n'
+                'Package: qcf_quran_plus\n'
+                'Widget: QuranPageView(isTajweed: false)\n'
+                'الخطوط: QCF Fonts مدمجة في الحزمة الجديدة\n'
                 'المصدر: fonts مضمّنة في الـ package',
           ),
         ],
@@ -1053,25 +984,21 @@ class _NurAyahTestScreenState extends State<NurAyahTestScreen>
                 const Divider(height: 1),
                 SizedBox(
                   height: 560,
-                  child: AppQcfPage(
-                    pageNumber: _kPage,
-                    sp: 1.0,
-                    h: 1.0,
-                    theme: QcfThemeData(
-                      verseTextColor: textColor,
-                      pageBackgroundColor: Colors.transparent,
-                      verseHeight: 2.2,
-                      showHeader: true,
-                      showBasmala: true,
-                    ),
-                    // Highlight our verse
-                    verseBackgroundColor: (surah, verse) {
-                      if (surah == _kSurah && verse == _kAyah) {
-                        return const Color(0xFFD4AF37)
-                            .withValues(alpha: 0.22);
-                      }
-                      return null;
-                    },
+                  child: QuranPageView(
+                    pageController: PageController(initialPage: _kPage - 1),
+                    highlights: [
+                      HighlightVerse(
+                        surah: _kSurah,
+                        verseNumber: _kAyah,
+                        page: _kPage,
+                        color: const Color(0xFFD4AF37),
+                      ),
+                    ],
+                    isDarkMode: isDark,
+                    isTajweed: false,
+                    onPageChanged: (_) {},
+                    onLongPress: (s, v, d) {},
+                    ayahStyle: TextStyle(color: textColor),
                   ),
                 ),
               ],

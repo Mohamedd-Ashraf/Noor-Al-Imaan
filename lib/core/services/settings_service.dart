@@ -94,7 +94,7 @@ class SettingsService {
   // Set to true when the feature is ready for production.
   static const bool enableQuizFeature = false;
   static const bool enableHadithFeature = false;
-  static const bool enableTajweedFeature = false;
+  static const bool enableTajweedFeature = true;
   static const bool enableTutorialsFeature = false;
 
   // ── Mushaf continue-recitation settings ──────────────────────────────────

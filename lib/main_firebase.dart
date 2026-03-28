@@ -8,6 +8,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:just_audio_background/just_audio_background.dart';
 import 'firebase_options.dart';
+import 'package:qcf_quran_plus/qcf_quran_plus.dart' show QcfFontLoader;
+import 'core/services/qcf_font_download_service.dart';
 import 'core/di/injection_container_firebase.dart' as di;
 import 'core/services/adhan_notification_service.dart';
 import 'core/services/quran_cache_warmup_service.dart';
@@ -31,6 +33,27 @@ import 'features/hadith/data/repositories/hadith_repository.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Pre-load only the bundled QCF page fonts (66 pages covering key surahs).
+  // Remaining 538 pages are downloaded on demand via QcfFontDownloadService.
+  // Bundled pages: 1–30, 293–297, 440–444, 571–573, 582–604.
+  const List<int> bundledRanges = [1, 30, 293, 297, 440, 444, 571, 573, 582, 604];
+  for (int rangeStart = 0; rangeStart < bundledRanges.length; rangeStart += 2) {
+    final start = bundledRanges[rangeStart];
+    final end = bundledRanges[rangeStart + 1];
+    for (int p = start; p <= end; p++) {
+      await QcfFontLoader.ensureFontLoaded(p);
+    }
+  }
+
+  // If any previously-downloaded (non-bundled) fonts are on disk, register
+  // them in the Flutter font engine now so they render instantly on first view.
+  // This is lightweight – skipped pages have no disk file so nothing happens.
+  final fontsComplete = await QcfFontDownloadService.isFullyDownloaded();
+  if (fontsComplete) {
+    // All fonts on disk — load them all (fast batch since TTFs already cached).
+    await QcfFontLoader.setupFontsAtStartup(onProgress: (_) {});
+  }
 
   // Allow runtime fetching when online. Failures are handled gracefully below.
   GoogleFonts.config.allowRuntimeFetching = true;

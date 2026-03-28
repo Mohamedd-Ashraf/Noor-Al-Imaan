@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:qcf_quran/qcf_quran.dart';
+import 'package:qcf_quran_plus/qcf_quran_plus.dart';
 
 import '../../../../core/constants/app_colors.dart';
 
@@ -23,14 +23,22 @@ class QcfPageviewDemoScreen extends StatefulWidget {
 
 class _QcfPageviewDemoScreenState extends State<QcfPageviewDemoScreen> {
   late int _currentPage;
+  late PageController _pageCtrl;
 
   @override
   void initState() {
     super.initState();
     _currentPage = widget.initialPage;
+    _pageCtrl = PageController(initialPage: widget.initialPage - 1);
     SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
       statusBarColor: Colors.transparent,
     ));
+  }
+
+  @override
+  void dispose() {
+    _pageCtrl.dispose();
+    super.dispose();
   }
 
   @override
@@ -94,35 +102,15 @@ class _QcfPageviewDemoScreenState extends State<QcfPageviewDemoScreen> {
                   color: dividerColor,
                 ),
                 Expanded(
-                  child: LayoutBuilder(
-                    builder: (context, constraints) {
-                      final screenSize = MediaQuery.of(context).size;
-
-                      // Compute responsive scaling ratios so QcfPage
-                      // adapts to the actual available area instead of
-                      // the full screen dimensions.
-                      final double sp = constraints.maxWidth.isFinite
-                          ? constraints.maxWidth / screenSize.width
-                          : 1.0;
-                      final double h = constraints.maxHeight.isFinite
-                          ? constraints.maxHeight / screenSize.height
-                          : 1.0;
-
-                      return PageviewQuran(
-                        initialPageNumber: widget.initialPage,
-                        sp: sp,
-                        h: h,
-                        physics: const BouncingScrollPhysics(),
-                        theme: QcfThemeData(
-                          verseTextColor: textColor,
-                          pageBackgroundColor: Colors.transparent,
-                          verseHeight: 2.2,
-                        ),
-                        onPageChanged: (page) {
-                          if (mounted) setState(() => _currentPage = page);
-                          HapticFeedback.selectionClick();
-                        },
-                      );
+                  child: QuranPageView(
+                    pageController: _pageCtrl,
+                    isDarkMode: isDark,
+                    isTajweed: false,
+                    highlights: const [],
+                    ayahStyle: TextStyle(color: textColor),
+                    onPageChanged: (page) {
+                      if (mounted) setState(() => _currentPage = page);
+                      HapticFeedback.selectionClick();
                     },
                   ),
                 ),

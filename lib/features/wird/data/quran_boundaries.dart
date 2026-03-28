@@ -4,7 +4,7 @@
 /// Egyptian (Cairo) muṣḥaf — the most widely used edition worldwide.
 library;
 
-import 'package:qcf_quran/qcf_quran.dart' show getPageData;
+import 'package:qcf_quran_lite/qcf_quran_lite.dart' show getPageData;
 
 const int _kMushafTotalPages = 604;
 
