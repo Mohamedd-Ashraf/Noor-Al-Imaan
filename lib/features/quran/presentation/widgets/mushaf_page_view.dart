@@ -204,8 +204,9 @@ class MushafPageView extends StatefulWidget {
 class _MushafPageViewState extends State<MushafPageView>
     with SingleTickerProviderStateMixin {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
-  final ValueNotifier<List<HighlightVerse>> _highlightsNotifier =
-      ValueNotifier([]);
+  final ValueNotifier<List<HighlightVerse>> _highlightsNotifier = ValueNotifier(
+    [],
+  );
 
   late PageController _pageController;
   late final BookmarkService _bookmarkService;
@@ -233,10 +234,6 @@ class _MushafPageViewState extends State<MushafPageView>
 
   // Tracks whether the QCF font for the current page is available on disk.
   bool _currentPageFontAvailable = true;
-
-  // ── Controls visibility (tap-to-show/hide) ─────────────────────────────────
-  bool _showControls = true;
-  Timer? _hideTimer;
 
   // ── Init / dispose ─────────────────────────────────────────────────────────
 
@@ -295,31 +292,16 @@ class _MushafPageViewState extends State<MushafPageView>
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _showTutorialIfNeeded();
     });
-
-    _resetHideTimer();
   }
 
   @override
   void dispose() {
-    _hideTimer?.cancel();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     _highlightAnimationController.dispose();
     _pageController.dispose();
     _highlightsNotifier.dispose();
     _playerCollapsed.dispose();
     super.dispose();
-  }
-
-  void _resetHideTimer() {
-    _hideTimer?.cancel();
-    _hideTimer = Timer(const Duration(seconds: 3), () {
-      if (mounted) setState(() => _showControls = false);
-    });
-  }
-
-  void _onPageTap() {
-    setState(() => _showControls = !_showControls);
-    if (_showControls) _resetHideTimer();
   }
 
   void _showTutorialIfNeeded() {
@@ -492,10 +474,9 @@ class _MushafPageViewState extends State<MushafPageView>
     if (settings.mushafContinueTilawa) {
       if (settings.mushafContinueScope == 'surah') {
         final idx = surahNumber - 1;
-        final totalAyahs =
-            idx >= 0 && idx < kSurahAyahCounts.length
-                ? kSurahAyahCounts[idx]
-                : ayahNumber;
+        final totalAyahs = idx >= 0 && idx < kSurahAyahCounts.length
+            ? kSurahAyahCounts[idx]
+            : ayahNumber;
         cubit.playAyahRange(
           surahNumber: surahNumber,
           startAyah: ayahNumber,
@@ -506,7 +487,10 @@ class _MushafPageViewState extends State<MushafPageView>
         try {
           rawRanges = getPageData(_currentPageNum);
         } catch (_) {
-          cubit.togglePlayAyah(surahNumber: surahNumber, ayahNumber: ayahNumber);
+          cubit.togglePlayAyah(
+            surahNumber: surahNumber,
+            ayahNumber: ayahNumber,
+          );
           return;
         }
         int endAyah = ayahNumber;
@@ -523,10 +507,7 @@ class _MushafPageViewState extends State<MushafPageView>
         );
       }
     } else {
-      cubit.togglePlayAyah(
-        surahNumber: surahNumber,
-        ayahNumber: ayahNumber,
-      );
+      cubit.togglePlayAyah(surahNumber: surahNumber, ayahNumber: ayahNumber);
     }
   }
 
@@ -624,55 +605,45 @@ class _MushafPageViewState extends State<MushafPageView>
             bottom: false,
             top: false,
             child: Container(
-            color: bgColor,
-            child: Stack(
-              children: [
-                Positioned.fill(
-                  child: CustomPaint(
-                    painter: IslamicPatternPainter(
-                      color: isDark
-                          ? const Color(0xFFC8A84B)
-                          : AppColors.primary,
+              color: bgColor,
+              child: Stack(
+                children: [
+                  Positioned.fill(
+                    child: CustomPaint(
+                      painter: IslamicPatternPainter(
+                        color: isDark
+                            ? const Color(0xFFC8A84B)
+                            : AppColors.primary,
+                      ),
                     ),
                   ),
-                ),
-                Positioned.fill(
-                  child: CustomPaint(
-                    painter: BorderOrnamentPainter(
-                      color: isDark
-                          ? const Color(0xFFC8A84B)
-                          : AppColors.primary,
+                  Positioned.fill(
+                    child: CustomPaint(
+                      painter: BorderOrnamentPainter(
+                        color: isDark
+                            ? const Color(0xFFC8A84B)
+                            : AppColors.primary,
+                      ),
                     ),
                   ),
-                ),
-                // ── Quran page – always fills the full body area ──────
-                // Using Positioned.fill guarantees the page occupies the
-                // entire available space regardless of any overlay widgets.
-                // When the audio player is visible, shrink from the bottom
-                // so the page content is never covered by the player.
-                ValueListenableBuilder<bool>(
-                  valueListenable: _playerCollapsed,
-                  builder: (ctx, isCollapsed, child) => Positioned.fill(
-                    // When minimized the pill floats over the content.
-                    // Only push content up when the full player is expanded.
-                    bottom: playerVisible
-                        ? (isCollapsed ? 0.0 : kPlayerHeight)
-                        : 0.0,
-                    child: GestureDetector(
-                      onTap: _onPageTap,
-                      behavior: HitTestBehavior.translucent,
+                  // ── Quran page – always fills the full body area ──────
+                  // Using Positioned.fill guarantees the page occupies the
+                  // entire available space regardless of any overlay widgets.
+                  // When the audio player is visible, shrink from the bottom
+                  // so the page content is never covered by the player.
+                  ValueListenableBuilder<bool>(
+                    valueListenable: _playerCollapsed,
+                    builder: (ctx, isCollapsed, child) => Positioned.fill(
+                      // When minimized the pill floats over the content.
+                      // Only push content up when the full player is expanded.
+                      bottom: playerVisible
+                          ? (isCollapsed ? 0.0 : kPlayerHeight)
+                          : 0.0,
                       child: Column(
                         children: [
-                          AnimatedOpacity(
-                            opacity: _showControls ? 1.0 : 0.0,
-                            duration: const Duration(milliseconds: 300),
-                            child: IgnorePointer(
-                              ignoring: !_showControls,
-                              child: Directionality(
-                                textDirection: TextDirection.ltr,
-                                child: _buildTopBar(isDark, _currentPageNum),
-                              ),
-                            ),
+                          Directionality(
+                            textDirection: TextDirection.ltr,
+                            child: _buildTopBar(isDark, _currentPageNum),
                           ),
                           Expanded(
                             key: MushafTutorialKeys.quranPage,
@@ -681,21 +652,21 @@ class _MushafPageViewState extends State<MushafPageView>
                                 ValueListenableBuilder<List<HighlightVerse>>(
                                   valueListenable: _highlightsNotifier,
                                   builder: (_, highlights, __) => QuranPageView(
-                                      pageController: _pageController,
-                                      highlights: highlights,
-                                      isDarkMode: isDark,
-                                      isTajweed: _tajweedMode,
-                                      onPageChanged: _handleDisplayedPageChanged,
-                                      onAyahTap: _onAyahTap,
-                                      onLongPress: (surah, verse, details) =>
-                                          _onLongPress(surah, verse),
-                                      ayahStyle: TextStyle(color: textColor),
-                                      fallbackPageBuilder: (ctx, pageNum) =>
-                                          QcfFallbackPage(
-                                            pageNumber: pageNum,
-                                            isDarkMode: isDark,
-                                          ),
-                                    ),
+                                    pageController: _pageController,
+                                    highlights: highlights,
+                                    isDarkMode: isDark,
+                                    isTajweed: _tajweedMode,
+                                    onPageChanged: _handleDisplayedPageChanged,
+                                    onAyahTap: _onAyahTap,
+                                    onLongPress: (surah, verse, details) =>
+                                        _onLongPress(surah, verse),
+                                    ayahStyle: TextStyle(color: textColor),
+                                    fallbackPageBuilder: (ctx, pageNum) =>
+                                        QcfFallbackPage(
+                                          pageNumber: pageNum,
+                                          isDarkMode: isDark,
+                                        ),
+                                  ),
                                 ),
                                 // ── Download-fonts banner (only when current page is fallback) ──
                                 if (!_currentPageFontAvailable)
@@ -708,46 +679,38 @@ class _MushafPageViewState extends State<MushafPageView>
                               ],
                             ),
                           ),
-                          AnimatedOpacity(
-                            opacity: _showControls ? 1.0 : 0.0,
-                            duration: const Duration(milliseconds: 300),
-                            child: IgnorePointer(
-                              ignoring: !_showControls,
-                              child: Directionality(
-                                key: MushafTutorialKeys.pageFooter,
-                                textDirection: TextDirection.ltr,
-                                child: _buildDecorativeFooter(
-                                  _currentPageNum,
-                                  isDarkMode: isDark,
-                                ),
-                              ),
+                          Directionality(
+                            key: MushafTutorialKeys.pageFooter,
+                            textDirection: TextDirection.ltr,
+                            child: _buildDecorativeFooter(
+                              _currentPageNum,
+                              isDarkMode: isDark,
                             ),
                           ),
                         ],
                       ),
                     ),
                   ),
-                ),
-                // ── Floating audio player ──────────────────────────────
-                // Positioned at the bottom so it never participates in
-                // layout and never compresses the Quran page above it.
-                // Returns SizedBox.shrink() when audio is idle.
-                Positioned(
-                  bottom: 0,
-                  left: 0,
-                  right: 0,
-                  child: IslamicAudioPlayer(
-                    isArabicUi: widget.isArabicUi,
-                    collapsedNotifier: _playerCollapsed,
+                  // ── Floating audio player ──────────────────────────────
+                  // Positioned at the bottom so it never participates in
+                  // layout and never compresses the Quran page above it.
+                  // Returns SizedBox.shrink() when audio is idle.
+                  Positioned(
+                    bottom: 0,
+                    left: 0,
+                    right: 0,
+                    child: IslamicAudioPlayer(
+                      isArabicUi: widget.isArabicUi,
+                      collapsedNotifier: _playerCollapsed,
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),
       ),
-    ),
-  );
+    );
   }
 
   Widget _buildPageBookmarkButton(int pageNumber, {bool attachKey = false}) {
@@ -932,9 +895,7 @@ class _MushafPageViewState extends State<MushafPageView>
       backgroundColor: Colors.transparent,
       builder: (_) => BlocProvider.value(
         value: ctx.read<AppSettingsCubit>(),
-        child: _MushafQcfRecitationSheet(
-          isAr: widget.isArabicUi,
-        ),
+        child: _MushafQcfRecitationSheet(isAr: widget.isArabicUi),
       ),
     );
   }
@@ -993,20 +954,20 @@ class _MushafPageViewState extends State<MushafPageView>
 
   // ── Premium Mushaf color constants ─────────────────────────────────────
   static const _kBarTealLight = Color(0xFF3C9A80);
-  static const _kBarTealDark  = Color(0xFF2A7F6B);
+  static const _kBarTealDark = Color(0xFF2A7F6B);
   static const _kBarTealDarkModeLight = Color(0xFF1A5244);
-  static const _kBarTealDarkModeDark  = Color(0xFF133D31);
-  static const _kGoldText   = Color(0xFFEDE3B7);
+  static const _kBarTealDarkModeDark = Color(0xFF133D31);
+  static const _kGoldText = Color(0xFFEDE3B7);
   static const _kGoldBorder = Color(0xFFE6D9A8);
 
   Widget _buildTopBar(bool isDark, int pageNumber) {
     final isInitialPage = pageNumber == _startPage;
-    final topInset      = MediaQuery.of(context).padding.top;
+    final topInset = MediaQuery.of(context).padding.top;
 
     final gradientStart = isDark ? _kBarTealDarkModeLight : _kBarTealLight;
-    final gradientEnd   = isDark ? _kBarTealDarkModeDark  : _kBarTealDark;
-    final goldColor     = _kGoldText;
-    final goldBorder    = _kGoldBorder.withValues(alpha: 0.28);
+    final gradientEnd = isDark ? _kBarTealDarkModeDark : _kBarTealDark;
+    final goldColor = _kGoldText;
+    final goldBorder = _kGoldBorder.withValues(alpha: 0.28);
     final ornamentColor = goldColor.withValues(alpha: 0.50);
 
     final labelStyle = GoogleFonts.arefRuqaa(
@@ -1018,7 +979,8 @@ class _MushafPageViewState extends State<MushafPageView>
     return Container(
       key: isInitialPage ? MushafTutorialKeys.topBar : null,
       margin: const EdgeInsets.only(bottom: 4),
-      padding: EdgeInsets.fromLTRB(10, topInset, 10, 0),
+      //TODO
+      padding: EdgeInsets.fromLTRB(10, topInset/2, 10, 0),
       decoration: BoxDecoration(
         borderRadius: const BorderRadius.vertical(bottom: Radius.circular(22)),
         gradient: LinearGradient(
@@ -1062,7 +1024,7 @@ class _MushafPageViewState extends State<MushafPageView>
             Expanded(
               child: Center(
                 child: Text(
-                  '❧',
+                  '',
                   style: TextStyle(
                     color: ornamentColor,
                     fontSize: 16,
@@ -1128,7 +1090,10 @@ class _MushafPageViewState extends State<MushafPageView>
             GestureDetector(
               onTap: () => _promptFontDownload(context),
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 4,
+                ),
                 decoration: BoxDecoration(
                   color: btnCol,
                   borderRadius: BorderRadius.circular(12),
@@ -1152,7 +1117,7 @@ class _MushafPageViewState extends State<MushafPageView>
   Widget _buildTajweedToggle(bool isDark, int pageNumber) {
     if (!SettingsService.enableTajweedFeature) return const SizedBox.shrink();
 
-    final activeColor = const Color(0xFFB8E6C8);  // Soft mint — visible on teal
+    final activeColor = const Color(0xFFB8E6C8); // Soft mint — visible on teal
     final inactiveColor = _kGoldText.withValues(alpha: 0.5);
     return GestureDetector(
       onTap: () => _toggleTajweed(pageNumber),
@@ -1176,16 +1141,17 @@ class _MushafPageViewState extends State<MushafPageView>
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.palette_rounded,
-                size: 14,
-                color: _tajweedMode ? activeColor : inactiveColor),
+            Icon(
+              Icons.palette_rounded,
+              size: 14,
+              color: _tajweedMode ? activeColor : inactiveColor,
+            ),
             const SizedBox(width: 3),
             Text(
               'تجويد',
               style: GoogleFonts.arefRuqaa(
                 fontSize: 10,
-                fontWeight:
-                    _tajweedMode ? FontWeight.w700 : FontWeight.w500,
+                fontWeight: _tajweedMode ? FontWeight.w700 : FontWeight.w500,
                 color: _tajweedMode ? activeColor : inactiveColor,
               ),
             ),
@@ -1331,8 +1297,7 @@ class _MushafPageViewState extends State<MushafPageView>
                         _TajweedLinkRow(
                           icon: Icons.language_rounded,
                           label: 'دليل ألوان التجويد — alquran.cloud',
-                          url:
-                              'https://alquran.cloud/tajweed-guide',
+                          url: 'https://alquran.cloud/tajweed-guide',
                           color: linkColor,
                           textColor: textColor,
                         ),
@@ -1358,86 +1323,67 @@ class _MushafPageViewState extends State<MushafPageView>
     );
   }
 
-
   Widget _buildDecorativeFooter(int pageNumber, {required bool isDarkMode}) {
     final bottomInset = MediaQuery.of(context).padding.bottom;
-    const tealL    = Color(0xFF2A7F6B);
-    const tealD    = Color(0xFF1F6F5E);
-    const tealBot  = Color(0xFF3C9A80);
-    const darkL    = Color(0xFF1A5244);
-    const darkD    = Color(0xFF133D31);
+    const tealL = Color(0xFF2A7F6B);
+    const tealBot = Color(0xFF3C9A80);
+    const darkL = Color(0xFF1A5244);
+    const darkD = Color(0xFF133D31);
     const borderCol = Color(0xFFE6D9A8);
-    const textCol   = Color(0xFFF5E6B5);
+    const textCol = Color(0xFFF5E6B5);
 
     final barTop = isDarkMode ? darkD : tealL;
     final barBot = isDarkMode ? darkL : tealBot;
-
-    const barH         = 80.0;
-    const pillOverflow = 30.0;
-
-    return SizedBox(
-      height: barH + pillOverflow + bottomInset,
+// متعدلش اي حاجة هنا في الويدجت كلها 
+    return Container(
       width: double.infinity,
-      child: Stack(
-        alignment: Alignment.bottomCenter,
-        children: [
-          // ── Main bar ──────────────────────────────
-          Positioned(
-            bottom: 0,
-            left: 0,
-            right: 0,
-            height: barH + bottomInset,
-            child: Container(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [barTop, barBot],
-                ),
-                borderRadius: const BorderRadius.vertical(
-                  top: Radius.circular(45),
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.25),
-                    blurRadius: 20,
-                    offset: const Offset(0, -8),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          // ── Ornamental frame (PNG) + page number ──
-          Positioned(
-            top: 0,
-            child: SizedBox(
-              width: 210,
-              height: 60,
-              child: Stack(
-                alignment: Alignment.center,
-                children: [
-                  Image.asset(
-                    'assets/logo/files/page_number.png',
-                    width: 210,
-                    height: 60,
-                    color: borderCol,
-                    colorBlendMode: BlendMode.srcIn,
-                    fit: BoxFit.fill,
-                  ),
-                  Text(
-                    _toArabicNumerals(pageNumber),
-                    textAlign: TextAlign.center,
-                    style: GoogleFonts.arefRuqaa(
-                      fontSize: 20,
-                      fontWeight: FontWeight.w700,
-                      color: textCol,
-                    ),
-                  ),
-                ],
-              ),
-            ),
+      padding: EdgeInsets.only(bottom: bottomInset),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [barTop, barBot],
+        ),
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.25),
+            blurRadius: 20,
+            offset: const Offset(0, -8),
           ),
         ],
+      ),
+      child: SizedBox(
+        height: 30,
+        child: Center(
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              Image.asset(
+                'assets/logo/files/page_number.png',
+                width: 180,
+                height: 23,
+                color: borderCol,
+                colorBlendMode: BlendMode.srcIn,
+                fit: BoxFit.fill,
+              ),
+
+              Positioned(
+                bottom: 5,
+                child: Text(
+                  _toArabicNumerals(pageNumber),
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.arefRuqaa(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w700,
+                    color: textCol,
+                    height: 1,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -1639,8 +1585,11 @@ class _TajweedLinkRow extends StatelessWidget {
                 ),
               ),
             ),
-            Icon(Icons.open_in_new_rounded,
-                size: 14, color: color.withValues(alpha: 0.65)),
+            Icon(
+              Icons.open_in_new_rounded,
+              size: 14,
+              color: color.withValues(alpha: 0.65),
+            ),
           ],
         ),
       ),
@@ -1659,8 +1608,7 @@ class _MushafQcfRecitationSheet extends StatefulWidget {
       _MushafQcfRecitationSheetState();
 }
 
-class _MushafQcfRecitationSheetState
-    extends State<_MushafQcfRecitationSheet> {
+class _MushafQcfRecitationSheetState extends State<_MushafQcfRecitationSheet> {
   late final OfflineAudioService _offlineAudio;
   late final AudioEditionService _editionService;
   late Future<List<AudioEdition>> _editionsFuture;
@@ -1719,10 +1667,14 @@ class _MushafQcfRecitationSheetState
           fontWeight: FontWeight.w700,
           color: textColor,
         );
-        final labelStyle =
-            GoogleFonts.arefRuqaa(fontSize: 14, color: textColor);
-        final noteStyle =
-            GoogleFonts.arefRuqaa(fontSize: 11, color: subTextColor);
+        final labelStyle = GoogleFonts.arefRuqaa(
+          fontSize: 14,
+          color: textColor,
+        );
+        final noteStyle = GoogleFonts.arefRuqaa(
+          fontSize: 11,
+          color: subTextColor,
+        );
 
         return SafeArea(
           child: Directionality(
@@ -1730,8 +1682,9 @@ class _MushafQcfRecitationSheetState
             child: Container(
               decoration: BoxDecoration(
                 color: bg,
-                borderRadius:
-                    const BorderRadius.vertical(top: Radius.circular(20)),
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(20),
+                ),
               ),
               padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
               child: Column(
@@ -1750,8 +1703,11 @@ class _MushafQcfRecitationSheetState
                       ),
                     ),
                   ),
-                  Text('إعدادات التلاوة',
-                      style: titleStyle, textAlign: TextAlign.center),
+                  Text(
+                    'إعدادات التلاوة',
+                    style: titleStyle,
+                    textAlign: TextAlign.center,
+                  ),
                   const SizedBox(height: 16),
                   Divider(color: dividerColor, height: 1),
                   const SizedBox(height: 12),
@@ -1767,8 +1723,9 @@ class _MushafQcfRecitationSheetState
                           .firstOrNull;
                       final name =
                           edition?.displayNameForAppLanguage(
-                              widget.isAr ? 'ar' : 'en') ??
-                              currentId;
+                            widget.isAr ? 'ar' : 'en',
+                          ) ??
+                          currentId;
                       return Row(
                         children: [
                           Expanded(
@@ -1776,18 +1733,23 @@ class _MushafQcfRecitationSheetState
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text('القارئ', style: labelStyle),
-                                Text(name,
-                                    style: labelStyle.copyWith(
-                                      color: subTextColor,
-                                      fontSize: 12,
-                                    )),
+                                Text(
+                                  name,
+                                  style: labelStyle.copyWith(
+                                    color: subTextColor,
+                                    fontSize: 12,
+                                  ),
+                                ),
                               ],
                             ),
                           ),
                           TextButton(
                             onPressed: snap.hasData
                                 ? () => _showReciterPicker(
-                                    ctx, snap.data!, _offlineAudio.edition)
+                                    ctx,
+                                    snap.data!,
+                                    _offlineAudio.edition,
+                                  )
                                 : null,
                             child: Text(
                               'تغيير',
@@ -1807,48 +1769,51 @@ class _MushafQcfRecitationSheetState
                   const SizedBox(height: 12),
 
                   // ── تلاوة كلمة بكلمة ────────────────────────────────────────
-                  Builder(builder: (context) {
-                    final wordByWordEnabled =
-                        settings.useUthmaniScript && !settings.useQcfFont;
-                    return Opacity(
-                      opacity: wordByWordEnabled ? 1.0 : 0.45,
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text('تلاوة كلمة بكلمة', style: labelStyle),
-                                Text(
-                                  wordByWordEnabled
-                                      ? 'اضغط على كلمة لتسمعها'
-                                      : (settings.useQcfFont
-                                          ? 'يتطلب إيقاف رسم المصحف QCF'
-                                          : 'يتطلب تفعيل عرض المصحف الشريف'),
-                                  style: noteStyle,
-                                ),
-                              ],
+                  Builder(
+                    builder: (context) {
+                      final wordByWordEnabled =
+                          settings.useUthmaniScript && !settings.useQcfFont;
+                      return Opacity(
+                        opacity: wordByWordEnabled ? 1.0 : 0.45,
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text('تلاوة كلمة بكلمة', style: labelStyle),
+                                  Text(
+                                    wordByWordEnabled
+                                        ? 'اضغط على كلمة لتسمعها'
+                                        : (settings.useQcfFont
+                                              ? 'يتطلب إيقاف رسم المصحف QCF'
+                                              : 'يتطلب تفعيل عرض المصحف الشريف'),
+                                    style: noteStyle,
+                                  ),
+                                ],
+                              ),
                             ),
-                          ),
-                          Switch(
-                            value: wordByWordEnabled && settings.wordByWordAudio,
-                            onChanged: wordByWordEnabled
-                                ? (v) => ctx
-                                    .read<AppSettingsCubit>()
-                                    .setWordByWordAudio(v)
-                                : null,
-                            activeColor: AppColors.secondary,
-                            inactiveThumbColor: isDark
-                                ? Colors.white.withValues(alpha: 0.55)
-                                : Colors.grey.shade400,
-                            inactiveTrackColor: isDark
-                                ? Colors.white.withValues(alpha: 0.12)
-                                : Colors.grey.shade300,
-                          ),
-                        ],
-                      ),
-                    );
-                  }),
+                            Switch(
+                              value:
+                                  wordByWordEnabled && settings.wordByWordAudio,
+                              onChanged: wordByWordEnabled
+                                  ? (v) => ctx
+                                        .read<AppSettingsCubit>()
+                                        .setWordByWordAudio(v)
+                                  : null,
+                              activeColor: AppColors.secondary,
+                              inactiveThumbColor: isDark
+                                  ? Colors.white.withValues(alpha: 0.55)
+                                  : Colors.grey.shade400,
+                              inactiveTrackColor: isDark
+                                  ? Colors.white.withValues(alpha: 0.12)
+                                  : Colors.grey.shade300,
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
                   const SizedBox(height: 12),
                   Divider(color: dividerColor, height: 1),
                   const SizedBox(height: 12),
@@ -1857,8 +1822,10 @@ class _MushafQcfRecitationSheetState
                   Row(
                     children: [
                       Expanded(
-                        child: Text('تكملة التلاوة عند الضغط',
-                            style: labelStyle),
+                        child: Text(
+                          'تكملة التلاوة عند الضغط',
+                          style: labelStyle,
+                        ),
                       ),
                       Switch(
                         value: settings.mushafContinueTilawa,
@@ -1881,13 +1848,17 @@ class _MushafQcfRecitationSheetState
                       segments: [
                         ButtonSegment(
                           value: 'page',
-                          label: Text('إلى نهاية الصفحة',
-                              style: GoogleFonts.arefRuqaa(fontSize: 12)),
+                          label: Text(
+                            'إلى نهاية الصفحة',
+                            style: GoogleFonts.arefRuqaa(fontSize: 12),
+                          ),
                         ),
                         ButtonSegment(
                           value: 'surah',
-                          label: Text('إلى نهاية السورة',
-                              style: GoogleFonts.arefRuqaa(fontSize: 12)),
+                          label: Text(
+                            'إلى نهاية السورة',
+                            style: GoogleFonts.arefRuqaa(fontSize: 12),
+                          ),
                         ),
                       ],
                       selected: {settings.mushafContinueScope},
@@ -1902,7 +1873,9 @@ class _MushafQcfRecitationSheetState
                         ),
                         backgroundColor: WidgetStateProperty.resolveWith(
                           (states) => states.contains(WidgetState.selected)
-                              ? AppColors.primary.withValues(alpha: isDark ? 0.30 : 0.12)
+                              ? AppColors.primary.withValues(
+                                  alpha: isDark ? 0.30 : 0.12,
+                                )
                               : Colors.transparent,
                         ),
                         side: WidgetStateProperty.all(
@@ -1936,8 +1909,7 @@ class _QcfReciterPickerSheet extends StatefulWidget {
   });
 
   @override
-  State<_QcfReciterPickerSheet> createState() =>
-      _QcfReciterPickerSheetState();
+  State<_QcfReciterPickerSheet> createState() => _QcfReciterPickerSheetState();
 }
 
 class _QcfReciterPickerSheetState extends State<_QcfReciterPickerSheet> {
@@ -1964,8 +1936,9 @@ class _QcfReciterPickerSheetState extends State<_QcfReciterPickerSheet> {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final bg = isDark ? const Color(0xFF1C1C1E) : Colors.white;
-    final surfaceColor =
-        isDark ? const Color(0xFF2C2C2E) : const Color(0xFFF5F5F5);
+    final surfaceColor = isDark
+        ? const Color(0xFF2C2C2E)
+        : const Color(0xFFF5F5F5);
     final textColor = isDark ? Colors.white : const Color(0xFF1A1A1A);
     final subtleColor = isDark
         ? Colors.white.withValues(alpha: 0.40)
@@ -1991,8 +1964,7 @@ class _QcfReciterPickerSheetState extends State<_QcfReciterPickerSheet> {
         child: Container(
           decoration: BoxDecoration(
             color: bg,
-            borderRadius:
-                const BorderRadius.vertical(top: Radius.circular(24)),
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -2009,8 +1981,10 @@ class _QcfReciterPickerSheetState extends State<_QcfReciterPickerSheet> {
                 ),
               ),
               Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 6,
+                ),
                 child: Row(
                   children: [
                     Container(
@@ -2020,8 +1994,11 @@ class _QcfReciterPickerSheetState extends State<_QcfReciterPickerSheet> {
                         color: accent.withValues(alpha: 0.12),
                         shape: BoxShape.circle,
                       ),
-                      child: const Icon(Icons.record_voice_over_rounded,
-                          color: accent, size: 18),
+                      child: const Icon(
+                        Icons.record_voice_over_rounded,
+                        color: accent,
+                        size: 18,
+                      ),
                     ),
                     const SizedBox(width: 10),
                     Text(
@@ -2036,35 +2013,49 @@ class _QcfReciterPickerSheetState extends State<_QcfReciterPickerSheet> {
                     Text(
                       '${all.length} قارئ',
                       style: GoogleFonts.cairo(
-                          fontSize: 12, color: subtleColor),
+                        fontSize: 12,
+                        color: subtleColor,
+                      ),
                     ),
                   ],
                 ),
               ),
               Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 8,
+                ),
                 child: TextField(
                   controller: _searchController,
                   textDirection: TextDirection.rtl,
                   style: GoogleFonts.cairo(fontSize: 13, color: textColor),
                   decoration: InputDecoration(
                     hintText: 'ابحث عن قارئ…',
-                    hintStyle:
-                        GoogleFonts.cairo(fontSize: 13, color: subtleColor),
-                    prefixIcon: Icon(Icons.search_rounded,
-                        color: subtleColor, size: 20),
+                    hintStyle: GoogleFonts.cairo(
+                      fontSize: 13,
+                      color: subtleColor,
+                    ),
+                    prefixIcon: Icon(
+                      Icons.search_rounded,
+                      color: subtleColor,
+                      size: 20,
+                    ),
                     suffixIcon: _query.isNotEmpty
                         ? IconButton(
-                            icon: Icon(Icons.close_rounded,
-                                size: 18, color: subtleColor),
+                            icon: Icon(
+                              Icons.close_rounded,
+                              size: 18,
+                              color: subtleColor,
+                            ),
                             onPressed: () => _searchController.clear(),
                           )
                         : null,
                     filled: true,
                     fillColor: surfaceColor,
                     contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 14, vertical: 10),
+                      horizontal: 14,
+                      vertical: 10,
+                    ),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
                       borderSide: BorderSide.none,
@@ -2073,10 +2064,11 @@ class _QcfReciterPickerSheetState extends State<_QcfReciterPickerSheet> {
                 ),
               ),
               Divider(
-                  height: 1,
-                  color: isDark
-                      ? Colors.white.withValues(alpha: 0.08)
-                      : Colors.black.withValues(alpha: 0.06)),
+                height: 1,
+                color: isDark
+                    ? Colors.white.withValues(alpha: 0.08)
+                    : Colors.black.withValues(alpha: 0.06),
+              ),
               ConstrainedBox(
                 constraints: BoxConstraints(
                   maxHeight: MediaQuery.of(context).size.height * 0.50,
@@ -2087,20 +2079,24 @@ class _QcfReciterPickerSheetState extends State<_QcfReciterPickerSheet> {
                         child: Text(
                           'لا توجد نتائج',
                           style: GoogleFonts.cairo(
-                              fontSize: 13, color: subtleColor),
+                            fontSize: 13,
+                            color: subtleColor,
+                          ),
                           textAlign: TextAlign.center,
                         ),
                       )
                     : ListView.separated(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 8),
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
                         itemCount: filtered.length,
-                        separatorBuilder: (_, __) =>
-                            const SizedBox(height: 4),
+                        separatorBuilder: (_, __) => const SizedBox(height: 4),
                         itemBuilder: (ctx, i) {
                           final e = filtered[i];
                           final name = e.displayNameForAppLanguage(
-                              widget.isAr ? 'ar' : 'en');
+                            widget.isAr ? 'ar' : 'en',
+                          );
                           final isSelected = e.identifier == _selected;
                           return Material(
                             color: isSelected
@@ -2118,7 +2114,9 @@ class _QcfReciterPickerSheetState extends State<_QcfReciterPickerSheet> {
                               },
                               child: Padding(
                                 padding: const EdgeInsets.symmetric(
-                                    horizontal: 14, vertical: 11),
+                                  horizontal: 14,
+                                  vertical: 11,
+                                ),
                                 child: Row(
                                   children: [
                                     Expanded(
@@ -2144,9 +2142,10 @@ class _QcfReciterPickerSheetState extends State<_QcfReciterPickerSheet> {
                                           shape: BoxShape.circle,
                                         ),
                                         child: const Icon(
-                                            Icons.check_rounded,
-                                            color: Colors.white,
-                                            size: 14),
+                                          Icons.check_rounded,
+                                          color: Colors.white,
+                                          size: 14,
+                                        ),
                                       ),
                                   ],
                                 ),

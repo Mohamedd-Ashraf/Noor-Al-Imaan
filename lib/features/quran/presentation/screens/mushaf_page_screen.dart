@@ -373,10 +373,6 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
   bool _tutorialShown = false;
   bool _tajweedMode = false;
 
-  // ── Controls visibility (tap-to-show/hide) ─────────────────────────────────
-  bool _showControls = true;
-  Timer? _hideTimer;
-
   final Map<int, List<_Verse>> _cache = {};
   final Map<int, bool> _loading = {};
   final Map<int, Object?> _errors = {};
@@ -398,27 +394,13 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
       _showTutorialIfNeeded();
     });
 
-    _resetHideTimer();
   }
 
   @override
   void dispose() {
-    _hideTimer?.cancel();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     _pageCtrl.dispose();
     super.dispose();
-  }
-
-  void _resetHideTimer() {
-    _hideTimer?.cancel();
-    _hideTimer = Timer(const Duration(seconds: 3), () {
-      if (mounted) setState(() => _showControls = false);
-    });
-  }
-
-  void _onPageTap() {
-    setState(() => _showControls = !_showControls);
-    if (_showControls) _resetHideTimer();
   }
 
   void _showTutorialIfNeeded() {
@@ -543,8 +525,6 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
                         tajweedTexts: _tajweedCache[page],
                         tajweedLoading: _tajweedLoading[page] == true,
                         onToggleTajweed: _toggleTajweed,
-                        showControls: _showControls,
-                        onTap: _onPageTap,
                       );
                     },
                   ),
@@ -574,8 +554,6 @@ class _MushafPage extends StatelessWidget {
   final Map<String, String>? tajweedTexts;
   final bool tajweedLoading;
   final VoidCallback onToggleTajweed;
-  final bool showControls;
-  final VoidCallback onTap;
 
   const _MushafPage({
     required this.page,
@@ -591,8 +569,6 @@ class _MushafPage extends StatelessWidget {
     this.tajweedTexts,
     this.tajweedLoading = false,
     required this.onToggleTajweed,
-    this.showControls = true,
-    required this.onTap,
   });
 
   @override
@@ -667,25 +643,15 @@ class _MushafPage extends StatelessWidget {
       );
     }
 
-    return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.translucent,
-      child: Column(
+    return Column(
         children: [
-          AnimatedOpacity(
-            opacity: showControls ? 1.0 : 0.0,
-            duration: const Duration(milliseconds: 300),
-            child: IgnorePointer(
-              ignoring: !showControls,
-              child: _MushafTopBar(
-                page: page,
-                verses: visibleVerses,
-                isDark: isDark,
-                attachKeys: isInitialPage,
-                tajweedMode: tajweedMode,
-                onToggleTajweed: onToggleTajweed,
-              ),
-            ),
+          _MushafTopBar(
+            page: page,
+            verses: visibleVerses,
+            isDark: isDark,
+            attachKeys: isInitialPage,
+            tajweedMode: tajweedMode,
+            onToggleTajweed: onToggleTajweed,
           ),
           Expanded(
             key: isInitialPage ? MushafTutorialKeys.quranPage : null,
@@ -720,20 +686,12 @@ class _MushafPage extends StatelessWidget {
               },
             ),
           ),
-          AnimatedOpacity(
-            opacity: showControls ? 1.0 : 0.0,
-            duration: const Duration(milliseconds: 300),
-            child: IgnorePointer(
-              ignoring: !showControls,
-              child: _MushafFooter(
-                key: isInitialPage ? MushafTutorialKeys.pageFooter : null,
-                page: page,
-                isDark: isDark,
-              ),
-            ),
+          _MushafFooter(
+            key: isInitialPage ? MushafTutorialKeys.pageFooter : null,
+            page: page,
+            isDark: isDark,
           ),
         ],
-      ),
     );
   }
 }
@@ -880,7 +838,7 @@ class _MushafTopBar extends StatelessWidget {
             Expanded(
               child: Center(
                 child: Text(
-                  '❧',
+                  '',
                   style: TextStyle(
                     color: ornamentColor,
                     fontSize: 16,
@@ -1811,72 +1769,56 @@ class _MushafFooter extends StatelessWidget {
     final barTop = isDark ? _darkD : _tealL;
     final barBot = isDark ? _darkL : _tealBot;
 
-    const barH         = 80.0;
-    const pillOverflow = 30.0;
-
-    return SizedBox(
-      height: barH + pillOverflow + bottomInset,
+    return Container(
       width: double.infinity,
-      child: Stack(
-        alignment: Alignment.bottomCenter,
-        children: [
-          // ── Main bar
-          Positioned(
-            bottom: 0,
-            left: 0,
-            right: 0,
-            height: barH + bottomInset,
-            child: Container(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [barTop, barBot],
-                ),
-                borderRadius: const BorderRadius.vertical(
-                  top: Radius.circular(45),
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.25),
-                    blurRadius: 20,
-                    offset: const Offset(0, -8),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          // ── Ornamental frame (PNG) + page number
-          Positioned(
-            top: 0,
-            child: SizedBox(
-              width: 210,
-              height: 60,
-              child: Stack(
-                alignment: Alignment.center,
-                children: [
-                  Image.asset(
-                    'assets/logo/files/page_number.png',
-                    width: 210,
-                    height: 60,
-                    color: _borderCol,
-                    colorBlendMode: BlendMode.srcIn,
-                    fit: BoxFit.fill,
-                  ),
-                  Text(
-                    _toArabicNum(page),
-                    textAlign: TextAlign.center,
-                    style: GoogleFonts.cairo(
-                      fontSize: 20,
-                      fontWeight: FontWeight.w700,
-                      color: _textCol,
-                    ),
-                  ),
-                ],
-              ),
-            ),
+      padding: EdgeInsets.only(bottom: bottomInset),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [barTop, barBot],
+        ),
+        borderRadius: const BorderRadius.vertical(
+          top: Radius.circular(32),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.25),
+            blurRadius: 20,
+            offset: const Offset(0, -8),
           ),
         ],
+      ),
+      child: SizedBox(
+        height: 30,
+        child: Center(
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              Image.asset(
+                'assets/logo/files/page_number.png',
+                width: 180,
+                height: 23,
+                color: _borderCol,
+                colorBlendMode: BlendMode.srcIn,
+                fit: BoxFit.fill,
+              ),
+              Positioned(
+                bottom: 5,
+                child: Text(
+                  _toArabicNum(page),
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.cairo(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w700,
+                    color: _textCol,
+                    height: 1.0
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
